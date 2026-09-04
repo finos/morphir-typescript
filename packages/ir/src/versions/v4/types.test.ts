@@ -35,10 +35,12 @@ describe("readType/writeType", () => {
 		const r = readType(root, json('["morphir/SDK:list#list", "a"]'));
 		expect(r.ok && r.value.kind).toBe("Tuple");
 	});
-	test("renamed members are unknown_member", () => {
+	test("renamed members are unknown_member, located in the source", () => {
 		const r = readType(root, json('{ "Function": { "arg": "a", "result": "b" } }'));
 		expect(!r.ok && r.error.code).toBe("unknown_member");
 		expect(!r.ok && r.error.cursor).toBe("/Function/arg");
+		expect(!r.ok && r.error.line).not.toBeNull();
+		expect(!r.ok && r.error.column).not.toBeNull();
 	});
 	test("deep nesting is a diagnostic, not a thrown stack overflow", () => {
 		const text = "[".repeat(20000) + "]".repeat(20000);

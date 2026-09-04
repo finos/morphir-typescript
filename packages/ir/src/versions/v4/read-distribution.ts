@@ -134,15 +134,15 @@ function readEntryPoints(ctx: Ctx, v: JsonValue): Result<readonly EntryPoint[], 
 
 export function readDistribution(ctx: Ctx, v: JsonValue): Result<Distribution<TA, VA>, Diagnostic> {
 	if (!isObject(v)) {
-		return fail(ctx, "invalid_distribution_shape", `expected a distribution wrapper object, found ${describe(v)}`);
+		return fail(ctx, "invalid_distribution_shape", `expected a distribution wrapper object, found ${describe(v)}`, v);
 	}
 	const entries = [...v.members.entries()];
 	const first = entries[0];
 	if (entries.length !== 1 || first === undefined) {
-		return fail(ctx, "invalid_distribution_shape", `expected a wrapper object with one member, found ${entries.length}`);
+		return fail(ctx, "invalid_distribution_shape", `expected a wrapper object with one member, found ${entries.length}`, v);
 	}
 	const [key, payload] = first;
-	if (!DISTRIBUTION_KEYS.includes(key)) return fail(ctx, "invalid_distribution_shape", `unknown distribution "${key}"`);
+	if (!DISTRIBUTION_KEYS.includes(key)) return fail(ctx, "invalid_distribution_shape", `unknown distribution "${key}"`, v);
 	const inner = at(ctx, key);
 	const body = expectObject(inner, payload);
 	if (!body.ok) return body;
@@ -206,7 +206,7 @@ export function readIRFile(v: JsonValue): Result<IRFile<TA, VA>, Diagnostic> {
 	if (!o.ok) return o;
 	for (const key of o.value.members.keys()) {
 		if (key !== "formatVersion" && key !== "distribution") {
-			return fail(at(root, key), "unknown_member", `unknown member "${key}"`);
+			return fail(at(root, key), "unknown_member", `unknown member "${key}"`, o.value);
 		}
 	}
 	const recognized = readFormatVersionMember(root, o.value);
@@ -214,10 +214,10 @@ export function readIRFile(v: JsonValue): Result<IRFile<TA, VA>, Diagnostic> {
 	const compat = compatibility(recognized.value.normalized, SUPPORTED_HERE);
 	if (compat !== "supported") {
 		const fv = recognized.value.normalized;
-		return fail(at(root, "formatVersion"), compat, `format version ${fv.major}.${fv.minor}.${fv.patch} is not supported`);
+		return fail(at(root, "formatVersion"), compat, `format version ${fv.major}.${fv.minor}.${fv.patch} is not supported`, o.value.members.get("formatVersion"));
 	}
 	const raw = o.value.members.get("distribution");
-	if (raw === undefined) return fail(root, "missing_member", 'missing member "distribution"');
+	if (raw === undefined) return fail(root, "missing_member", 'missing member "distribution"', o.value);
 	const distribution = readDistribution(at(root, "distribution"), raw);
 	return distribution.ok ? ok({ formatVersion: recognized.value.normalized, distribution: distribution.value }) : distribution;
 }

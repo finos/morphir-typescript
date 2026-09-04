@@ -70,7 +70,7 @@ function readFormatVersionNode(ctx: Ctx, v: JsonValue): Result<model.FormatVersi
 	const compat = compatibility(fv, SUPPORTED);
 	return compat === "supported"
 		? ok(fv)
-		: fail(ctx, compat, `format version ${fv.major}.${fv.minor}.${fv.patch} is not supported`);
+		: fail(ctx, compat, `format version ${fv.major}.${fv.minor}.${fv.patch} is not supported`, v);
 }
 
 function readNodeValue(node: NodeKind, v: JsonValue): Result<unknown, Diagnostic> {

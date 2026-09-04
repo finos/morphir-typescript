@@ -1,7 +1,7 @@
 // packages/ir/src/codec/json/value.test.ts
 // Run with: bun test packages/ir/src/codec/json/value.test.ts
 import { describe, expect, test } from "bun:test";
-import { isInteger, jsonNumber, jsonObject, parseJson, writeJson } from "./value.ts";
+import { type JsonValue, isInteger, isObject, jsonNumber, jsonObject, locationOf, parseJson, writeJson } from "./value.ts";
 
 describe("parseJson", () => {
 	test("keeps number lexemes and member order", () => {
@@ -31,6 +31,19 @@ describe("parseJson", () => {
 	test("bounds nesting instead of exhausting the stack", () => {
 		const r = parseJson("[".repeat(20000) + "]".repeat(20000));
 		expect(r).toMatchObject({ ok: false, error: { code: "nesting_too_deep" } });
+	});
+	test("records where each composite value started", () => {
+		const r = parseJson('{\n  "a": [1, {"b": 2}],\n  "s": "x"\n}');
+		expect(r.ok).toBe(true);
+		if (!r.ok || !isObject(r.value)) return;
+		expect(locationOf(r.value)).toEqual({ line: 1, column: 1 });
+		const a = r.value.members.get("a");
+		if (a === undefined || !Array.isArray(a)) throw new Error("expected an array member");
+		expect(locationOf(a)).toEqual({ line: 2, column: 8 });
+		expect(locationOf(a[0] as JsonValue)).toEqual({ line: 2, column: 9 });
+		expect(locationOf(a[1] as JsonValue)).toEqual({ line: 2, column: 12 });
+		// Strings, booleans and null are primitives with no identity to key on.
+		expect(locationOf(r.value.members.get("s") as JsonValue)).toBeNull();
 	});
 });
 

@@ -117,7 +117,7 @@ export function readType(ctx: Ctx, v: JsonValue): Result<Type<TA>, Diagnostic> {
 		const elements = readTypes(ctx, v);
 		return elements.ok ? ok({ kind: "Tuple", attributes: EMPTY_TYPE_ATTRIBUTES, elements: elements.value }) : elements;
 	}
-	if (!isObject(v)) return fail(ctx, "invalid_type", "expected a type expression");
+	if (!isObject(v)) return fail(ctx, "invalid_type", "expected a type expression", v);
 	const kv = singleKey(ctx, v);
 	if (!kv.ok) return kv;
 	const [key, payload] = kv.value;
@@ -130,7 +130,7 @@ export function readType(ctx: Ctx, v: JsonValue): Result<Type<TA>, Diagnostic> {
 		case "ExtensibleRecord": return readExtensibleRecordType(inner, payload);
 		case "Function": return readFunctionType(inner, payload);
 		case "Unit": return readUnitType(inner, payload);
-		default: return fail(ctx, "unknown_node", `unknown type node "${key}"`);
+		default: return fail(ctx, "unknown_node", `unknown type node "${key}"`, v);
 	}
 }
 
@@ -149,7 +149,7 @@ function readVariableType(ctx: Ctx, v: JsonValue): Result<Type<TA>, Diagnostic> 
 
 function readReferenceType(ctx: Ctx, v: JsonValue): Result<Type<TA>, Diagnostic> {
 	if (Array.isArray(v)) {
-		if (v.length === 0) return fail(ctx, "missing_member", "a Reference array needs an fqname as its first element");
+		if (v.length === 0) return fail(ctx, "missing_member", "a Reference array needs an fqname as its first element", v);
 		const fq = readFQName(at(ctx, 0), v[0] as JsonValue);
 		if (!fq.ok) return fq;
 		const args = readTypes(ctx, v.slice(1), 1);
@@ -355,7 +355,7 @@ function legacyArity(ctx: Ctx, items: readonly JsonValue[], tag: string, arity: 
 }
 
 function readLegacySpecification(ctx: Ctx, items: readonly JsonValue[]): Result<TypeSpecification<TA, VA>, Diagnostic> {
-	if (items.length === 0) return fail(ctx, "unknown_node", "expected a tagged specification array");
+	if (items.length === 0) return fail(ctx, "unknown_node", "expected a tagged specification array", items);
 	const tag = expectString(at(ctx, 0), items[0] as JsonValue);
 	if (!tag.ok) return tag;
 	const arity = (n: number): Result<never, Diagnostic> | null => legacyArity(ctx, items, tag.value, n);
@@ -394,7 +394,7 @@ function readLegacySpecification(ctx: Ctx, items: readonly JsonValue[]): Result<
 			return ok({ kind: "DerivedTypeSpecification", annotations: [], typeParams: typeParams.value, ...body.value });
 		}
 		default:
-			return fail(at(ctx, 0), "unknown_node", `unknown type specification "${tag.value}"`);
+			return fail(at(ctx, 0), "unknown_node", `unknown type specification "${tag.value}"`, items);
 	}
 }
 
@@ -429,7 +429,7 @@ export function readTypeSpecification(ctx: Ctx, v: JsonValue): Result<TypeSpecif
 	const kv = singleKey(ctx, o.value);
 	if (!kv.ok) return kv;
 	const [key, payload] = kv.value;
-	if (!SPECIFICATION_KEYS.includes(key)) return fail(ctx, "unknown_node", `unknown type specification "${key}"`);
+	if (!SPECIFICATION_KEYS.includes(key)) return fail(ctx, "unknown_node", `unknown type specification "${key}"`, v);
 	const inner = at(ctx, key);
 	const body = expectObject(inner, payload);
 	if (!body.ok) return body;
@@ -495,7 +495,7 @@ export function readTypeSpecification(ctx: Ctx, v: JsonValue): Result<TypeSpecif
 			});
 		}
 		default:
-			return fail(ctx, "unknown_node", `unknown type specification "${key}"`);
+			return fail(ctx, "unknown_node", `unknown type specification "${key}"`, v);
 	}
 }
 
@@ -507,7 +507,7 @@ export function readHoleReason(ctx: Ctx, v: JsonValue): Result<HoleReason, Diagn
 	const kv = singleKey(ctx, o.value);
 	if (!kv.ok) return kv;
 	const [key, payload] = kv.value;
-	if (!HOLE_REASON_KEYS.includes(key)) return fail(ctx, "unknown_node", `unknown hole reason "${key}"`);
+	if (!HOLE_REASON_KEYS.includes(key)) return fail(ctx, "unknown_node", `unknown hole reason "${key}"`, v);
 	const inner = at(ctx, key);
 	const body = expectObject(inner, payload);
 	if (!body.ok) return body;
@@ -535,7 +535,7 @@ export function readHoleReason(ctx: Ctx, v: JsonValue): Result<HoleReason, Diagn
 			return ok({ kind: "TypeMismatch", expected: expected.value, found: found.value });
 		}
 		default:
-			return fail(ctx, "unknown_node", `unknown hole reason "${key}"`);
+			return fail(ctx, "unknown_node", `unknown hole reason "${key}"`, v);
 	}
 }
 
@@ -545,7 +545,7 @@ export function readIncompleteness(ctx: Ctx, v: JsonValue): Result<Incompletenes
 	const kv = singleKey(ctx, o.value);
 	if (!kv.ok) return kv;
 	const [key, payload] = kv.value;
-	if (!INCOMPLETENESS_KEYS.includes(key)) return fail(ctx, "unknown_node", `unknown incompleteness "${key}"`);
+	if (!INCOMPLETENESS_KEYS.includes(key)) return fail(ctx, "unknown_node", `unknown incompleteness "${key}"`, v);
 	const inner = at(ctx, key);
 	const body = expectObject(inner, payload);
 	if (!body.ok) return body;
@@ -565,12 +565,12 @@ export function readIncompleteness(ctx: Ctx, v: JsonValue): Result<Incompletenes
 			return m.ok ? ok({ kind: "Draft" }) : m;
 		}
 		default:
-			return fail(ctx, "unknown_node", `unknown incompleteness "${key}"`);
+			return fail(ctx, "unknown_node", `unknown incompleteness "${key}"`, v);
 	}
 }
 
 function readLegacyDefinition(ctx: Ctx, items: readonly JsonValue[]): Result<TypeDefinition<TA>, Diagnostic> {
-	if (items.length === 0) return fail(ctx, "unknown_node", "expected a tagged definition array");
+	if (items.length === 0) return fail(ctx, "unknown_node", "expected a tagged definition array", items);
 	const tag = expectString(at(ctx, 0), items[0] as JsonValue);
 	if (!tag.ok) return tag;
 	switch (tag.value) {
@@ -601,7 +601,7 @@ function readLegacyDefinition(ctx: Ctx, items: readonly JsonValue[]): Result<Typ
 			});
 		}
 		default:
-			return fail(at(ctx, 0), "unknown_node", `unknown type definition "${tag.value}"`);
+			return fail(at(ctx, 0), "unknown_node", `unknown type definition "${tag.value}"`, items);
 	}
 }
 
@@ -612,7 +612,7 @@ export function readTypeDefinition(ctx: Ctx, v: JsonValue): Result<TypeDefinitio
 	const kv = singleKey(ctx, o.value);
 	if (!kv.ok) return kv;
 	const [key, payload] = kv.value;
-	if (!DEFINITION_KEYS.includes(key)) return fail(ctx, "unknown_node", `unknown type definition "${key}"`);
+	if (!DEFINITION_KEYS.includes(key)) return fail(ctx, "unknown_node", `unknown type definition "${key}"`, v);
 	const inner = at(ctx, key);
 	const body = expectObject(inner, payload);
 	if (!body.ok) return body;
@@ -670,6 +670,6 @@ export function readTypeDefinition(ctx: Ctx, v: JsonValue): Result<TypeDefinitio
 			});
 		}
 		default:
-			return fail(ctx, "unknown_node", `unknown type definition "${key}"`);
+			return fail(ctx, "unknown_node", `unknown type definition "${key}"`, v);
 	}
 }

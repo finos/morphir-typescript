@@ -51,7 +51,7 @@ function readSourceLocation(ctx: Ctx, v: JsonValue): Result<SourceLocation, Diag
 	for (const key of SOURCE_MEMBERS) {
 		const n = expectNumber(at(ctx, key), m.value.get(key) as JsonValue);
 		if (!n.ok) return n;
-		if (!isInteger(n.value)) return fail(at(ctx, key), "invalid_type", `expected an integer, found ${n.value.text}`);
+		if (!isInteger(n.value)) return fail(at(ctx, key), "invalid_type", `expected an integer, found ${n.value.text}`, n.value);
 		parts.push(Number(n.value.text));
 	}
 	return ok({

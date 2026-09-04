@@ -6,14 +6,18 @@
 // what the kit's rejected fences expect.
 import { type Diagnostic, type DiagnosticCode, diagnostic } from "../../model/diagnostic.ts";
 import { type Result, err, ok } from "../../model/result.ts";
-import { MAX_DEPTH, type JsonNumber, type JsonObject, type JsonValue, isNumber, isObject } from "./value.ts";
+import { MAX_DEPTH, type JsonNumber, type JsonObject, type JsonValue, isNumber, isObject, locationOf } from "./value.ts";
 
 export interface Ctx { readonly cursor: string; readonly depth: number }
 export const root: Ctx = { cursor: "", depth: 0 };
 export function at(ctx: Ctx, key: string | number): Ctx { return { cursor: `${ctx.cursor}/${key}`, depth: ctx.depth + 1 }; }
 
-export function fail(ctx: Ctx, code: DiagnosticCode, message: string): Result<never, Diagnostic> {
-	return err(diagnostic(code, "normalization", ctx.cursor || "/", message));
+// `near` is the JSON value the failure is about; when the parser recorded a
+// location for it the diagnostic carries the line and column, so a reader
+// error points at the source and not just at a cursor path.
+export function fail(ctx: Ctx, code: DiagnosticCode, message: string, near?: JsonValue): Result<never, Diagnostic> {
+	const location = near === undefined ? null : locationOf(near);
+	return err(diagnostic(code, "normalization", ctx.cursor || "/", message, location ?? undefined));
 }
 
 // parseJson already bounds the depth of anything read from text, so this only
@@ -28,27 +32,27 @@ const describe = (v: JsonValue): string =>
 	v === null ? "null" : Array.isArray(v) ? "array" : isObject(v) ? "object" : isNumber(v) ? "number" : typeof v;
 
 export function expectObject(ctx: Ctx, v: JsonValue): Result<JsonObject, Diagnostic> {
-	return isObject(v) ? ok(v) : fail(ctx, "invalid_type", `expected an object, found ${describe(v)}`);
+	return isObject(v) ? ok(v) : fail(ctx, "invalid_type", `expected an object, found ${describe(v)}`, v);
 }
 export function expectArray(ctx: Ctx, v: JsonValue): Result<readonly JsonValue[], Diagnostic> {
-	return Array.isArray(v) ? ok(v) : fail(ctx, "invalid_type", `expected an array, found ${describe(v)}`);
+	return Array.isArray(v) ? ok(v) : fail(ctx, "invalid_type", `expected an array, found ${describe(v)}`, v);
 }
 export function expectString(ctx: Ctx, v: JsonValue): Result<string, Diagnostic> {
-	return typeof v === "string" ? ok(v) : fail(ctx, "invalid_type", `expected a string, found ${describe(v)}`);
+	return typeof v === "string" ? ok(v) : fail(ctx, "invalid_type", `expected a string, found ${describe(v)}`, v);
 }
 export function expectBoolean(ctx: Ctx, v: JsonValue): Result<boolean, Diagnostic> {
-	return typeof v === "boolean" ? ok(v) : fail(ctx, "invalid_type", `expected a boolean, found ${describe(v)}`);
+	return typeof v === "boolean" ? ok(v) : fail(ctx, "invalid_type", `expected a boolean, found ${describe(v)}`, v);
 }
 export function expectNumber(ctx: Ctx, v: JsonValue): Result<JsonNumber, Diagnostic> {
-	return isNumber(v) ? ok(v) : fail(ctx, "invalid_type", `expected a number, found ${describe(v)}`);
+	return isNumber(v) ? ok(v) : fail(ctx, "invalid_type", `expected a number, found ${describe(v)}`, v);
 }
 
 export function members(ctx: Ctx, o: JsonObject, required: readonly string[], optional: readonly string[]): Result<ReadonlyMap<string, JsonValue>, Diagnostic> {
 	for (const key of o.members.keys()) {
-		if (!required.includes(key) && !optional.includes(key)) return fail(at(ctx, key), "unknown_member", `unknown member "${key}"`);
+		if (!required.includes(key) && !optional.includes(key)) return fail(at(ctx, key), "unknown_member", `unknown member "${key}"`, o);
 	}
 	for (const key of required) {
-		if (!o.members.has(key)) return fail(ctx, "missing_member", `missing member "${key}"`);
+		if (!o.members.has(key)) return fail(ctx, "missing_member", `missing member "${key}"`, o);
 	}
 	return ok(o.members);
 }
@@ -57,7 +61,7 @@ export function singleKey(ctx: Ctx, o: JsonObject): Result<readonly [string, Jso
 	const entries = [...o.members.entries()];
 	const first = entries[0];
 	if (entries.length !== 1 || first === undefined) {
-		return fail(ctx, "unknown_node", `expected a wrapper object with one member, found ${entries.length}`);
+		return fail(ctx, "unknown_node", `expected a wrapper object with one member, found ${entries.length}`, o);
 	}
 	return ok(first);
 }

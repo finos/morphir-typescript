@@ -142,11 +142,11 @@ function floatLiteral(ctx: Ctx, text: string): Result<Literal, Diagnostic> {
 }
 
 export function readLiteral(ctx: Ctx, v: JsonValue): Result<Literal, Diagnostic> {
-	if (!isObject(v)) return fail(ctx, "invalid_literal", `expected a literal wrapper object, found ${describe(v)}`);
+	if (!isObject(v)) return fail(ctx, "invalid_literal", `expected a literal wrapper object, found ${describe(v)}`, v);
 	const entries = [...v.members.entries()];
 	const first = entries[0];
 	if (entries.length !== 1 || first === undefined) {
-		return fail(ctx, "invalid_literal", `expected a literal wrapper with one member, found ${entries.length}`);
+		return fail(ctx, "invalid_literal", `expected a literal wrapper with one member, found ${entries.length}`, v);
 	}
 	const [key, raw] = first;
 	const inner = at(ctx, key);
@@ -154,7 +154,7 @@ export function readLiteral(ctx: Ctx, v: JsonValue): Result<Literal, Diagnostic>
 	if (!unwrapped.ok) return unwrapped;
 	const p = unwrapped.value;
 	const wrong = (what: string): Result<never, Diagnostic> =>
-		fail(inner, "invalid_literal", `${key} expects ${what}, found ${describe(p)}`);
+		fail(inner, "invalid_literal", `${key} expects ${what}, found ${describe(p)}`, p);
 	switch (key) {
 		case "BoolLiteral":
 			return typeof p === "boolean" ? ok({ kind: "BoolLiteral", value: p }) : wrong("a boolean");
@@ -172,7 +172,7 @@ export function readLiteral(ctx: Ctx, v: JsonValue): Result<Literal, Diagnostic>
 			// Carried as text so no binding rounds it into a float.
 			return typeof p === "string" ? ok({ kind: "DecimalLiteral", value: p }) : wrong("a string");
 		default:
-			return fail(ctx, "invalid_literal", `unknown literal "${key}"`);
+			return fail(ctx, "invalid_literal", `unknown literal "${key}"`, v);
 	}
 }
 
@@ -211,7 +211,7 @@ export function readPattern(ctx: Ctx, v: JsonValue): Result<Pattern<VA>, Diagnos
 		const patterns = readPatterns(ctx, v);
 		return patterns.ok ? ok({ kind: "TuplePattern", attributes: EMPTY_VA, patterns: patterns.value }) : patterns;
 	}
-	if (!isObject(v)) return fail(ctx, "invalid_type", `expected a pattern, found ${describe(v)}`);
+	if (!isObject(v)) return fail(ctx, "invalid_type", `expected a pattern, found ${describe(v)}`, v);
 	const kv = singleKey(ctx, v);
 	if (!kv.ok) return kv;
 	const [key, payload] = kv.value;
@@ -263,7 +263,7 @@ export function readPattern(ctx: Ctx, v: JsonValue): Result<Pattern<VA>, Diagnos
 			return l.ok ? ok({ kind: "LiteralPattern", attributes: l.value.a, literal: l.value.literal }) : l;
 		}
 		default:
-			return fail(ctx, "unknown_node", `unknown pattern node "${key}"`);
+			return fail(ctx, "unknown_node", `unknown pattern node "${key}"`, v);
 	}
 }
 
@@ -286,10 +286,10 @@ export function readValue(ctx: Ctx, v: JsonValue): Result<Value<TA, VA>, Diagnos
 		const n = readName(ctx, v);
 		return n.ok ? ok({ kind: "Variable", attributes: EMPTY_VA, name: n.value }) : n;
 	}
-	if (typeof v === "boolean") return fail(ctx, "ambiguous_shorthand", BARE_BOOLEAN);
-	if (isNumber(v)) return fail(ctx, "ambiguous_shorthand", BARE_NUMBER);
-	if (Array.isArray(v)) return fail(ctx, "ambiguous_shorthand", BARE_ARRAY);
-	if (!isObject(v)) return fail(ctx, "invalid_type", `expected a value expression, found ${describe(v)}`);
+	if (typeof v === "boolean") return fail(ctx, "ambiguous_shorthand", BARE_BOOLEAN, v);
+	if (isNumber(v)) return fail(ctx, "ambiguous_shorthand", BARE_NUMBER, v);
+	if (Array.isArray(v)) return fail(ctx, "ambiguous_shorthand", BARE_ARRAY, v);
+	if (!isObject(v)) return fail(ctx, "invalid_type", `expected a value expression, found ${describe(v)}`, v);
 	const kv = singleKey(ctx, v);
 	if (!kv.ok) return kv;
 	const [key, payload] = kv.value;
@@ -429,7 +429,7 @@ export function readValue(ctx: Ctx, v: JsonValue): Result<Value<TA, VA>, Diagnos
 			return ok({ kind: "External", attributes: e.value.a, externalName: externalName.value, targetPlatform: targetPlatform.value });
 		}
 		default:
-			return fail(ctx, "unknown_node", `unknown value node "${key}"`);
+			return fail(ctx, "unknown_node", `unknown value node "${key}"`, v);
 	}
 }
 
@@ -525,7 +525,7 @@ export function readNativeHint(ctx: Ctx, v: JsonValue): Result<NativeHint, Diagn
 	const kv = singleKey(ctx, o.value);
 	if (!kv.ok) return kv;
 	const [key, payload] = kv.value;
-	if (!NATIVE_HINT_KEYS.includes(key)) return fail(ctx, "unknown_node", `unknown native hint "${key}"`);
+	if (!NATIVE_HINT_KEYS.includes(key)) return fail(ctx, "unknown_node", `unknown native hint "${key}"`, v);
 	const inner = at(ctx, key);
 	const body = expectObject(inner, payload);
 	if (!body.ok) return body;
@@ -584,7 +584,7 @@ export function readValueDefinition(ctx: Ctx, v: JsonValue): Result<ValueDefinit
 	const kv = singleKey(ctx, o.value);
 	if (!kv.ok) return kv;
 	const [key, payload] = kv.value;
-	if (!DEFINITION_KEYS.includes(key)) return fail(ctx, "unknown_node", `unknown value definition "${key}"`);
+	if (!DEFINITION_KEYS.includes(key)) return fail(ctx, "unknown_node", `unknown value definition "${key}"`, v);
 	const inner = at(ctx, key);
 	const body = expectObject(inner, payload);
 	if (!body.ok) return body;

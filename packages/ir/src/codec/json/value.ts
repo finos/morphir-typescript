@@ -22,6 +22,19 @@ export function isNumber(v: JsonValue): v is JsonNumber {
 }
 export function isInteger(n: JsonNumber): boolean { return !/[.eE]/.test(n.text); }
 
+export interface JsonLocation { readonly line: number; readonly column: number }
+
+// Where a value started in the source. JsonValue stays a plain structural type
+// — a reader can build one by hand, and two trees that mean the same thing
+// still compare equal — so the location lives beside the tree in a side table
+// keyed by identity. Only the composite values and numbers have an identity to
+// key on; strings, booleans and null are shared primitives and report null.
+const locations = new WeakMap<object, JsonLocation>();
+
+export function locationOf(v: JsonValue): JsonLocation | null {
+	return typeof v === "object" && v !== null ? locations.get(v) ?? null : null;
+}
+
 const NUMBER = /^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?/;
 
 // A reader must return a diagnostic rather than exhaust the stack, and this
@@ -49,6 +62,11 @@ class Parser {
 		}
 	}
 	private ws(): void { while (/[ \t\n\r]/.test(this.peek())) this.advance(1); }
+	private here(): JsonLocation { return { line: this.line, column: this.col }; }
+	private located<T extends object>(node: T, at: JsonLocation): T {
+		locations.set(node, at);
+		return node;
+	}
 
 	parseDocument(): Result<JsonValue, Diagnostic> {
 		this.ws();
@@ -68,16 +86,24 @@ class Parser {
 		if (this.text.startsWith("false", this.pos)) { this.advance(5); return ok(false); }
 		if (this.text.startsWith("null", this.pos)) { this.advance(4); return ok(null); }
 		const m = NUMBER.exec(this.text.slice(this.pos));
-		if (m !== null) { this.advance(m[0].length); return ok(jsonNumber(m[0])); }
+		if (m !== null) {
+			const start = this.here();
+			this.advance(m[0].length);
+			return ok(this.located(jsonNumber(m[0]), start));
+		}
 		return err(this.fail(c === "" ? "unexpected end of input" : `unexpected character "${c}"`));
 	}
 
 	private parseObject(cursor: string, depth: number): Result<JsonValue, Diagnostic> {
 		if (depth >= MAX_DEPTH) return err(this.tooDeep(cursor));
+		const start = this.here();
 		this.advance(1);
 		const members = new Map<string, JsonValue>();
+		// The node is created before its members are read so the location is
+		// recorded against the identity the caller will see.
+		const node = this.located<JsonObject>({ kind: "object", members }, start);
 		this.ws();
-		if (this.peek() === "}") { this.advance(1); return ok({ kind: "object", members }); }
+		if (this.peek() === "}") { this.advance(1); return ok(node); }
 		for (;;) {
 			this.ws();
 			if (this.peek() !== '"') return err(this.fail("expected a member name"));
@@ -96,15 +122,16 @@ class Parser {
 			members.set(name, value.value);
 			this.ws();
 			if (this.peek() === ",") { this.advance(1); continue; }
-			if (this.peek() === "}") { this.advance(1); return ok({ kind: "object", members }); }
+			if (this.peek() === "}") { this.advance(1); return ok(node); }
 			return err(this.fail('expected "," or "}"'));
 		}
 	}
 
 	private parseArray(cursor: string, depth: number): Result<JsonValue, Diagnostic> {
 		if (depth >= MAX_DEPTH) return err(this.tooDeep(cursor));
+		const start = this.here();
 		this.advance(1);
-		const items: JsonValue[] = [];
+		const items = this.located<JsonValue[]>([], start);
 		this.ws();
 		if (this.peek() === "]") { this.advance(1); return ok(items); }
 		for (;;) {

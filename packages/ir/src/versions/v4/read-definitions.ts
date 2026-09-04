@@ -66,7 +66,7 @@ export function readAccessControlled<T>(ctx: Ctx, v: JsonValue, read: Read<T>): 
 				rest.push([key, member] as const);
 			}
 		}
-		if (rest.length === 0) return fail(ctx, "missing_member", "an access-controlled entry needs a payload");
+		if (rest.length === 0) return fail(ctx, "missing_member", "an access-controlled entry needs a payload", o.value);
 		const [inner, payload] = payloadOf(ctx, rest);
 		const value = read(inner, payload);
 		return value.ok ? ok({ access, value: value.value }) : value;
@@ -96,7 +96,7 @@ export function readDocumented<T>(ctx: Ctx, v: JsonValue, read: Read<T>): Result
 				rest.push([key, member] as const);
 			}
 		}
-		if (rest.length === 0) return fail(ctx, "missing_member", "a documented entry needs a value");
+		if (rest.length === 0) return fail(ctx, "missing_member", "a documented entry needs a value", v);
 		const [inner, payload] = payloadOf(ctx, rest);
 		const value = read(inner, payload);
 		return value.ok ? ok({ doc, value: value.value }) : value;
