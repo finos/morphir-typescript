@@ -1,3 +1,5 @@
+//
+// Tests for the corpus case parser. Run with: bun test src/corpus/case.test.ts
 import { describe, expect, test } from "bun:test";
 import { parseCorpusFile, topicOf } from "./case.ts";
 
@@ -65,8 +67,10 @@ describe("parseCorpusFile", () => {
 		["```yaml canonical\na: 1\n```", /data fence before the first case/],
 		["## types-0001: two\n```yaml canonical\na: 1\n```\n```yaml canonical\na: 1\n```", /more than one canonical yaml fence/],
 		["## types-0001: pending with data {status=pending}\n```yaml canonical\na: 1\n```", /pending case may not carry canonical/],
-		["## types-0001: nothing\nprose only", /active case has no canonical fence/],
+		["## types-0001: nothing\nprose only", /case has no data fences/],
 		["## types-0001: bad fence\n```yaml canonical\na: 1\n```\n```yaml rejected\na: 1\n```", /rejected needs exactly one/],
+		["## types-0001: open\n```yaml canonical\na: 1\n", /unterminated fence/],
+		["## types-0001: accepted only\n```json accepted\n1\n```", /active case has no canonical fence/],
 	])("reports: %s", (source, pattern) => {
 		const { errors } = parseCorpusFile(file, source);
 		expect(errors.length).toBeGreaterThan(0);
@@ -78,5 +82,44 @@ describe("parseCorpusFile", () => {
 		const { cases, errors } = parseCorpusFile(file, source);
 		expect(errors).toEqual([]);
 		expect(cases[0]?.fences).toHaveLength(1);
+	});
+
+	test("a heading key block with no space before the brace parses", () => {
+		const source = "## types-0001: Tight{node=Type compare=attributes}\n```yaml canonical\na: 1\n```";
+		const { cases, errors } = parseCorpusFile(file, source);
+		expect(errors).toEqual([]);
+		expect(cases[0]).toMatchObject({ title: "Tight", node: "Type", compare: "attributes" });
+	});
+
+	test("a rejection-only active case is legal", () => {
+		const source = "## types-0001: reject only\n```json rejected diagnostic=x\n1\n```";
+		const { cases, errors } = parseCorpusFile(file, source);
+		expect(errors).toEqual([]);
+		expect(cases[0]?.status).toBe("active");
+	});
+
+	test("canonical count is per profile, not per language", () => {
+		const withDupe = [
+			"## types-0001: dupe profile",
+			"```json canonical",
+			'{ "a": 1 }',
+			"```",
+			"```text canonical",
+			"x.json",
+			"```",
+		].join("\n");
+		const { errors } = parseCorpusFile(file, withDupe);
+		expect(errors.map((e) => e.message).join("\n")).toMatch(/more than one canonical json fence/);
+
+		const withoutDupe = [
+			"## types-0001: distinct profiles",
+			"```yaml canonical",
+			"a: 1",
+			"```",
+			"```text canonical",
+			"x.json",
+			"```",
+		].join("\n");
+		expect(parseCorpusFile(file, withoutDupe).errors).toEqual([]);
 	});
 });

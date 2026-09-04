@@ -14,14 +14,15 @@
 export type Block =
 	| { readonly kind: "frontMatter"; readonly text: string; readonly line: number }
 	| { readonly kind: "heading"; readonly level: number; readonly text: string; readonly line: number }
-	| { readonly kind: "fence"; readonly info: string; readonly body: string; readonly line: number }
+	| { readonly kind: "fence"; readonly info: string; readonly body: string; readonly line: number; readonly closed: boolean }
 	| { readonly kind: "prose"; readonly text: string; readonly line: number };
 
 const FENCE_OPEN = /^(`{3,})(.*)$/;
 const HEADING = /^(#{1,6}) (.+?)\s*$/;
 
 export function tokenize(source: string): readonly Block[] {
-	const lines = source.split(/\r?\n/);
+	const withoutBom = source.startsWith("﻿") ? source.slice(1) : source;
+	const lines = withoutBom.split(/\r?\n/);
 	// A trailing newline yields a final empty element; drop it so line counts match editors.
 	if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
 
@@ -64,8 +65,7 @@ export function tokenize(source: string): readonly Block[] {
 				body.push(candidate);
 				index += 1;
 			}
-			void closed; // an unterminated fence runs to end of file; the case parser reports it if it matters
-			blocks.push({ kind: "fence", info, body: body.map((l) => `${l}\n`).join(""), line: start + 1 });
+			blocks.push({ kind: "fence", info, body: body.map((l) => `${l}\n`).join(""), line: start + 1, closed });
 			continue;
 		}
 

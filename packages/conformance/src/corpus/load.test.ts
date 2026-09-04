@@ -1,3 +1,5 @@
+//
+// Tests for the corpus directory loader. Run with: bun test src/corpus/load.test.ts
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

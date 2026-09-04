@@ -1,3 +1,5 @@
+//
+// Tests for the morphir-conformance CLI. Run with: bun test src/cli.test.ts
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

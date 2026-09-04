@@ -1,3 +1,5 @@
+//
+// Tests for the corpus markdown tokenizer. Run with: bun test src/corpus/markdown.test.ts
 import { describe, expect, test } from "bun:test";
 import { tokenize } from "./markdown.ts";
 
@@ -21,7 +23,7 @@ describe("tokenize", () => {
 			{ kind: "heading", level: 1, text: "Title", line: 4 },
 			{ kind: "heading", level: 2, text: "types-0001: Something {node=Type}", line: 6 },
 			{ kind: "prose", text: "Some prose.", line: 7 },
-			{ kind: "fence", info: "yaml canonical", body: "Unit: {}\n", line: 8 },
+			{ kind: "fence", info: "yaml canonical", body: "Unit: {}\n", line: 8, closed: true },
 		]);
 	});
 
@@ -34,6 +36,7 @@ describe("tokenize", () => {
 			info: "markdown",
 			body: "```yaml canonical\nx: 1\n```\n",
 			line: 1,
+			closed: true,
 		});
 	});
 
@@ -45,7 +48,7 @@ describe("tokenize", () => {
 
 	test("an unterminated fence is reported as a fence running to end of file", () => {
 		const blocks = tokenize("```yaml canonical\na: 1\n");
-		expect(blocks[0]).toEqual({ kind: "fence", info: "yaml canonical", body: "a: 1\n", line: 1 });
+		expect(blocks[0]).toEqual({ kind: "fence", info: "yaml canonical", body: "a: 1\n", line: 1, closed: false });
 	});
 
 	test("blank lines separate prose blocks and are not emitted", () => {
@@ -54,5 +57,10 @@ describe("tokenize", () => {
 			{ kind: "prose", text: "one", line: 1 },
 			{ kind: "prose", text: "two", line: 3 },
 		]);
+	});
+
+	test("a leading UTF-8 BOM is stripped before splitting", () => {
+		const blocks = tokenize("﻿## x");
+		expect(blocks).toEqual([{ kind: "heading", level: 2, text: "x", line: 1 }]);
 	});
 });

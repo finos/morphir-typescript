@@ -1,3 +1,5 @@
+//
+// Tests for the report skeleton builder. Run with: bun test src/report.test.ts
 import { expect, test } from "bun:test";
 import { type Report, emptyReport } from "./report.ts";
 

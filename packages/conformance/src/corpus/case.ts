@@ -39,8 +39,20 @@ export interface ParsedFile {
 	readonly errors: readonly CorpusError[];
 }
 
-const HEADING = /^([a-z][a-z0-9-]*)-(\d{4}): (.+?)(?:\s+\{([^}]*)\})?\s*$/;
+const HEADING = /^([a-z][a-z0-9-]*)-(\d{4}): (.+?)(?:\s*\{([^}]*)\})?\s*$/;
 const HEADING_KEYS: ReadonlySet<string> = new Set(["node", "version", "status", "compare"]);
+
+// A `text` fence names a file rather than embedding data; for the purposes of
+// counting canonicals it belongs to the profile of the named file's extension,
+// not to the literal "text" language. The path is the fence body's first
+// non-empty line.
+function profileOf(fence: CorpusFence): string {
+	if (fence.info.language !== "text") return fence.info.language;
+	const path = (fence.body.split(/\r?\n/).find((l) => l.trim().length > 0) ?? "").trim();
+	if (path.endsWith(".json")) return "json";
+	if (path.endsWith(".yaml") || path.endsWith(".yml")) return "yaml";
+	return "text";
+}
 
 export function topicOf(file: string): string {
 	const base = file.split(/[\\/]/).pop() ?? file;
@@ -79,16 +91,23 @@ export function parseCorpusFile(file: string, source: string): ParsedFile {
 		const canonicals = new Map<string, number>();
 		for (const fence of current.fences) {
 			if (fence.info.role === "canonical") {
-				const count = (canonicals.get(fence.info.language) ?? 0) + 1;
-				canonicals.set(fence.info.language, count);
-				if (count === 2) fail(fence.line, `more than one canonical ${fence.info.language} fence in ${current.id}`);
+				const profile = profileOf(fence);
+				const count = (canonicals.get(profile) ?? 0) + 1;
+				canonicals.set(profile, count);
+				if (count === 2) fail(fence.line, `more than one canonical ${profile} fence in ${current.id}`);
 			}
 		}
 		if (current.status === "pending") {
 			const bad = current.fences.find((f) => f.info.role !== "rejected");
 			if (bad !== undefined) fail(bad.line, `pending case may not carry canonical, accepted, or file fences (${current.id})`);
-		} else if (canonicals.size === 0) {
-			fail(current.line, `active case has no canonical fence (${current.id})`);
+		} else {
+			const hasCanonical = canonicals.size > 0;
+			const hasAcceptedOrFile = current.fences.some((f) => f.info.role === "accepted" || f.info.role === "file");
+			if (!hasCanonical && hasAcceptedOrFile) {
+				fail(current.line, `active case has no canonical fence (${current.id})`);
+			} else if (current.fences.length === 0) {
+				fail(current.line, `case has no data fences (${current.id})`);
+			}
 		}
 		cases.push({ ...current, prose: [...current.prose], fences: [...current.fences] });
 		draft = null;
@@ -163,6 +182,7 @@ export function parseCorpusFile(file: string, source: string): ParsedFile {
 					break;
 				}
 				if (draft === null) { fail(block.line, "data fence before the first case"); break; }
+				if (!block.closed) { fail(block.line, "unterminated fence"); break; }
 				draft.fences.push({ info, body: block.body, line: block.line, index: draft.fences.length });
 				break;
 			}
