@@ -32,6 +32,7 @@ import type {
 	TypeSpecification,
 } from "../../model/types.ts";
 import { type TA, type VA, readTypeAttributes } from "./attributes.ts";
+import { readAccess, readAccessControlled } from "./read-definitions.ts";
 import { isFQNameString, readFQName, readName } from "./read-names.ts";
 import { readValue } from "./read-values.ts";
 
@@ -270,42 +271,6 @@ export function readConstructors(ctx: Ctx, v: JsonValue): Result<readonly Constr
 		out.push({ name: name.value, args: args.value });
 	}
 	return ok(out);
-}
-
-export function readAccess(ctx: Ctx, v: JsonValue): Result<Access, Diagnostic> {
-	const s = expectString(ctx, v);
-	if (!s.ok) return s;
-	switch (s.value) {
-		case "Public": case "public": case "pub": return ok("Public");
-		case "Private": case "private": return ok("Private");
-		default: return fail(ctx, "invalid_access", `unknown access "${s.value}"`);
-	}
-}
-
-// The legacy CustomTypeDefinition array carries its constructors inside an
-// access-controlled wrapper, in either the tag spelling or the {access, value}
-// spelling (kit definitions-0001).
-function readAccessControlledConstructors(
-	ctx: Ctx,
-	v: JsonValue,
-): Result<{ readonly access: Access; readonly constructors: readonly Constructor<TA>[] }, Diagnostic> {
-	const o = expectObject(ctx, v);
-	if (!o.ok) return o;
-	if (o.value.members.has("access")) {
-		const m = members(ctx, o.value, ["access", "value"], []);
-		if (!m.ok) return m;
-		const access = readAccess(at(ctx, "access"), m.value.get("access") as JsonValue);
-		if (!access.ok) return access;
-		const constructors = readConstructors(at(ctx, "value"), m.value.get("value") as JsonValue);
-		return constructors.ok ? ok({ access: access.value, constructors: constructors.value }) : constructors;
-	}
-	const kv = singleKey(ctx, o.value);
-	if (!kv.ok) return kv;
-	const [key, payload] = kv.value;
-	const access = readAccess(ctx, key);
-	if (!access.ok) return access;
-	const constructors = readConstructors(at(ctx, key), payload);
-	return constructors.ok ? ok({ access: access.value, constructors: constructors.value }) : constructors;
 }
 
 // ------------------------------------------------------------ annotations
@@ -621,13 +586,16 @@ function readLegacyDefinition(ctx: Ctx, items: readonly JsonValue[]): Result<Typ
 			if (bad !== null) return bad;
 			const typeParams = readNames(at(ctx, 1), items[1] as JsonValue);
 			if (!typeParams.ok) return typeParams;
-			const acc = readAccessControlledConstructors(at(ctx, 2), items[2] as JsonValue);
+			// The legacy array carries its constructors inside an
+			// access-controlled wrapper, in any of the three spellings
+			// read-definitions.ts accepts (kit definitions-0001).
+			const acc = readAccessControlled(at(ctx, 2), items[2] as JsonValue, readConstructors);
 			if (!acc.ok) return acc;
 			return ok({
 				kind: "CustomTypeDefinition",
 				typeParams: typeParams.value,
 				constructorsAccess: acc.value.access,
-				constructors: acc.value.constructors,
+				constructors: acc.value.value,
 			});
 		}
 		default:
