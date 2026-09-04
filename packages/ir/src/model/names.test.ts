@@ -8,6 +8,11 @@ import path from "node:path";
 import { FQName, Name, Path, type NameStyle } from "./names.ts";
 
 const corpusPath = path.resolve(import.meta.dir, "../../../../../../docs/spec/ir/fixtures/naming-conformance.json");
+// A missing corpus would quietly skip the conformance cases, so it is an error
+// unless a caller has said it is running without the fixtures.
+if (!existsSync(corpusPath) && process.env.MORPHIR_FIXTURES_OPTIONAL !== "1") {
+	throw new Error(`naming-conformance.json not found at ${corpusPath}; set MORPHIR_FIXTURES_OPTIONAL=1 to skip`);
+}
 const corpus = existsSync(corpusPath) ? JSON.parse(readFileSync(corpusPath, "utf8")) : null;
 const styles: readonly NameStyle[] = ["uppercase", "doubledHyphen"];
 

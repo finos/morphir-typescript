@@ -21,6 +21,11 @@ const NODES: ReadonlyMap<string, NodeKind> = new Map<string, NodeKind>([
 	...Object.entries(NODE_ALIASES),
 ]);
 
+// A missing kit means the whole runner silently reports nothing, so it is an
+// error here unless a caller has said it is running without the fixtures.
+if (!existsSync(kitDir) && process.env.MORPHIR_FIXTURES_OPTIONAL !== "1") {
+	throw new Error(`the Morphir Compatibility Kit not found at ${kitDir}; set MORPHIR_FIXTURES_OPTIONAL=1 to skip`);
+}
 const kit = existsSync(kitDir) ? await loadKit(kitDir) : null;
 let checked = 0;
 let skipped = 0;

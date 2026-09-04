@@ -14,7 +14,7 @@
 // object carrying an "attributes" member beside the rest (provisional, bead
 // morphir-ir-v4-stabilize.1), which is also what admits Hole, Native and
 // External at value position.
-import { type Ctx, at, expectArray, expectObject, expectString, fail, guardDepth, members, optionalString, singleKey } from "../../codec/json/cursor.ts";
+import { type Ctx, at, describeJson, expectArray, expectObject, expectString, fail, guardDepth, members, optionalString, singleKey } from "../../codec/json/cursor.ts";
 import { type JsonObject, type JsonValue, isInteger, isNumber, isObject } from "../../codec/json/value.ts";
 import type { Diagnostic } from "../../model/diagnostic.ts";
 import type { Name } from "../../model/names.ts";
@@ -121,9 +121,6 @@ function readPatterns(ctx: Ctx, v: JsonValue): Result<readonly Pattern<VA>[], Di
 
 // --------------------------------------------------------------- literals
 
-const describe = (v: JsonValue): string =>
-	v === null ? "null" : Array.isArray(v) ? "array" : isObject(v) ? "object" : isNumber(v) ? "number" : typeof v;
-
 // The compact payload of every literal is a scalar, so an object payload is
 // always the expanded { "value": ... } spelling and never a literal in its
 // own right.
@@ -141,7 +138,7 @@ function floatLiteral(ctx: Ctx, text: string): Result<Literal, Diagnostic> {
 }
 
 export function readLiteral(ctx: Ctx, v: JsonValue): Result<Literal, Diagnostic> {
-	if (!isObject(v)) return fail(ctx, "invalid_literal", `expected a literal wrapper object, found ${describe(v)}`, v);
+	if (!isObject(v)) return fail(ctx, "invalid_literal", `expected a literal wrapper object, found ${describeJson(v)}`, v);
 	const entries = [...v.members.entries()];
 	const first = entries[0];
 	if (entries.length !== 1 || first === undefined) {
@@ -153,7 +150,7 @@ export function readLiteral(ctx: Ctx, v: JsonValue): Result<Literal, Diagnostic>
 	if (!unwrapped.ok) return unwrapped;
 	const p = unwrapped.value;
 	const wrong = (what: string): Result<never, Diagnostic> =>
-		fail(inner, "invalid_literal", `${key} expects ${what}, found ${describe(p)}`, p);
+		fail(inner, "invalid_literal", `${key} expects ${what}, found ${describeJson(p)}`, p);
 	switch (key) {
 		case "BoolLiteral":
 			return typeof p === "boolean" ? ok({ kind: "BoolLiteral", value: p }) : wrong("a boolean");
@@ -210,7 +207,7 @@ export function readPattern(ctx: Ctx, v: JsonValue): Result<Pattern<VA>, Diagnos
 		const patterns = readPatterns(ctx, v);
 		return patterns.ok ? ok({ kind: "TuplePattern", attributes: EMPTY_VA, patterns: patterns.value }) : patterns;
 	}
-	if (!isObject(v)) return fail(ctx, "invalid_type", `expected a pattern, found ${describe(v)}`, v);
+	if (!isObject(v)) return fail(ctx, "invalid_type", `expected a pattern, found ${describeJson(v)}`, v);
 	const kv = singleKey(ctx, v);
 	if (!kv.ok) return kv;
 	const [key, payload] = kv.value;
@@ -288,7 +285,7 @@ export function readValue(ctx: Ctx, v: JsonValue): Result<Value<TA, VA>, Diagnos
 	if (typeof v === "boolean") return fail(ctx, "ambiguous_shorthand", BARE_BOOLEAN, v);
 	if (isNumber(v)) return fail(ctx, "ambiguous_shorthand", BARE_NUMBER, v);
 	if (Array.isArray(v)) return fail(ctx, "ambiguous_shorthand", BARE_ARRAY, v);
-	if (!isObject(v)) return fail(ctx, "invalid_type", `expected a value expression, found ${describe(v)}`, v);
+	if (!isObject(v)) return fail(ctx, "invalid_type", `expected a value expression, found ${describeJson(v)}`, v);
 	const kv = singleKey(ctx, v);
 	if (!kv.ok) return kv;
 	const [key, payload] = kv.value;

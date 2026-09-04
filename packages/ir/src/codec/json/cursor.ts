@@ -28,23 +28,25 @@ export function guardDepth(ctx: Ctx): Result<Ctx, Diagnostic> {
 	return ctx.depth > MAX_DEPTH ? fail(ctx, "nesting_too_deep", `nesting deeper than ${MAX_DEPTH} is not accepted`) : ok(ctx);
 }
 
-const describe = (v: JsonValue): string =>
+// What to call a JSON value in a message. Every reader that has to say what it
+// found instead uses this one, so the wording does not drift between modules.
+export const describeJson = (v: JsonValue): string =>
 	v === null ? "null" : Array.isArray(v) ? "array" : isObject(v) ? "object" : isNumber(v) ? "number" : typeof v;
 
 export function expectObject(ctx: Ctx, v: JsonValue): Result<JsonObject, Diagnostic> {
-	return isObject(v) ? ok(v) : fail(ctx, "invalid_type", `expected an object, found ${describe(v)}`, v);
+	return isObject(v) ? ok(v) : fail(ctx, "invalid_type", `expected an object, found ${describeJson(v)}`, v);
 }
 export function expectArray(ctx: Ctx, v: JsonValue): Result<readonly JsonValue[], Diagnostic> {
-	return Array.isArray(v) ? ok(v) : fail(ctx, "invalid_type", `expected an array, found ${describe(v)}`, v);
+	return Array.isArray(v) ? ok(v) : fail(ctx, "invalid_type", `expected an array, found ${describeJson(v)}`, v);
 }
 export function expectString(ctx: Ctx, v: JsonValue): Result<string, Diagnostic> {
-	return typeof v === "string" ? ok(v) : fail(ctx, "invalid_type", `expected a string, found ${describe(v)}`, v);
+	return typeof v === "string" ? ok(v) : fail(ctx, "invalid_type", `expected a string, found ${describeJson(v)}`, v);
 }
 export function expectBoolean(ctx: Ctx, v: JsonValue): Result<boolean, Diagnostic> {
-	return typeof v === "boolean" ? ok(v) : fail(ctx, "invalid_type", `expected a boolean, found ${describe(v)}`, v);
+	return typeof v === "boolean" ? ok(v) : fail(ctx, "invalid_type", `expected a boolean, found ${describeJson(v)}`, v);
 }
 export function expectNumber(ctx: Ctx, v: JsonValue): Result<JsonNumber, Diagnostic> {
-	return isNumber(v) ? ok(v) : fail(ctx, "invalid_type", `expected a number, found ${describe(v)}`, v);
+	return isNumber(v) ? ok(v) : fail(ctx, "invalid_type", `expected a number, found ${describeJson(v)}`, v);
 }
 
 export function members(ctx: Ctx, o: JsonObject, required: readonly string[], optional: readonly string[]): Result<ReadonlyMap<string, JsonValue>, Diagnostic> {

@@ -10,6 +10,11 @@ import { isObject, jsonNumber, parseJson, writeJson } from "../../codec/json/val
 import { compatibility, readFormatVersionMember, recognize } from "./format-version.ts";
 
 const corpusPath = path.resolve(import.meta.dir, "../../../../../../../docs/spec/ir/fixtures/format-version-conformance.json");
+// A missing corpus would quietly skip the conformance cases, so it is an error
+// unless a caller has said it is running without the fixtures.
+if (!existsSync(corpusPath) && process.env.MORPHIR_FIXTURES_OPTIONAL !== "1") {
+	throw new Error(`format-version-conformance.json not found at ${corpusPath}; set MORPHIR_FIXTURES_OPTIONAL=1 to skip`);
+}
 const corpus = existsSync(corpusPath) ? JSON.parse(readFileSync(corpusPath, "utf8")) : null;
 
 describe("recognize", () => {

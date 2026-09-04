@@ -1,3 +1,4 @@
+// packages/ir/src/model/result.ts
 //
 // A minimal Result type. Readers return Result rather than throwing, so a
 // binding can report a diagnostic with a cursor instead of a stack trace.

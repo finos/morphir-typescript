@@ -9,8 +9,8 @@
 // exactly formatVersion and distribution, in either order; the version is read
 // and checked for support before the document under it is read at all (kit
 // distributions-0001, distributions-0002).
-import { type Ctx, at, expectObject, expectString, fail, members, optionalString, root } from "../../codec/json/cursor.ts";
-import { type JsonValue, isNumber, isObject } from "../../codec/json/value.ts";
+import { type Ctx, at, describeJson, expectObject, expectString, fail, members, optionalString, root } from "../../codec/json/cursor.ts";
+import { type JsonValue, isObject } from "../../codec/json/value.ts";
 import type { Diagnostic } from "../../model/diagnostic.ts";
 import type {
 	Distribution,
@@ -38,9 +38,6 @@ const DISTRIBUTION_KEYS: readonly string[] = ["Library", "Specs", "Application"]
 const ENTRY_POINT_KINDS: readonly string[] = ["main", "command", "handler", "job", "policy"];
 
 type Read<T> = (ctx: Ctx, v: JsonValue) => Result<T, Diagnostic>;
-
-const describe = (v: JsonValue): string =>
-	v === null ? "null" : Array.isArray(v) ? "array" : isObject(v) ? "object" : isNumber(v) ? "number" : typeof v;
 
 // --------------------------------------------------------------- packages
 
@@ -136,7 +133,7 @@ function readEntryPoints(ctx: Ctx, v: JsonValue): Result<readonly EntryPoint[], 
 
 export function readDistribution(ctx: Ctx, v: JsonValue): Result<Distribution<TA, VA>, Diagnostic> {
 	if (!isObject(v)) {
-		return fail(ctx, "invalid_distribution_shape", `expected a distribution wrapper object, found ${describe(v)}`, v);
+		return fail(ctx, "invalid_distribution_shape", `expected a distribution wrapper object, found ${describeJson(v)}`, v);
 	}
 	const entries = [...v.members.entries()];
 	const first = entries[0];
