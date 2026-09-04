@@ -6,14 +6,22 @@
 // what the kit's rejected fences expect.
 import { type Diagnostic, type DiagnosticCode, diagnostic } from "../../model/diagnostic.ts";
 import { type Result, err, ok } from "../../model/result.ts";
-import { type JsonNumber, type JsonObject, type JsonValue, isNumber, isObject } from "./value.ts";
+import { MAX_DEPTH, type JsonNumber, type JsonObject, type JsonValue, isNumber, isObject } from "./value.ts";
 
-export interface Ctx { readonly cursor: string }
-export const root: Ctx = { cursor: "" };
-export function at(ctx: Ctx, key: string | number): Ctx { return { cursor: `${ctx.cursor}/${key}` }; }
+export interface Ctx { readonly cursor: string; readonly depth: number }
+export const root: Ctx = { cursor: "", depth: 0 };
+export function at(ctx: Ctx, key: string | number): Ctx { return { cursor: `${ctx.cursor}/${key}`, depth: ctx.depth + 1 }; }
 
 export function fail(ctx: Ctx, code: DiagnosticCode, message: string): Result<never, Diagnostic> {
 	return err(diagnostic(code, "normalization", ctx.cursor || "/", message));
+}
+
+// parseJson already bounds the depth of anything read from text, so this only
+// catches trees a binding built in memory and handed straight to a reader. It
+// is one integer compare per recursive node, which is why the recursive
+// readers can afford to call it on the way in.
+export function guardDepth(ctx: Ctx): Result<Ctx, Diagnostic> {
+	return ctx.depth > MAX_DEPTH ? fail(ctx, "nesting_too_deep", `nesting deeper than ${MAX_DEPTH} is not accepted`) : ok(ctx);
 }
 
 const describe = (v: JsonValue): string =>

@@ -12,7 +12,7 @@
 // Legacy tagged arrays for type *expressions* belong to the v3 reader and are
 // not accepted here; legacy tagged arrays for specifications and definitions
 // are, because the v4 schema still lists them.
-import { type Ctx, at, expectArray, expectObject, expectString, fail, members, singleKey } from "../../codec/json/cursor.ts";
+import { type Ctx, at, expectArray, expectObject, expectString, fail, guardDepth, members, singleKey } from "../../codec/json/cursor.ts";
 import { type JsonObject, type JsonValue, isObject } from "../../codec/json/value.ts";
 import { EMPTY_TYPE_ATTRIBUTES } from "../../model/attributes.ts";
 import type { Diagnostic } from "../../model/diagnostic.ts";
@@ -103,6 +103,8 @@ function expanded(
 // ------------------------------------------------------------ expressions
 
 export function readType(ctx: Ctx, v: JsonValue): Result<Type<TA>, Diagnostic> {
+	const depth = guardDepth(ctx);
+	if (!depth.ok) return depth;
 	if (typeof v === "string") {
 		if (isFQNameString(v)) {
 			const fq = readFQName(ctx, v);

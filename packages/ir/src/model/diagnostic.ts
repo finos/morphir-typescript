@@ -5,7 +5,7 @@
 export type DiagnosticStage = "syntax" | "normalization" | "semantic";
 
 export type DiagnosticCode =
-	| "invalid_json" | "duplicate_member" | "invalid_type" | "missing_member" | "unknown_member"
+	| "invalid_json" | "duplicate_member" | "nesting_too_deep" | "invalid_type" | "missing_member" | "unknown_member"
 	| "unknown_node" | "ambiguous_shorthand" | "invalid_name" | "invalid_path" | "invalid_fqname"
 	| "invalid_literal" | "invalid_access" | "invalid_distribution_shape"
 	| "missing_format_version" | "duplicate_format_version" | "invalid_format_version_type"

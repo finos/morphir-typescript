@@ -28,6 +28,10 @@ describe("parseJson", () => {
 		expect(parseJson("1 2").ok).toBe(false);
 		expect(parseJson("NaN").ok).toBe(false);
 	});
+	test("bounds nesting instead of exhausting the stack", () => {
+		const r = parseJson("[".repeat(20000) + "]".repeat(20000));
+		expect(r).toMatchObject({ ok: false, error: { code: "nesting_too_deep" } });
+	});
 });
 
 describe("writeJson", () => {

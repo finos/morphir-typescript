@@ -2,8 +2,8 @@
 // Hand cases for v4 type reading and canonical writing; the kit runner covers the rest.
 // Run with: bun test packages/ir/src/versions/v4/types.test.ts
 import { describe, expect, test } from "bun:test";
-import { root } from "../../codec/json/cursor.ts";
-import { parseJson, writeJson } from "../../codec/json/value.ts";
+import { at, root } from "../../codec/json/cursor.ts";
+import { type JsonValue, parseJson, writeJson } from "../../codec/json/value.ts";
 import { readType, readTypeDefinition, readTypeSpecification } from "./read-types.ts";
 import { writeType, writeTypeDefinition, writeTypeSpecification } from "./write-types.ts";
 
@@ -39,6 +39,20 @@ describe("readType/writeType", () => {
 		const r = readType(root, json('{ "Function": { "arg": "a", "result": "b" } }'));
 		expect(!r.ok && r.error.code).toBe("unknown_member");
 		expect(!r.ok && r.error.cursor).toBe("/Function/arg");
+	});
+	test("deep nesting is a diagnostic, not a thrown stack overflow", () => {
+		const text = "[".repeat(20000) + "]".repeat(20000);
+		const parsed = parseJson(text);
+		const r = parsed.ok ? readType(root, parsed.value) : parsed;
+		expect(r).toMatchObject({ ok: false, error: { code: "nesting_too_deep" } });
+	});
+	test("a tree built in memory is bounded by the cursor guard", () => {
+		let deep: JsonValue = [];
+		for (let i = 0; i < 2000; i += 1) deep = [deep];
+		// The guard reads the cursor's own depth, so a nested read starts where
+		// its caller left off; from the root it trips at MAX_DEPTH.
+		expect(readType(root, deep)).toMatchObject({ ok: false, error: { code: "nesting_too_deep" } });
+		expect(at(root, "x").depth).toBe(1);
 	});
 	test("attributes produce and read the expanded form", () => {
 		const s = '{ "Variable": { "attributes": { "source": { "startLine": 1, "startColumn": 2, "endLine": 3, "endColumn": 4 } }, "name": "a" } }';

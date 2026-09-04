@@ -14,7 +14,7 @@
 // object carrying an "attributes" member beside the rest (provisional, bead
 // morphir-ir-v4-stabilize.1), which is also what admits Hole, Native and
 // External at value position.
-import { type Ctx, at, expectArray, expectObject, expectString, fail, members, optionalString, singleKey } from "../../codec/json/cursor.ts";
+import { type Ctx, at, expectArray, expectObject, expectString, fail, guardDepth, members, optionalString, singleKey } from "../../codec/json/cursor.ts";
 import { type JsonObject, type JsonValue, isInteger, isNumber, isObject } from "../../codec/json/value.ts";
 import { emptyValueAttributes } from "../../model/attributes.ts";
 import type { Diagnostic } from "../../model/diagnostic.ts";
@@ -203,6 +203,8 @@ function readLiteralPayload(ctx: Ctx, v: JsonValue): Result<{ readonly literal: 
 // --------------------------------------------------------------- patterns
 
 export function readPattern(ctx: Ctx, v: JsonValue): Result<Pattern<VA>, Diagnostic> {
+	const depth = guardDepth(ctx);
+	if (!depth.ok) return depth;
 	// A bare array is a TuplePattern; no other pattern uses one, so unlike at
 	// value position there is nothing to be ambiguous about.
 	if (Array.isArray(v)) {
@@ -272,6 +274,8 @@ const BARE_NUMBER = 'a bare number at value position is ambiguous; write { "Lite
 const BARE_ARRAY = 'a bare array at value position is ambiguous between Tuple and List; write { "List": [..] } or { "Tuple": [..] }';
 
 export function readValue(ctx: Ctx, v: JsonValue): Result<Value<TA, VA>, Diagnostic> {
+	const depth = guardDepth(ctx);
+	if (!depth.ok) return depth;
 	// A bare string is the one shorthand the kit settles: an FQName is a
 	// Reference, anything else is a Variable.
 	if (typeof v === "string") {

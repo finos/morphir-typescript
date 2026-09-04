@@ -24,6 +24,11 @@ export function isInteger(n: JsonNumber): boolean { return !/[.eE]/.test(n.text)
 
 const NUMBER = /^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?/;
 
+// A reader must return a diagnostic rather than exhaust the stack, and this
+// parser descends recursively, so nesting is bounded here. 1000 is far past
+// anything a compiler emits and far short of the engine's limit.
+export const MAX_DEPTH = 1000;
+
 class Parser {
 	private pos = 0;
 	private line = 1;
@@ -32,6 +37,9 @@ class Parser {
 
 	private fail(message: string): Diagnostic {
 		return diagnostic("invalid_json", "syntax", "", message, { line: this.line, column: this.col });
+	}
+	private tooDeep(cursor: string): Diagnostic {
+		return diagnostic("nesting_too_deep", "syntax", cursor || "/", `nesting deeper than ${MAX_DEPTH} is not accepted`, { line: this.line, column: this.col });
 	}
 	private peek(): string { return this.text[this.pos] ?? ""; }
 	private advance(n: number): void {
@@ -44,17 +52,17 @@ class Parser {
 
 	parseDocument(): Result<JsonValue, Diagnostic> {
 		this.ws();
-		const v = this.parseValue("");
+		const v = this.parseValue("", 0);
 		if (!v.ok) return v;
 		this.ws();
 		if (this.pos !== this.text.length) return err(this.fail("trailing content after the JSON value"));
 		return v;
 	}
 
-	private parseValue(cursor: string): Result<JsonValue, Diagnostic> {
+	private parseValue(cursor: string, depth: number): Result<JsonValue, Diagnostic> {
 		const c = this.peek();
-		if (c === "{") return this.parseObject(cursor);
-		if (c === "[") return this.parseArray(cursor);
+		if (c === "{") return this.parseObject(cursor, depth);
+		if (c === "[") return this.parseArray(cursor, depth);
 		if (c === '"') return this.parseString();
 		if (this.text.startsWith("true", this.pos)) { this.advance(4); return ok(true); }
 		if (this.text.startsWith("false", this.pos)) { this.advance(5); return ok(false); }
@@ -64,7 +72,8 @@ class Parser {
 		return err(this.fail(c === "" ? "unexpected end of input" : `unexpected character "${c}"`));
 	}
 
-	private parseObject(cursor: string): Result<JsonValue, Diagnostic> {
+	private parseObject(cursor: string, depth: number): Result<JsonValue, Diagnostic> {
+		if (depth >= MAX_DEPTH) return err(this.tooDeep(cursor));
 		this.advance(1);
 		const members = new Map<string, JsonValue>();
 		this.ws();
@@ -79,7 +88,7 @@ class Parser {
 			if (this.peek() !== ":") return err(this.fail('expected ":"'));
 			this.advance(1);
 			this.ws();
-			const value = this.parseValue(`${cursor}/${name}`);
+			const value = this.parseValue(`${cursor}/${name}`, depth + 1);
 			if (!value.ok) return value;
 			if (members.has(name)) {
 				return err(diagnostic("duplicate_member", "syntax", `${cursor}/${name}`, `duplicate member "${name}"`, { line: this.line, column: this.col }));
@@ -92,14 +101,15 @@ class Parser {
 		}
 	}
 
-	private parseArray(cursor: string): Result<JsonValue, Diagnostic> {
+	private parseArray(cursor: string, depth: number): Result<JsonValue, Diagnostic> {
+		if (depth >= MAX_DEPTH) return err(this.tooDeep(cursor));
 		this.advance(1);
 		const items: JsonValue[] = [];
 		this.ws();
 		if (this.peek() === "]") { this.advance(1); return ok(items); }
 		for (;;) {
 			this.ws();
-			const v = this.parseValue(`${cursor}/${items.length}`);
+			const v = this.parseValue(`${cursor}/${items.length}`, depth + 1);
 			if (!v.ok) return v;
 			items.push(v.value);
 			this.ws();
