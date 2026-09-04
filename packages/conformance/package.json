@@ -1,0 +1,16 @@
+{
+	"name": "@finos/morphir-ir-conformance",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"description": "The Morphir IR conformance driver: parses the corpus, drives bindings, writes reports.",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"bin": {
+		"morphir-conformance": "./src/cli.ts"
+	},
+	"scripts": {
+		"typecheck": "tsc -p tsconfig.json"
+	}
+}
