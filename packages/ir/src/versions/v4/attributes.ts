@@ -5,9 +5,7 @@
 // wire and overwhelmingly empty, so the writers return null when there is
 // nothing to say and the node writers omit the member entirely.
 import { type Ctx, at, expectNumber, expectObject, fail, members } from "../../codec/json/cursor.ts";
-import { type JsonObject, type JsonValue, isInteger, isNumber, isObject, jsonNumber, jsonObject } from "../../codec/json/value.ts";
-import type { Json } from "../../model/attributes.ts";
-import { isJsonNumber } from "../../model/attributes.ts";
+import { type JsonObject, type JsonValue, isInteger, jsonNumber, jsonObject } from "../../codec/json/value.ts";
 import type { Diagnostic } from "../../model/diagnostic.ts";
 import { type Result, ok } from "../../model/result.ts";
 import type { Type } from "../../model/types.ts";
@@ -25,49 +23,36 @@ export interface SourceLocation {
 	readonly endColumn: number;
 }
 
+// Constraints and extensions are opaque payloads: the profile carries them
+// through unread, so they are the parsed JSON object itself — ordered, with its
+// number lexemes intact — and are written back unchanged. Nothing here inspects
+// or rebuilds them, which is why 12345678901234567890 and 1.50 survive a round
+// trip and why an object that looks like a number stays an object.
 export interface TypeAttributes {
 	readonly source: SourceLocation | null;
-	readonly constraints: { readonly [key: string]: Json };
-	readonly extensions: { readonly [key: string]: Json };
+	readonly constraints: JsonObject;
+	readonly extensions: JsonObject;
 }
 
 export interface ValueAttributes<TA> {
 	readonly source: SourceLocation | null;
 	readonly inferredType: Type<TA> | null;
-	readonly extensions: { readonly [key: string]: Json };
+	readonly extensions: JsonObject;
 }
 
-export const EMPTY_TYPE_ATTRIBUTES: TypeAttributes = { source: null, constraints: {}, extensions: {} };
+// An empty payload, built fresh. This is a hoisted function rather than a
+// shared const because the v4 readers form an import cycle: read-values.ts
+// builds its empty value attributes while this module is still initializing,
+// when a function declaration is already bound and a const is not.
+function emptyPayload(): JsonObject { return jsonObject([]); }
+
+export const EMPTY_TYPE_ATTRIBUTES: TypeAttributes = { source: null, constraints: emptyPayload(), extensions: emptyPayload() };
 export function emptyValueAttributes<TA>(): ValueAttributes<TA> {
-	return { source: null, inferredType: null, extensions: {} };
+	return { source: null, inferredType: null, extensions: emptyPayload() };
 }
 
 export type TA = TypeAttributes;
 export type VA = ValueAttributes<TypeAttributes>;
-
-type JsonMap = { readonly [key: string]: Json };
-
-// Constraints and extensions are opaque payloads: the profile carries them
-// through unread, so they cross into the model as plain Json. A number crosses
-// as the lexeme it was read as — 12345678901234567890 and 1.50 survive a round
-// trip that a double would round or renormalize.
-export function toJson(v: JsonValue): Json {
-	if (v === null || typeof v === "boolean" || typeof v === "string") return v;
-	if (isNumber(v)) return v;
-	if (isObject(v)) {
-		const out: Record<string, Json> = {};
-		for (const [key, member] of v.members) out[key] = toJson(member);
-		return out;
-	}
-	return v.map(toJson);
-}
-
-export function fromJson(j: Json): JsonValue {
-	if (j === null || typeof j === "boolean" || typeof j === "string") return j;
-	if (isJsonNumber(j)) return j;
-	if (Array.isArray(j)) return j.map(fromJson);
-	return jsonObject(Object.entries(j as JsonMap).map(([key, value]) => [key, fromJson(value)] as const));
-}
 
 const SOURCE_MEMBERS = ["startLine", "startColumn", "endLine", "endColumn"] as const;
 
@@ -91,14 +76,6 @@ function readSourceLocation(ctx: Ctx, v: JsonValue): Result<SourceLocation, Diag
 	});
 }
 
-function readJsonMap(ctx: Ctx, v: JsonValue): Result<JsonMap, Diagnostic> {
-	const o = expectObject(ctx, v);
-	if (!o.ok) return o;
-	const out: Record<string, Json> = {};
-	for (const [key, member] of o.value.members) out[key] = toJson(member);
-	return ok(out);
-}
-
 // An absent attributes member and an empty attributes object mean the same
 // thing, so the reader accepts undefined rather than forcing every caller to
 // branch first.
@@ -115,17 +92,17 @@ export function readTypeAttributes(ctx: Ctx, v: JsonValue | undefined): Result<T
 		if (!s.ok) return s;
 		source = s.value;
 	}
-	let constraints: JsonMap = {};
+	let constraints: JsonObject = emptyPayload();
 	const rawConstraints = m.value.get("constraints");
 	if (rawConstraints !== undefined) {
-		const c = readJsonMap(at(ctx, "constraints"), rawConstraints);
+		const c = expectObject(at(ctx, "constraints"), rawConstraints);
 		if (!c.ok) return c;
 		constraints = c.value;
 	}
-	let extensions: JsonMap = {};
+	let extensions: JsonObject = emptyPayload();
 	const rawExtensions = m.value.get("extensions");
 	if (rawExtensions !== undefined) {
-		const e = readJsonMap(at(ctx, "extensions"), rawExtensions);
+		const e = expectObject(at(ctx, "extensions"), rawExtensions);
 		if (!e.ok) return e;
 		extensions = e.value;
 	}
@@ -152,17 +129,17 @@ export function readValueAttributes(ctx: Ctx, v: JsonValue | undefined): Result<
 		if (!t.ok) return t;
 		inferredType = t.value;
 	}
-	let extensions: JsonMap = {};
+	let extensions: JsonObject = emptyPayload();
 	const rawExtensions = m.value.get("extensions");
 	if (rawExtensions !== undefined) {
-		const e = readJsonMap(at(ctx, "extensions"), rawExtensions);
+		const e = expectObject(at(ctx, "extensions"), rawExtensions);
 		if (!e.ok) return e;
 		extensions = e.value;
 	}
 	return ok({ source, inferredType, extensions });
 }
 
-const isEmptyMap = (m: JsonMap): boolean => Object.keys(m).length === 0;
+const isEmptyMap = (m: JsonObject): boolean => m.members.size === 0;
 
 export function isEmptyTA(a: TA): boolean {
 	return a.source === null && isEmptyMap(a.constraints) && isEmptyMap(a.extensions);
@@ -175,10 +152,6 @@ function writeSourceLocation(s: SourceLocation): JsonObject {
 	return jsonObject(SOURCE_MEMBERS.map((key) => [key, jsonNumber(String(s[key]))] as const));
 }
 
-function writeJsonMap(m: JsonMap): JsonObject {
-	return jsonObject(Object.entries(m).map(([key, value]) => [key, fromJson(value)] as const));
-}
-
 // An attributes record with nothing to say is written as no member at all,
 // which is what `null` means to the node writers here. Clearing a tree for
 // comparison replaces each record with the empty one rather than dropping it,
@@ -187,8 +160,8 @@ export function writeTypeAttributes(a: TA): JsonObject | null {
 	if (isEmptyTA(a)) return null;
 	const entries: (readonly [string, JsonValue])[] = [];
 	if (a.source !== null) entries.push(["source", writeSourceLocation(a.source)]);
-	if (!isEmptyMap(a.constraints)) entries.push(["constraints", writeJsonMap(a.constraints)]);
-	if (!isEmptyMap(a.extensions)) entries.push(["extensions", writeJsonMap(a.extensions)]);
+	if (!isEmptyMap(a.constraints)) entries.push(["constraints", a.constraints]);
+	if (!isEmptyMap(a.extensions)) entries.push(["extensions", a.extensions]);
 	return jsonObject(entries);
 }
 
@@ -197,6 +170,6 @@ export function writeValueAttributes(a: VA): JsonObject | null {
 	const entries: (readonly [string, JsonValue])[] = [];
 	if (a.source !== null) entries.push(["source", writeSourceLocation(a.source)]);
 	if (a.inferredType !== null) entries.push(["inferredType", writeType(a.inferredType)]);
-	if (!isEmptyMap(a.extensions)) entries.push(["extensions", writeJsonMap(a.extensions)]);
+	if (!isEmptyMap(a.extensions)) entries.push(["extensions", a.extensions]);
 	return jsonObject(entries);
 }

@@ -3,26 +3,23 @@
 // A strict JSON value layer. JSON.parse cannot reject duplicate members or
 // preserve number lexemes, and both are required by the v4 JSON profile, so
 // this is a small hand-written RFC 8259 parser and a canonical one-line writer.
-import type { JsonNumber } from "../../model/attributes.ts";
+import { type Json, type JsonNumber, type JsonObject, isJsonNumber, isJsonObject } from "../../model/attributes.ts";
 import { type Diagnostic, diagnostic } from "../../model/diagnostic.ts";
 import { type Result, err, ok } from "../../model/result.ts";
 
-// The number lexeme is declared in the model so the codec and the opaque
-// attribute payloads share one shape rather than two that happen to match.
-export type { JsonNumber };
-export interface JsonObject { readonly kind: "object"; readonly members: ReadonlyMap<string, JsonValue> }
-export type JsonValue = null | boolean | string | JsonNumber | readonly JsonValue[] | JsonObject;
+// The value tree is declared in the model, because an opaque attribute payload
+// is one of these trees carried through unread. There is one tree, not two that
+// happen to match, so a payload can never be mistaken for a codec value or the
+// other way round.
+export type { Json, JsonNumber, JsonObject };
+export type JsonValue = Json;
 
 export function jsonNumber(text: string): JsonNumber { return { kind: "number", text }; }
 export function jsonObject(entries: readonly (readonly [string, JsonValue])[]): JsonObject {
 	return { kind: "object", members: new Map(entries) };
 }
-export function isObject(v: JsonValue): v is JsonObject {
-	return typeof v === "object" && v !== null && !Array.isArray(v) && (v as JsonObject).kind === "object";
-}
-export function isNumber(v: JsonValue): v is JsonNumber {
-	return typeof v === "object" && v !== null && !Array.isArray(v) && (v as JsonNumber).kind === "number";
-}
+export function isObject(v: JsonValue): v is JsonObject { return isJsonObject(v); }
+export function isNumber(v: JsonValue): v is JsonNumber { return isJsonNumber(v); }
 export function isInteger(n: JsonNumber): boolean { return !/[.eE]/.test(n.text); }
 
 export interface JsonLocation { readonly line: number; readonly column: number }

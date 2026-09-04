@@ -3,25 +3,23 @@
 // The opaque payload attributes carry, and nothing else. The model is generic
 // over its attributes (Type<A>, Value<TA, VA>) and stays that way: the records
 // a wire format pins them to live in that version's module, not here.
+//
+// Json is the JSON codec's own value tree, kept opaque. The profile reads these
+// payloads and never interprets them, so they cross the model exactly as they
+// were parsed and are written back byte for byte: a number is the lexeme it was
+// spelled with rather than a double, and an object is a tagged, ordered map
+// rather than a plain record. The tag is what makes the tree unambiguous — a
+// payload spelled {"kind": "number", "text": "hello"} parses into a JsonObject
+// whose members map holds those two strings, so no payload can imitate a
+// number, and the writer can never splice a non-numeric text into the output.
 
-// The one number shape the package has: a lexeme, not a double. The JSON
-// codec's JsonNumber is this type, so a payload number that crosses into the
-// model keeps the spelling its source used and can be written back byte for
-// byte. `text` is the RFC 8259 number token exactly as it was read.
 export interface JsonNumber { readonly kind: "number"; readonly text: string }
+export interface JsonObject { readonly kind: "object"; readonly members: ReadonlyMap<string, Json> }
+export type Json = null | boolean | string | JsonNumber | readonly Json[] | JsonObject;
 
-// The opaque payload carried by v1-to-v3 attributes and by the v4 constraints
-// and extensions maps: read but never interpreted, so numbers stay lexemes.
-export type Json = null | boolean | JsonNumber | string | readonly Json[] | { readonly [key: string]: Json };
-
-// A Json object member set is unconstrained, so a payload spelled exactly
-// {"kind": "number", "text": "..."} is indistinguishable from a lexeme; it is
-// read back as the number it imitates.
 export function isJsonNumber(j: Json): j is JsonNumber {
-	if (j === null || typeof j !== "object" || Array.isArray(j)) return false;
-	const keys = Object.keys(j);
-	return keys.length === 2 && keys.includes("kind") && keys.includes("text")
-		&& (j as { readonly [key: string]: Json })["kind"] === "number"
-		&& typeof (j as { readonly [key: string]: Json })["text"] === "string";
+	return typeof j === "object" && j !== null && !Array.isArray(j) && (j as JsonNumber).kind === "number";
 }
-
+export function isJsonObject(j: Json): j is JsonObject {
+	return typeof j === "object" && j !== null && !Array.isArray(j) && (j as JsonObject).kind === "object";
+}
