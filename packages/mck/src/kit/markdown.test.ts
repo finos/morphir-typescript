@@ -1,5 +1,5 @@
 //
-// Tests for the corpus markdown tokenizer. Run with: bun test src/corpus/markdown.test.ts
+// Tests for the MCK case-file markdown tokenizer. Run with: bun test packages/mck/src/kit/markdown.test.ts
 import { describe, expect, test } from "bun:test";
 import { tokenize } from "./markdown.ts";
 
@@ -7,7 +7,7 @@ describe("tokenize", () => {
 	test("splits front matter, headings, fences, and prose", () => {
 		const source = [
 			"---",
-			"corpus: ir-v4-encoding",
+			"kit: ir-v4-encoding",
 			"---",
 			"# Title",
 			"",
@@ -19,7 +19,7 @@ describe("tokenize", () => {
 		].join("\n");
 		const blocks = tokenize(source);
 		expect(blocks).toEqual([
-			{ kind: "frontMatter", text: "corpus: ir-v4-encoding", line: 1 },
+			{ kind: "frontMatter", text: "kit: ir-v4-encoding", line: 1 },
 			{ kind: "heading", level: 1, text: "Title", line: 4 },
 			{ kind: "heading", level: 2, text: "types-0001: Something {node=Type}", line: 6 },
 			{ kind: "prose", text: "Some prose.", line: 7 },

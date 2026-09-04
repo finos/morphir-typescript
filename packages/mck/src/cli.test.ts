@@ -1,5 +1,5 @@
 //
-// Tests for the morphir-conformance CLI. Run with: bun test src/cli.test.ts
+// Tests for the mck CLI. Run with: bun test packages/mck/src/cli.test.ts
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -7,7 +7,7 @@ import path from "node:path";
 
 const cli = path.join(import.meta.dir, "cli.ts");
 const dirs: string[] = [];
-const temp = (): string => { const d = mkdtempSync(path.join(tmpdir(), "corpus-cli-")); dirs.push(d); return d; };
+const temp = (): string => { const d = mkdtempSync(path.join(tmpdir(), "mck-cli-")); dirs.push(d); return d; };
 afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { force: true, recursive: true }); });
 
 const run = (...args: string[]) => {
@@ -15,8 +15,8 @@ const run = (...args: string[]) => {
 	return { code: r.exitCode, out: r.stdout.toString(), err: r.stderr.toString() };
 };
 
-describe("morphir-conformance check", () => {
-	test("passes a well-formed corpus", () => {
+describe("mck check", () => {
+	test("passes a well-formed kit", () => {
 		const d = temp();
 		writeFileSync(path.join(d, "types.md"), "## types-0001: ok\n```yaml canonical\na: 1\n```\n");
 		const r = run("check", d);
@@ -40,6 +40,6 @@ describe("morphir-conformance check", () => {
 	test("unknown command is usage error", () => {
 		const r = run("frobnicate");
 		expect(r.code).toBe(2);
-		expect(r.err).toMatch(/usage: morphir-conformance check <dir> \[--json\]/);
+		expect(r.err).toMatch(/usage: mck check <dir> \[--json\]/);
 	});
 });

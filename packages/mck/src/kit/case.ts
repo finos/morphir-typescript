@@ -1,19 +1,19 @@
 //
-// Turns one corpus markdown file into cases. An H2 opens a case; its fences are
+// Turns one MCK case file into cases. An H2 opens a case; its fences are
 // the data; everything else under it is prose. Every structural rule from the
-// corpus README is enforced here and reported as a CorpusError with a line, so
+// kit's README is enforced here and reported as a KitError with a line, so
 // the check command can print `file:line: message`.
 import { type FenceInfo, isInfoError, parseInfoString } from "./info-string.ts";
 import { type Block, tokenize } from "./markdown.ts";
 
-export interface CorpusFence {
+export interface KitFence {
 	readonly info: FenceInfo;
 	readonly body: string;
 	readonly line: number;
 	readonly index: number;
 }
 
-export interface CorpusCase {
+export interface KitCase {
 	readonly id: string;
 	readonly topic: string;
 	readonly number: number;
@@ -23,20 +23,20 @@ export interface CorpusCase {
 	readonly status: "active" | "pending";
 	readonly compare: "stripped" | "attributes";
 	readonly prose: readonly string[];
-	readonly fences: readonly CorpusFence[];
+	readonly fences: readonly KitFence[];
 	readonly file: string;
 	readonly line: number;
 }
 
-export interface CorpusError {
+export interface KitError {
 	readonly file: string;
 	readonly line: number;
 	readonly message: string;
 }
 
 export interface ParsedFile {
-	readonly cases: readonly CorpusCase[];
-	readonly errors: readonly CorpusError[];
+	readonly cases: readonly KitCase[];
+	readonly errors: readonly KitError[];
 }
 
 const HEADING = /^([a-z][a-z0-9-]*)-(\d{4}): (.+?)(?:\s*\{([^}]*)\})?\s*$/;
@@ -46,7 +46,7 @@ const HEADING_KEYS: ReadonlySet<string> = new Set(["node", "version", "status", 
 // counting canonicals it belongs to the profile of the named file's extension,
 // not to the literal "text" language. The path is the fence body's first
 // non-empty line.
-function profileOf(fence: CorpusFence): string {
+function profileOf(fence: KitFence): string {
 	if (fence.info.language !== "text") return fence.info.language;
 	const path = (fence.body.split(/\r?\n/).find((l) => l.trim().length > 0) ?? "").trim();
 	if (path.endsWith(".json")) return "json";
@@ -69,15 +69,15 @@ interface Draft {
 	status: "active" | "pending";
 	compare: "stripped" | "attributes";
 	prose: string[];
-	fences: CorpusFence[];
+	fences: KitFence[];
 	file: string;
 	line: number;
 }
 
-export function parseCorpusFile(file: string, source: string): ParsedFile {
+export function parseKitFile(file: string, source: string): ParsedFile {
 	const fileTopic = topicOf(file);
-	const errors: CorpusError[] = [];
-	const cases: CorpusCase[] = [];
+	const errors: KitError[] = [];
+	const cases: KitCase[] = [];
 	const seen = new Set<string>();
 	let draft: Draft | null = null;
 

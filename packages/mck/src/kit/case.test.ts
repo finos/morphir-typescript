@@ -1,9 +1,9 @@
 //
-// Tests for the corpus case parser. Run with: bun test src/corpus/case.test.ts
+// Tests for the kit case parser. Run with: bun test packages/mck/src/kit/case.test.ts
 import { describe, expect, test } from "bun:test";
-import { parseCorpusFile, topicOf } from "./case.ts";
+import { parseKitFile, topicOf } from "./case.ts";
 
-const file = "spec/ir/corpus/types.md";
+const file = "spec/ir/mck/types.md";
 
 const good = [
 	"# Types",
@@ -26,14 +26,14 @@ const good = [
 
 describe("topicOf", () => {
 	test("strips directory and extension", () => {
-		expect(topicOf("spec/ir/corpus/patterns-and-literals.md")).toBe("patterns-and-literals");
-		expect(topicOf("C:\\repo\\spec\\ir\\corpus\\types.md")).toBe("types");
+		expect(topicOf("spec/ir/mck/patterns-and-literals.md")).toBe("patterns-and-literals");
+		expect(topicOf("C:\\repo\\spec\\ir\\mck\\types.md")).toBe("types");
 	});
 });
 
-describe("parseCorpusFile", () => {
+describe("parseKitFile", () => {
 	test("parses cases, keys, prose, and fences", () => {
-		const { cases, errors } = parseCorpusFile(file, good);
+		const { cases, errors } = parseKitFile(file, good);
 		expect(errors).toEqual([]);
 		expect(cases).toHaveLength(2);
 		const [first, second] = cases;
@@ -72,28 +72,28 @@ describe("parseCorpusFile", () => {
 		["## types-0001: open\n```yaml canonical\na: 1\n", /unterminated fence/],
 		["## types-0001: accepted only\n```json accepted\n1\n```", /active case has no canonical fence/],
 	])("reports: %s", (source, pattern) => {
-		const { errors } = parseCorpusFile(file, source);
+		const { errors } = parseKitFile(file, source);
 		expect(errors.length).toBeGreaterThan(0);
 		expect(errors.map((e) => e.message).join("\n")).toMatch(pattern);
 	});
 
 	test("illustrative fences without a role are ignored", () => {
 		const source = "## types-0001: ok\n```ts\nconst x = 1\n```\n```yaml canonical\na: 1\n```";
-		const { cases, errors } = parseCorpusFile(file, source);
+		const { cases, errors } = parseKitFile(file, source);
 		expect(errors).toEqual([]);
 		expect(cases[0]?.fences).toHaveLength(1);
 	});
 
 	test("a heading key block with no space before the brace parses", () => {
 		const source = "## types-0001: Tight{node=Type compare=attributes}\n```yaml canonical\na: 1\n```";
-		const { cases, errors } = parseCorpusFile(file, source);
+		const { cases, errors } = parseKitFile(file, source);
 		expect(errors).toEqual([]);
 		expect(cases[0]).toMatchObject({ title: "Tight", node: "Type", compare: "attributes" });
 	});
 
 	test("a rejection-only active case is legal", () => {
 		const source = "## types-0001: reject only\n```json rejected diagnostic=x\n1\n```";
-		const { cases, errors } = parseCorpusFile(file, source);
+		const { cases, errors } = parseKitFile(file, source);
 		expect(errors).toEqual([]);
 		expect(cases[0]?.status).toBe("active");
 	});
@@ -108,7 +108,7 @@ describe("parseCorpusFile", () => {
 			"x.json",
 			"```",
 		].join("\n");
-		const { errors } = parseCorpusFile(file, withDupe);
+		const { errors } = parseKitFile(file, withDupe);
 		expect(errors.map((e) => e.message).join("\n")).toMatch(/more than one canonical json fence/);
 
 		const withoutDupe = [
@@ -120,6 +120,6 @@ describe("parseCorpusFile", () => {
 			"x.json",
 			"```",
 		].join("\n");
-		expect(parseCorpusFile(file, withoutDupe).errors).toEqual([]);
+		expect(parseKitFile(file, withoutDupe).errors).toEqual([]);
 	});
 });

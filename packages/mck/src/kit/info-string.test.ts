@@ -1,5 +1,5 @@
 //
-// Tests for the fence info-string grammar. Run with: bun test src/corpus/info-string.test.ts
+// Tests for the fence info-string grammar. Run with: bun test packages/mck/src/kit/info-string.test.ts
 import { describe, expect, test } from "bun:test";
 import { isInfoError, parseInfoString } from "./info-string.ts";
 

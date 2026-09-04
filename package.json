@@ -2,7 +2,7 @@
 	"name": "morphir-typescript",
 	"private": true,
 	"type": "module",
-	"description": "TypeScript binding for the Morphir IR: reference model, codecs, and the conformance driver.",
+	"description": "TypeScript binding for the Morphir IR: reference model, codecs, and the Morphir Compatibility Kit (MCK) driver.",
 	"workspaces": ["packages/*"],
 	"scripts": {
 		"typecheck": "bun run --filter '*' typecheck",

@@ -9,16 +9,16 @@
         "typescript": "~7.0.0",
       },
     },
-    "packages/conformance": {
-      "name": "@finos/morphir-ir-conformance",
+    "packages/mck": {
+      "name": "@finos/morphir-mck",
       "version": "0.0.0",
       "bin": {
-        "morphir-conformance": "./src/cli.ts",
+        "mck": "./src/cli.ts",
       },
     },
   },
   "packages": {
-    "@finos/morphir-ir-conformance": ["@finos/morphir-ir-conformance@workspace:packages/conformance"],
+    "@finos/morphir-mck": ["@finos/morphir-mck@workspace:packages/mck"],
 
     "@types/bun": ["@types/bun@1.4.1", "", { "dependencies": { "bun-types": "1.4.1" } }, "sha512-0AVGiTXGajf1rgKom3N+c5L7CBxuoyyv1i44M0nX4UDK0G/fnRAMiri93nHuVPIb429KKtAgj7HatVmmOjeQLA=="],
 

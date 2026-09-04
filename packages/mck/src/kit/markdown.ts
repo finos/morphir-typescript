@@ -1,7 +1,7 @@
 //
-// Line-oriented tokenizer for corpus markdown. The corpus grammar needs only
-// four block kinds (front matter, ATX headings, fenced code, prose), so this is
-// deliberately not a general markdown parser and has no dependencies.
+// Line-oriented tokenizer for MCK case-file markdown. The kit grammar needs
+// only four block kinds (front matter, ATX headings, fenced code, prose), so
+// this is deliberately not a general markdown parser and has no dependencies.
 //
 // Rules:
 // - Front matter is a leading `---` line through the next `---` line.
