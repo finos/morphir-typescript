@@ -182,9 +182,9 @@ function readRecordType(ctx: Ctx, v: JsonValue): Result<Type<TA>, Diagnostic> {
 	if (!o.ok) return o;
 	// Record's compact payload is the field map itself, so "attributes" is the
 	// only member name that switches on the expanded form. A record with a
-	// field literally called "attributes" cannot be written compactly, and the
-	// writer never produces one, because it always expands when attributes are
-	// present and a field map is never ambiguous otherwise.
+	// field literally called "attributes" is therefore ambiguous compactly, and
+	// the writer never produces one: it expands whenever attributes are present
+	// *or* a field shadows the name, so this branch always round-trips.
 	if (o.value.members.has("attributes")) {
 		const e = expanded(ctx, v, ["fields"], []);
 		if (!e.ok) return e;

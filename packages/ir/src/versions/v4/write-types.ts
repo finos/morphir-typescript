@@ -53,7 +53,13 @@ export function writeType(t: Type<TA>): JsonValue {
 		}
 		case "Record": {
 			const fields = writeFieldMap(t.fields);
-			return wrap("Record", a === null ? fields : jsonObject([["attributes", a], ["fields", fields]]));
+			// A record whose own field is called "attributes" would read back as
+			// the expanded form, so it is written expanded even when its
+			// attributes are empty.
+			const shadowed = t.fields.some((f) => nameKey(f.name) === "attributes");
+			return wrap("Record", a === null && !shadowed
+				? fields
+				: jsonObject([["attributes", a ?? jsonObject([])], ["fields", fields]]));
 		}
 		case "ExtensibleRecord": {
 			const entries: Entry[] = a === null ? [] : [["attributes", a]];
