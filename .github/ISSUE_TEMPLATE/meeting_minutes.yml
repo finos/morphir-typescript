@@ -1,6 +1,6 @@
 name: 🤝 Meeting Minutes
-description: To track {project name} meeting agenda and attendance
-title: "DD MMM YYYY - {project name} Meeting Minutes"
+description: To track morphir-typescript meeting agenda and attendance
+title: "DD MMM YYYY - morphir-typescript Meeting Minutes"
 labels: ["meeting"]
 body:
   - type: markdown
