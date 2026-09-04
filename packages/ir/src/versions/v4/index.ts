@@ -30,9 +30,9 @@ import type * as model from "../../model/index.ts";
 import type { AccessControlled, Documented } from "../../model/modules.ts";
 import { type Result, ok } from "../../model/result.ts";
 import { EMPTY_TYPE_ATTRIBUTES, type TA, type VA, emptyValueAttributes } from "./attributes.ts";
-import { SUPPORTED, canonicalFormatVersion, compatibility, recognize } from "./format-version.ts";
+import { canonicalFormatVersion, compatibility, recognize } from "./format-version.ts";
 import { readAccessControlledTypeDefinition, readAccessControlledValueDefinition } from "./read-definitions.ts";
-import { readIRFile } from "./read-distribution.ts";
+import { SUPPORTED_VERSIONS, readIRFile } from "./read-distribution.ts";
 import { readFQName, readName, readPath } from "./read-names.ts";
 import { readType, readTypeDefinition, readTypeSpecification } from "./read-types.ts";
 import { readLiteral, readPattern, readValue, readValueDefinition, readValueSpecification } from "./read-values.ts";
@@ -94,12 +94,13 @@ export type NodeKind = NodeValue["node"];
 export const NODE_ALIASES: Readonly<Record<string, NodeKind>> = { Distribution: "IRFile" };
 
 // A FormatVersion node is the member's own value, so it is recognized and
-// checked for support here rather than in a document reader.
+// checked for support here rather than in a document reader — against the same
+// table a whole document is checked against, so the two cannot drift.
 function readFormatVersionNode(ctx: Ctx, v: JsonValue): Result<model.FormatVersion, Diagnostic> {
 	const recognized = recognize(ctx, v);
 	if (!recognized.ok) return recognized;
 	const fv = recognized.value.normalized;
-	const compat = compatibility(fv, SUPPORTED);
+	const compat = compatibility(fv, SUPPORTED_VERSIONS);
 	return compat === "supported"
 		? ok(fv)
 		: fail(ctx, compat, `format version ${fv.major}.${fv.minor}.${fv.patch} is not supported`, v);

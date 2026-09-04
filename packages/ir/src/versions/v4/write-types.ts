@@ -29,6 +29,13 @@ const writeNames = (ns: readonly Name[]): JsonValue => ns.map(writeName);
 const writeFieldMap = (fields: readonly Field<TA>[]): JsonValue =>
 	jsonObject(fields.map((f) => [nameKey(f.name), writeType(f.type)] as const));
 
+// The compact Record spelling is the field map itself, so a field set that
+// contains "attributes", or that is exactly {"fields"}, would read back as the
+// expanded form. Those are written expanded instead; write-values.ts applies
+// the same test to record values.
+export const needsExpansion = (names: readonly string[]): boolean =>
+	names.includes("attributes") || (names.length === 1 && names[0] === "fields");
+
 // ------------------------------------------------------------ expressions
 
 export function writeType(t: Type<TA>): JsonValue {
@@ -53,11 +60,10 @@ export function writeType(t: Type<TA>): JsonValue {
 		}
 		case "Record": {
 			const fields = writeFieldMap(t.fields);
-			// A record whose own field is called "attributes" would read back as
-			// the expanded form, so it is written expanded even when its
+			// A field set the reader would take for the expanded form cannot be
+			// written compactly, so it is written expanded even when its
 			// attributes are empty.
-			const shadowed = t.fields.some((f) => nameKey(f.name) === "attributes");
-			return wrap("Record", a === null && !shadowed
+			return wrap("Record", a === null && !needsExpansion(t.fields.map((f) => nameKey(f.name)))
 				? fields
 				: jsonObject([["attributes", a ?? jsonObject([])], ["fields", fields]]));
 		}

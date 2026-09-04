@@ -24,7 +24,7 @@ import type { ValueDefinition, ValueSpecification } from "../../model/values.ts"
 import type { TA, VA } from "./attributes.ts";
 import { readName } from "./read-names.ts";
 import { readAnnotations, readTypeDefinition, readTypeSpecification } from "./read-types.ts";
-import { readValueDefinition, readValueSpecificationWithDoc } from "./read-values.ts";
+import { readValueDefinition, readValueSpecification, readValueSpecificationWithDoc } from "./read-values.ts";
 
 type Read<T> = (ctx: Ctx, v: JsonValue) => Result<T, Diagnostic>;
 type Entry = readonly [string, JsonValue];
@@ -161,14 +161,27 @@ export function readModuleDefinition(ctx: Ctx, v: JsonValue): Result<ModuleDefin
 	return ok({ doc: doc.value, types: types.value, values: values.value });
 }
 
-// A module specification's type entries are Documented specifications; its
-// value entries are specification objects carrying their own optional "doc",
-// which is why they go through readValueSpecificationWithDoc.
 function readDocumentedTypeSpecification(ctx: Ctx, v: JsonValue): Result<Documented<TypeSpecification<TA, VA>>, Diagnostic> {
 	return readDocumented(ctx, v, readTypeSpecification);
 }
 
+// A value specification carries its own doc flat, beside its members, but the
+// document tree also nests it under a { "doc", "value" } wrapper the way every
+// other documented entry is nested. "value" is not a specification member, so a
+// member set of exactly {value} or {doc, value} is the wrapper and anything
+// else is the flat spelling. Both yield the same Documented, and the writer
+// emits the flat one.
 function readDocumentedValueSpecification(ctx: Ctx, v: JsonValue): Result<Documented<ValueSpecification<TA, VA>>, Diagnostic> {
+	if (isObject(v)) {
+		const wrapped = v.members.get("value");
+		const nested = v.members.size === 1 || (v.members.size === 2 && v.members.has("doc"));
+		if (wrapped !== undefined && nested) {
+			const doc = optionalString(ctx, v.members, "doc");
+			if (!doc.ok) return doc;
+			const spec = readValueSpecification(at(ctx, "value"), wrapped);
+			return spec.ok ? ok({ doc: doc.value, value: spec.value }) : spec;
+		}
+	}
 	const r = readValueSpecificationWithDoc(ctx, v);
 	return r.ok ? ok({ doc: r.value.doc, value: r.value.spec }) : r;
 }

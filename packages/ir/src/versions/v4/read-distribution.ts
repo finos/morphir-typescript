@@ -28,9 +28,11 @@ import { compatibility, readFormatVersionMember } from "./format-version.ts";
 import { readAccessControlled, readModuleDefinition, readModuleSpecification } from "./read-definitions.ts";
 import { readFQName, readModuleName, readPackageName } from "./read-names.ts";
 
-// This plan pins the binding to exactly 4.0.0; the v3 reader and its wider
-// support table arrive with the cross-version plan.
-const SUPPORTED_HERE: readonly string[] = ["4.0.0"];
+// The v4 module's support table, and the only one it reads against: this
+// binding accepts exactly 4.0.0. The wider table in format-version.ts is the
+// contract's reference list, which the conformance corpus checks; the v3
+// reader and its own table arrive with the cross-version plan.
+export const SUPPORTED_VERSIONS: readonly string[] = ["4.0.0"];
 
 const DISTRIBUTION_KEYS: readonly string[] = ["Library", "Specs", "Application"];
 const ENTRY_POINT_KINDS: readonly string[] = ["main", "command", "handler", "job", "policy"];
@@ -211,7 +213,7 @@ export function readIRFile(v: JsonValue): Result<IRFile<TA, VA>, Diagnostic> {
 	}
 	const recognized = readFormatVersionMember(root, o.value);
 	if (!recognized.ok) return recognized;
-	const compat = compatibility(recognized.value.normalized, SUPPORTED_HERE);
+	const compat = compatibility(recognized.value.normalized, SUPPORTED_VERSIONS);
 	if (compat !== "supported") {
 		const fv = recognized.value.normalized;
 		return fail(at(root, "formatVersion"), compat, `format version ${fv.major}.${fv.minor}.${fv.patch} is not supported`, o.value.members.get("formatVersion"));

@@ -179,15 +179,25 @@ function readTupleType(ctx: Ctx, v: JsonValue): Result<Type<TA>, Diagnostic> {
 	return elements.ok ? ok({ kind: "Tuple", attributes: EMPTY_TYPE_ATTRIBUTES, elements: elements.value }) : elements;
 }
 
+// Record's compact payload is the field map itself, so only the whole member
+// set can tell the two spellings apart: exactly {fields}, or exactly
+// {attributes, fields}, is the expanded form and nothing else is. A payload
+// with an "attributes" member beside other names is a field map with a field
+// called "attributes".
+//
+// The consequence: { "Record": { "fields": <type> } } is read as the expanded
+// form and fails with invalid_type at /Record/fields, never as a one-field
+// record whose field is called "fields". A record that really does have a
+// single field called "fields" is written expanded, so it still round-trips.
+function isExpandedRecord(o: JsonObject): boolean {
+	if (!o.members.has("fields")) return false;
+	return o.members.size === 1 || (o.members.size === 2 && o.members.has("attributes"));
+}
+
 function readRecordType(ctx: Ctx, v: JsonValue): Result<Type<TA>, Diagnostic> {
 	const o = expectObject(ctx, v);
 	if (!o.ok) return o;
-	// Record's compact payload is the field map itself, so "attributes" is the
-	// only member name that switches on the expanded form. A record with a
-	// field literally called "attributes" is therefore ambiguous compactly, and
-	// the writer never produces one: it expands whenever attributes are present
-	// *or* a field shadows the name, so this branch always round-trips.
-	if (o.value.members.has("attributes")) {
+	if (isExpandedRecord(o.value)) {
 		const e = expanded(ctx, v, ["fields"], []);
 		if (!e.ok) return e;
 		const fields = readFields(at(ctx, "fields"), e.value.m.get("fields") as JsonValue);

@@ -62,6 +62,25 @@ describe("readType/writeType", () => {
 	});
 });
 
+describe("record expanded-form detection", () => {
+	test("a member set that is not exactly {fields} or {attributes, fields} is a field map", () => {
+		// "attributes" beside another name is a field called "attributes", not the
+		// expanded form, so this is a two-field record.
+		const r = readType(root, json('{ "Record": { "a": "morphir/SDK:basics#int", "attributes": "morphir/SDK:string#string" } }'));
+		expect(r.ok && r.value.kind === "Record" && r.value.fields.length).toBe(2);
+		const expanded = '{ "Record": { "attributes": {}, "fields": { "a": "morphir/SDK:basics#int", "attributes": "morphir/SDK:string#string" } } }';
+		expect(r.ok && writeJson(writeType(r.value))).toBe(expanded);
+		roundTrip(expanded);
+	});
+	test("a lone fields member is the expanded form, so a non-object fails there", () => {
+		const r = readType(root, json('{ "Record": { "fields": "morphir/SDK:basics#int" } }'));
+		expect(r).toMatchObject({ ok: false, error: { code: "invalid_type", cursor: "/Record/fields" } });
+	});
+	test("a record whose only field is called fields round-trips expanded", () => {
+		roundTrip('{ "Record": { "attributes": {}, "fields": { "fields": "morphir/SDK:basics#int" } } }');
+	});
+});
+
 describe("specifications and definitions", () => {
 	test("opaque spec canonical and legacy", () => {
 		for (const s of ['{ "OpaqueTypeSpecification": {} }', '["OpaqueTypeSpecification", []]']) {

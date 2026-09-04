@@ -478,14 +478,21 @@ function readSequenceValue(
 		: { kind: "List", attributes: EMPTY_VA, items: items.value });
 }
 
+// The type-side twin of this rule lives in read-types.ts: Record's compact
+// payload is the field map itself, so only the whole member set tells the two
+// spellings apart — exactly {fields}, or exactly {attributes, fields}, is the
+// expanded form and nothing else is. So { "Record": { "fields": <value> } }
+// reads as the expanded form and fails at /Record/fields rather than as a
+// one-field record; the writer expands such a record so it round-trips.
+function isExpandedRecord(o: JsonObject): boolean {
+	if (!o.members.has("fields")) return false;
+	return o.members.size === 1 || (o.members.size === 2 && o.members.has("attributes"));
+}
+
 function readRecordValue(ctx: Ctx, v: JsonValue): Result<Value<TA, VA>, Diagnostic> {
 	const o = expectObject(ctx, v);
 	if (!o.ok) return o;
-	// Record's compact payload is the field map itself, so "attributes" is the
-	// only member name that switches on the expanded form; a record with a
-	// field literally called "attributes" is therefore always written expanded,
-	// even when its attributes are empty.
-	if (o.value.members.has("attributes")) {
+	if (isExpandedRecord(o.value)) {
 		const e = expanded(ctx, v, ["fields"], []);
 		if (!e.ok) return e;
 		const fields = readRecordFields(at(ctx, "fields"), e.value.m.get("fields") as JsonValue);

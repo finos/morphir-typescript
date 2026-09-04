@@ -157,6 +157,19 @@ describe("values", () => {
 			'{ "Record": { "attributes": {}, "fields": { "attributes": { "Variable": "x" } } } }',
 		);
 	});
+	test("record expanded-form detection reads the whole member set", () => {
+		// "attributes" beside another name is a field, so this is a two-field
+		// record, and the writer expands it so it reads back the same way.
+		rtValue(
+			'{ "Record": { "a": { "Variable": "x" }, "attributes": { "Variable": "y" } } }',
+			'{ "Record": { "attributes": {}, "fields": { "a": { "Variable": "x" }, "attributes": { "Variable": "y" } } } }',
+		);
+		// A lone "fields" member is the expanded form, so its payload must be a
+		// field map.
+		expect(readValue(root, json('{ "Record": { "fields": "x" } }')))
+			.toMatchObject({ ok: false, error: { code: "invalid_type", cursor: "/Record/fields" } });
+		rtValue('{ "Record": { "attributes": {}, "fields": { "fields": { "Variable": "x" } } } }');
+	});
 });
 
 describe("patterns", () => {

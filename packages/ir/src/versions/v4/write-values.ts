@@ -23,7 +23,7 @@ import type {
 } from "../../model/values.ts";
 import { type TA, type VA, writeValueAttributes } from "./attributes.ts";
 import { nameKey, writeFQName, writeName } from "./write-names.ts";
-import { writeAnnotations, writeHoleReason, writeIncompleteness, writeType } from "./write-types.ts";
+import { needsExpansion, writeAnnotations, writeHoleReason, writeIncompleteness, writeType } from "./write-types.ts";
 
 type Entry = readonly [string, JsonValue];
 
@@ -100,10 +100,11 @@ export function writeNativeInfo(i: NativeInfo): JsonValue {
 const writeFieldValues = (fields: readonly RecordField<TA, VA>[]): JsonValue =>
 	jsonObject(fields.map((f) => [nameKey(f.name), writeValue(f.value)] as const));
 
-// A record whose own field is called "attributes" would read back as the
-// expanded form, so it is written expanded even when its attributes are empty.
-const shadowsAttributes = (fields: readonly RecordField<TA, VA>[]): boolean =>
-	fields.some((f) => nameKey(f.name) === "attributes");
+// A field set the reader would take for the expanded form cannot be written
+// compactly, so it is written expanded even when its attributes are empty; the
+// rule itself lives with the type writer.
+const expandsRecord = (fields: readonly RecordField<TA, VA>[]): boolean =>
+	needsExpansion(fields.map((f) => nameKey(f.name)));
 
 export function writeValue(v: Value<TA, VA>): JsonValue {
 	const a = writeValueAttributes(v.attributes);
@@ -131,7 +132,7 @@ export function writeValue(v: Value<TA, VA>): JsonValue {
 		}
 		case "Record": {
 			const fields = writeFieldValues(v.fields);
-			return wrap("Record", a === null && !shadowsAttributes(v.fields)
+			return wrap("Record", a === null && !expandsRecord(v.fields)
 				? fields
 				: jsonObject([["attributes", a ?? EMPTY_ATTRIBUTES], ["fields", fields]]));
 		}
