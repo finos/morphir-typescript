@@ -1,0 +1,16 @@
+{
+	"name": "@finos/morphir-mck",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"description": "The Morphir Compatibility Kit (MCK) driver: parses the kit's case files, drives bindings, writes reports.",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"bin": {
+		"mck": "./src/cli.ts"
+	},
+	"scripts": {
+		"typecheck": "tsc -p tsconfig.json"
+	}
+}
