@@ -1,9 +1,8 @@
 // packages/ir/src/model/attributes.ts
 //
-// Attribute types the v4 profile defines, plus the opaque Json carried by
-// v1 to v3 attributes. The model is generic over attributes (Type<A>,
-// Value<TA, VA>); these are the concrete instantiations.
-import type { Type } from "./types.ts";
+// The opaque payload attributes carry, and nothing else. The model is generic
+// over its attributes (Type<A>, Value<TA, VA>) and stays that way: the records
+// a wire format pins them to live in that version's module, not here.
 
 // The one number shape the package has: a lexeme, not a double. The JSON
 // codec's JsonNumber is this type, so a payload number that crosses into the
@@ -26,26 +25,3 @@ export function isJsonNumber(j: Json): j is JsonNumber {
 		&& typeof (j as { readonly [key: string]: Json })["text"] === "string";
 }
 
-export interface SourceLocation {
-	readonly startLine: number;
-	readonly startColumn: number;
-	readonly endLine: number;
-	readonly endColumn: number;
-}
-
-export interface TypeAttributes {
-	readonly source: SourceLocation | null;
-	readonly constraints: { readonly [key: string]: Json };
-	readonly extensions: { readonly [key: string]: Json };
-}
-
-export interface ValueAttributes<TA> {
-	readonly source: SourceLocation | null;
-	readonly inferredType: Type<TA> | null;
-	readonly extensions: { readonly [key: string]: Json };
-}
-
-export const EMPTY_TYPE_ATTRIBUTES: TypeAttributes = { source: null, constraints: {}, extensions: {} };
-export function emptyValueAttributes<TA>(): ValueAttributes<TA> {
-	return { source: null, inferredType: null, extensions: {} };
-}

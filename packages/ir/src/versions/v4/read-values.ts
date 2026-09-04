@@ -16,7 +16,6 @@
 // External at value position.
 import { type Ctx, at, expectArray, expectObject, expectString, fail, guardDepth, members, optionalString, singleKey } from "../../codec/json/cursor.ts";
 import { type JsonObject, type JsonValue, isInteger, isNumber, isObject } from "../../codec/json/value.ts";
-import { emptyValueAttributes } from "../../model/attributes.ts";
 import type { Diagnostic } from "../../model/diagnostic.ts";
 import type { Name } from "../../model/names.ts";
 import { type Result, ok } from "../../model/result.ts";
@@ -34,7 +33,7 @@ import type {
 	ValueDefinition,
 	ValueSpecification,
 } from "../../model/values.ts";
-import { type TA, type VA, readValueAttributes } from "./attributes.ts";
+import { type TA, type VA, emptyValueAttributes, readValueAttributes } from "./attributes.ts";
 import { isFQNameString, readFQName, readName } from "./read-names.ts";
 import { readAnnotations, readHoleReason, readIncompleteness, readType } from "./read-types.ts";
 

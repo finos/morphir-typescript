@@ -6,13 +6,41 @@
 // nothing to say and the node writers omit the member entirely.
 import { type Ctx, at, expectNumber, expectObject, fail, members } from "../../codec/json/cursor.ts";
 import { type JsonObject, type JsonValue, isInteger, isNumber, isObject, jsonNumber, jsonObject } from "../../codec/json/value.ts";
-import type { Json, SourceLocation, TypeAttributes, ValueAttributes } from "../../model/attributes.ts";
-import { EMPTY_TYPE_ATTRIBUTES, emptyValueAttributes, isJsonNumber } from "../../model/attributes.ts";
+import type { Json } from "../../model/attributes.ts";
+import { isJsonNumber } from "../../model/attributes.ts";
 import type { Diagnostic } from "../../model/diagnostic.ts";
 import { type Result, ok } from "../../model/result.ts";
 import type { Type } from "../../model/types.ts";
 import { readType } from "./read-types.ts";
 import { writeType } from "./write-types.ts";
+
+// The records v4 pins the model's attribute parameters to. They are part of
+// this wire format, not of the semantic model, so they live here and the
+// generic model never mentions them.
+
+export interface SourceLocation {
+	readonly startLine: number;
+	readonly startColumn: number;
+	readonly endLine: number;
+	readonly endColumn: number;
+}
+
+export interface TypeAttributes {
+	readonly source: SourceLocation | null;
+	readonly constraints: { readonly [key: string]: Json };
+	readonly extensions: { readonly [key: string]: Json };
+}
+
+export interface ValueAttributes<TA> {
+	readonly source: SourceLocation | null;
+	readonly inferredType: Type<TA> | null;
+	readonly extensions: { readonly [key: string]: Json };
+}
+
+export const EMPTY_TYPE_ATTRIBUTES: TypeAttributes = { source: null, constraints: {}, extensions: {} };
+export function emptyValueAttributes<TA>(): ValueAttributes<TA> {
+	return { source: null, inferredType: null, extensions: {} };
+}
 
 export type TA = TypeAttributes;
 export type VA = ValueAttributes<TypeAttributes>;

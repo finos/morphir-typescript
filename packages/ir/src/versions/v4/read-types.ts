@@ -14,7 +14,6 @@
 // are, because the v4 schema still lists them.
 import { type Ctx, at, expectArray, expectObject, expectString, fail, guardDepth, members, singleKey } from "../../codec/json/cursor.ts";
 import { type JsonObject, type JsonValue, isObject } from "../../codec/json/value.ts";
-import { EMPTY_TYPE_ATTRIBUTES } from "../../model/attributes.ts";
 import type { Diagnostic } from "../../model/diagnostic.ts";
 import type { FQName, Name } from "../../model/names.ts";
 import { type Result, ok } from "../../model/result.ts";
@@ -31,7 +30,7 @@ import type {
 	TypeDefinition,
 	TypeSpecification,
 } from "../../model/types.ts";
-import { type TA, type VA, readTypeAttributes } from "./attributes.ts";
+import { EMPTY_TYPE_ATTRIBUTES, type TA, type VA, readTypeAttributes } from "./attributes.ts";
 import { readAccess, readAccessControlled } from "./read-definitions.ts";
 import { isFQNameString, readFQName, readName } from "./read-names.ts";
 import { readValue } from "./read-values.ts";
