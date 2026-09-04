@@ -7,7 +7,7 @@
 import { type Ctx, at, expectNumber, expectObject, fail, members } from "../../codec/json/cursor.ts";
 import { type JsonObject, type JsonValue, isInteger, isNumber, isObject, jsonNumber, jsonObject } from "../../codec/json/value.ts";
 import type { Json, SourceLocation, TypeAttributes, ValueAttributes } from "../../model/attributes.ts";
-import { EMPTY_TYPE_ATTRIBUTES, emptyValueAttributes } from "../../model/attributes.ts";
+import { EMPTY_TYPE_ATTRIBUTES, emptyValueAttributes, isJsonNumber } from "../../model/attributes.ts";
 import type { Diagnostic } from "../../model/diagnostic.ts";
 import { type Result, ok } from "../../model/result.ts";
 import type { Type } from "../../model/types.ts";
@@ -20,11 +20,12 @@ export type VA = ValueAttributes<TypeAttributes>;
 type JsonMap = { readonly [key: string]: Json };
 
 // Constraints and extensions are opaque payloads: the profile carries them
-// through unread, so they cross into the model as plain Json. Number lexemes
-// lose their spelling here, which is why only these two members use Json.
+// through unread, so they cross into the model as plain Json. A number crosses
+// as the lexeme it was read as — 12345678901234567890 and 1.50 survive a round
+// trip that a double would round or renormalize.
 export function toJson(v: JsonValue): Json {
 	if (v === null || typeof v === "boolean" || typeof v === "string") return v;
-	if (isNumber(v)) return Number(v.text);
+	if (isNumber(v)) return v;
 	if (isObject(v)) {
 		const out: Record<string, Json> = {};
 		for (const [key, member] of v.members) out[key] = toJson(member);
@@ -35,7 +36,7 @@ export function toJson(v: JsonValue): Json {
 
 export function fromJson(j: Json): JsonValue {
 	if (j === null || typeof j === "boolean" || typeof j === "string") return j;
-	if (typeof j === "number") return jsonNumber(String(j));
+	if (isJsonNumber(j)) return j;
 	if (Array.isArray(j)) return j.map(fromJson);
 	return jsonObject(Object.entries(j as JsonMap).map(([key, value]) => [key, fromJson(value)] as const));
 }

@@ -3,10 +3,13 @@
 // A strict JSON value layer. JSON.parse cannot reject duplicate members or
 // preserve number lexemes, and both are required by the v4 JSON profile, so
 // this is a small hand-written RFC 8259 parser and a canonical one-line writer.
+import type { JsonNumber } from "../../model/attributes.ts";
 import { type Diagnostic, diagnostic } from "../../model/diagnostic.ts";
 import { type Result, err, ok } from "../../model/result.ts";
 
-export interface JsonNumber { readonly kind: "number"; readonly text: string }
+// The number lexeme is declared in the model so the codec and the opaque
+// attribute payloads share one shape rather than two that happen to match.
+export type { JsonNumber };
 export interface JsonObject { readonly kind: "object"; readonly members: ReadonlyMap<string, JsonValue> }
 export type JsonValue = null | boolean | string | JsonNumber | readonly JsonValue[] | JsonObject;
 
