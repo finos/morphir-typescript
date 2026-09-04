@@ -179,12 +179,12 @@ function writeJsonMap(m: JsonMap): JsonObject {
 	return jsonObject(Object.entries(m).map(([key, value]) => [key, fromJson(value)] as const));
 }
 
-// Stripped trees (the kit's comparison mode) carry `null` in place of a TA/VA
-// record rather than an empty one, so the writer accepts `null` here too and
-// treats it exactly like an empty attributes record: nothing to say, member
-// omitted.
-export function writeTypeAttributes(a: TA | null): JsonObject | null {
-	if (a === null || isEmptyTA(a)) return null;
+// An attributes record with nothing to say is written as no member at all,
+// which is what `null` means to the node writers here. Clearing a tree for
+// comparison replaces each record with the empty one rather than dropping it,
+// so these stay total over TA and VA.
+export function writeTypeAttributes(a: TA): JsonObject | null {
+	if (isEmptyTA(a)) return null;
 	const entries: (readonly [string, JsonValue])[] = [];
 	if (a.source !== null) entries.push(["source", writeSourceLocation(a.source)]);
 	if (!isEmptyMap(a.constraints)) entries.push(["constraints", writeJsonMap(a.constraints)]);
@@ -192,8 +192,8 @@ export function writeTypeAttributes(a: TA | null): JsonObject | null {
 	return jsonObject(entries);
 }
 
-export function writeValueAttributes(a: VA | null): JsonObject | null {
-	if (a === null || isEmptyVA(a)) return null;
+export function writeValueAttributes(a: VA): JsonObject | null {
+	if (isEmptyVA(a)) return null;
 	const entries: (readonly [string, JsonValue])[] = [];
 	if (a.source !== null) entries.push(["source", writeSourceLocation(a.source)]);
 	if (a.inferredType !== null) entries.push(["inferredType", writeType(a.inferredType)]);

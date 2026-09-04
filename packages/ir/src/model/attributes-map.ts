@@ -13,6 +13,13 @@ export interface AttributeMapper<TA, VA, TB, VB> {
 	readonly onValue: (a: VA) => VB;
 }
 
+// The named entry point the spec gives this operation: rewrite every attribute
+// in a whole file. The per-node helpers below are the same walk stopped at a
+// smaller root.
+export function mapAttributes<TA, VA, TB, VB>(f: IRFile<TA, VA>, onType: (a: TA) => TB, onValue: (a: VA) => VB): IRFile<TB, VB> {
+	return mapIRFile(f, { onType, onValue });
+}
+
 export function mapType<TA, TB>(t: Type<TA>, f: (a: TA) => TB): Type<TB> {
 	switch (t.kind) {
 		case "Variable": return { kind: "Variable", attributes: f(t.attributes), name: t.name };

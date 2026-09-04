@@ -6,19 +6,26 @@ import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { type KitCase, loadKit } from "@finos/morphir-mck";
-import { type NodeKind, json, stripNode } from "../src/versions/v4/index.ts";
+import { NODE_ALIASES, type NodeKind, nodeKindOf, readNode, stripNode, writeNode } from "../src/versions/v4/index.ts";
 
 const kitDir = process.env.MORPHIR_MCK_DIR ?? path.resolve(import.meta.dir, "../../../../../spec/ir/mck");
-const NODES: ReadonlySet<string> = new Set<NodeKind>([
+
+// The kit names a node; this is the node kind that name reads as, including the
+// kit's own spellings that differ from the module's.
+const NODE_KINDS: readonly NodeKind[] = [
 	"Name", "Path", "FQName", "FormatVersion", "Type", "Literal", "Pattern", "Value", "TypeSpecification", "TypeDefinition",
-	"ValueSpecification", "ValueDefinition", "AccessControlledTypeDefinition", "AccessControlledValueDefinition", "Distribution",
+	"ValueSpecification", "ValueDefinition", "AccessControlledTypeDefinition", "AccessControlledValueDefinition", "IRFile",
+];
+const NODES: ReadonlyMap<string, NodeKind> = new Map<string, NodeKind>([
+	...NODE_KINDS.map((k): readonly [string, NodeKind] => [k, k]),
+	...Object.entries(NODE_ALIASES),
 ]);
+
 const kit = existsSync(kitDir) ? await loadKit(kitDir) : null;
 let checked = 0;
 let skipped = 0;
 
-function runCase(c: KitCase): void {
-	const node = c.node as NodeKind;
+function runCase(c: KitCase, node: NodeKind): void {
 	const jsonFences = c.fences.filter((f) => f.info.language === "json");
 	skipped += c.fences.length - jsonFences.length;
 	const canonical = jsonFences.find((f) => f.info.role === "canonical");
@@ -26,19 +33,18 @@ function runCase(c: KitCase): void {
 	for (const f of jsonFences) {
 		const body = f.body.replace(/\n$/, "");
 		if (f.info.role === "canonical" || f.info.role === "accepted") {
-			const r = json.readNode(node, body);
+			const r = readNode(node, body);
 			expect(r.ok ? "" : `${f.info.role} fence ${f.index} failed: ${r.error.code} at ${r.error.cursor}: ${r.error.message}`).toBe("");
 			if (!r.ok) continue;
-			const value = c.compare === "attributes" ? r.value : stripNode(node, r.value);
-			encodings.push(json.writeNode(node, value));
+			encodings.push(writeNode(c.compare === "attributes" ? r.value : stripNode(r.value)));
 			checked += 1;
 		} else if (f.info.role === "rejected") {
-			const r = json.readNode(node, body);
+			const r = readNode(node, body);
 			const expectKind = f.info.keys["expect"];
 			const code = f.info.keys["diagnostic"];
 			if (expectKind !== undefined) {
 				expect(r.ok ? "" : `expected a ${expectKind}, got ${r.error.code}: ${r.error.message}`).toBe("");
-				if (r.ok) expect((r.value as { kind?: string }).kind).toBe(expectKind);
+				if (r.ok) expect(nodeKindOf(r.value)).toBe(expectKind);
 			} else if (code !== undefined) {
 				expect(r.ok ? `expected ${code}, but the fence decoded` : r.error.code).toBe(code);
 			} else {
@@ -57,14 +63,17 @@ function runCase(c: KitCase): void {
 
 describe.skipIf(kit === null)("Morphir Compatibility Kit (JSON fences)", () => {
 	if (kit === null) return;
-	expect(kit.errors).toEqual([]);
+	test("the kit parses cleanly", () => {
+		expect(kit.errors).toEqual([]);
+	});
 	let run = 0;
 	for (const c of kit.cases) {
 		if (c.status !== "active") { skipped += c.fences.length; continue; }
 		if (c.version !== null && c.version !== 4) { skipped += c.fences.length; continue; }
-		if (c.node === null || !NODES.has(c.node)) { console.log(`kit: skipping ${c.id} (node ${c.node ?? "unset"} not runnable in process yet)`); skipped += c.fences.length; continue; }
+		const node = c.node === null ? undefined : NODES.get(c.node);
+		if (node === undefined) { console.log(`kit: skipping ${c.id} (node ${c.node ?? "unset"} not runnable in process yet)`); skipped += c.fences.length; continue; }
 		run += 1;
-		test(c.id, () => runCase(c));
+		test(c.id, () => runCase(c, node));
 	}
 	test("summary", () => {
 		console.log(`kit: ${run} cases run, ${checked} fences checked, ${skipped} fences skipped (yaml/text/version/pending)`);

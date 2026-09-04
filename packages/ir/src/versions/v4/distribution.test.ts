@@ -28,7 +28,7 @@ describe("json.read / json.write", () => {
 		for (const s of [`{ "Public": { ${def} } }`, `{ "access": "Public", ${def} }`, `{ "access": "Public", "value": { ${def} } }`, `{ "pub": { ${def} } }`]) {
 			const r = json.readNode("AccessControlledTypeDefinition", s);
 			expect(r.ok ? "" : r.error.message).toBe("");
-			if (r.ok) expect(json.writeNode("AccessControlledTypeDefinition", r.value)).toBe(expected);
+			if (r.ok) expect(json.writeNode(r.value)).toBe(expected);
 		}
 	});
 	test("a module with a documented type", () => {
