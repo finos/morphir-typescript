@@ -1,0 +1,19 @@
+{
+	"name": "@finos/morphir-ir",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"description": "The Morphir IR reference model and codecs: one generic semantic model, pinned version modules, JSON readers and canonical writers.",
+	"exports": {
+		".": "./src/index.ts",
+		"./model": "./src/model/index.ts",
+		"./v4": "./src/versions/v4/index.ts",
+		"./codec/json": "./src/codec/json/value.ts"
+	},
+	"scripts": {
+		"typecheck": "tsc -p tsconfig.json"
+	},
+	"devDependencies": {
+		"@finos/morphir-mck": "workspace:*"
+	}
+}
