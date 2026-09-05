@@ -127,10 +127,41 @@ describe("decisions 0004, 0005, 0007", () => {
 		}
 		const both = readNodeChecked("Type", '{ "Function": { "parameterType": "a", "argumentType": "a", "returnType": "b" } }');
 		expect(!both.ok && both.error.code).toBe("unknown_member");
+		expect(!both.ok && both.error.cursor).toBe("/Function/argumentType");
 	});
 	test("attrs is read as attributes with a warning", () => {
 		const r = readNodeChecked("Type", '{ "Variable": { "attrs": {}, "name": "a" } }');
 		expect(r.ok && r.value.warnings.map((w) => w.code)).toEqual(["legacy_spelling"]);
 		expect(r.ok && writeNode(r.value.value)).toBe('"a"');
+	});
+});
+
+// A payload that spells one slot twice is rejected at the key the author can
+// delete, so each of these pins the cursor as well as the code.
+describe("decision 0006 window collisions", () => {
+	test("attrs beside attributes is unknown_member at attrs", () => {
+		const r = readType(newRoot(), json('{ "Variable": { "attributes": {}, "attrs": {}, "name": "a" } }'));
+		expect(!r.ok && r.error.code).toBe("unknown_member");
+		expect(!r.ok && r.error.cursor).toBe("/Variable/attrs");
+	});
+	test("arg beside either canonical or legacy parameter spelling is unknown_member at arg", () => {
+		for (const other of ["parameterType", "argumentType"]) {
+			const r = readType(newRoot(), json(`{ "Function": { "${other}": "a", "arg": "a", "returnType": "b" } }`));
+			expect(!r.ok && r.error.code).toBe("unknown_member");
+			expect(!r.ok && r.error.cursor).toBe("/Function/arg");
+			// The message names the spelling the payload actually carries.
+			expect(!r.ok && r.error.message).toBe(`"arg" is the legacy spelling of "${other}"; write only one`);
+		}
+	});
+	test("result beside returnType is unknown_member at result", () => {
+		const r = readType(newRoot(), json('{ "Function": { "parameterType": "a", "returnType": "b", "result": "b" } }'));
+		expect(!r.ok && r.error.code).toBe("unknown_member");
+		expect(!r.ok && r.error.cursor).toBe("/Function/result");
+	});
+	test("a Function with no parameter spelling at all is missing_member naming parameterType", () => {
+		const r = readType(newRoot(), json('{ "Function": { "returnType": "b" } }'));
+		expect(!r.ok && r.error.code).toBe("missing_member");
+		expect(!r.ok && r.error.cursor).toBe("/Function");
+		expect(!r.ok && r.error.message).toContain("parameterType");
 	});
 });

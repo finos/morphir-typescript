@@ -122,10 +122,7 @@ describe("values", () => {
 		rtValue('{ "Apply": { "function": { "Reference": "morphir/SDK:basics#negate" }, "argument": { "Literal": { "IntegerLiteral": 1 } } } }');
 		rtValue('{ "Constructor": "morphir/SDK:maybe#just" }');
 		rtValue('{ "FieldFunction": "name" }');
-		rtValue(
-			'{ "Record": { "name": { "Variable": "x" }, "age": { "Literal": { "IntegerLiteral": 25 } } } }',
-			'{ "Record": { "fields": { "name": { "Variable": "x" }, "age": { "Literal": { "IntegerLiteral": 25 } } } } }',
-		);
+		rtValue('{ "Record": { "fields": { "name": { "Variable": "x" }, "age": { "Literal": { "IntegerLiteral": 25 } } } } }');
 		rtValue('{ "UpdateRecord": { "target": { "Variable": "record" }, "fields": { "name": { "Literal": { "StringLiteral": "new" } } } } }');
 		rtValue('{ "Lambda": { "pattern": { "AsPattern": { "pattern": { "WildcardPattern": {} }, "name": "x" } }, "body": { "Variable": "x" } } }');
 		rtValue('{ "Destructure": { "pattern": { "WildcardPattern": {} }, "value": { "Variable": "y" }, "in": { "Variable": "x" } } }');
@@ -133,6 +130,15 @@ describe("values", () => {
 		const definition = '{ "ExpressionBody": { "inputTypes": {}, "outputType": "morphir/SDK:basics#int", "body": { "Variable": "x" } } }';
 		rtValue(`{ "LetDefinition": { "name": "x", "definition": ${definition}, "in": { "Variable": "x" } } }`);
 		rtValue(`{ "LetRecursion": { "definitions": { "f": ${definition} }, "in": { "Variable": "f" } } }`);
+	});
+	test("a record value spelled as a direct field map normalizes to fields", () => {
+		// Decision 0004 at value position. The value reader still takes the
+		// direct map silently; decision 0006's warning arrives with the rest of
+		// the value reader in task 5.
+		rtValue(
+			'{ "Record": { "name": { "Variable": "x" }, "age": { "Literal": { "IntegerLiteral": 25 } } } }',
+			'{ "Record": { "fields": { "name": { "Variable": "x" }, "age": { "Literal": { "IntegerLiteral": 25 } } } } }',
+		);
 	});
 	test("hole, native, external", () => {
 		rtValue('{ "Hole": { "reason": { "UnresolvedReference": { "target": "a/b:c#d" } } } }');

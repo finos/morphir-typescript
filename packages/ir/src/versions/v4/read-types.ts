@@ -242,23 +242,30 @@ function readFunctionType(ctx: Ctx, v: JsonValue): Result<Type<TA>, Diagnostic> 
 	const e = expanded(ctx, v, [], ["parameterType", "argumentType", "arg", "returnType", "result"]);
 	if (!e.ok) return e;
 	const m = e.value.m;
-	const near = v as JsonObject;
 	let parameterKey: string;
+	let parameter: JsonValue;
 	if (m.has("arg")) {
-		if (m.has("parameterType") || m.has("argumentType")) return fail(at(ctx, "arg"), "unknown_member", '"arg" duplicates "parameterType"', near);
-		warn(at(ctx, "arg"), '"arg" is the legacy spelling of "parameterType"', near);
+		// windowed() pairs one legacy key with one canonical key, and the
+		// parameter slot has three spellings, so "arg" is checked here — in the
+		// same wording, and naming whichever other spelling is actually there.
+		const other = m.has("parameterType") ? "parameterType" : m.has("argumentType") ? "argumentType" : null;
+		if (other !== null) return fail(at(ctx, "arg"), "unknown_member", `"arg" is the legacy spelling of "${other}"; write only one`, v);
+		warn(at(ctx, "arg"), '"arg" is the legacy spelling of "parameterType"', v);
 		parameterKey = "arg";
+		parameter = m.get("arg") as JsonValue;
 	} else {
-		const p = windowed(ctx, m, "parameterType", "argumentType", near);
+		const p = windowed(ctx, m, "parameterType", "argumentType", v);
 		if (!p.ok) return p;
 		parameterKey = m.has("parameterType") ? "parameterType" : "argumentType";
+		parameter = p.value;
 	}
-	const r = windowed(ctx, m, "returnType", "result", near);
+	const r = windowed(ctx, m, "returnType", "result", v);
 	if (!r.ok) return r;
+	// windowed() answered with the payload; only the cursor needs the key.
 	const returnKey = m.has("returnType") ? "returnType" : "result";
-	const parameterType = readType(at(ctx, parameterKey), m.get(parameterKey) as JsonValue);
+	const parameterType = readType(at(ctx, parameterKey), parameter);
 	if (!parameterType.ok) return parameterType;
-	const returnType = readType(at(ctx, returnKey), m.get(returnKey) as JsonValue);
+	const returnType = readType(at(ctx, returnKey), r.value);
 	if (!returnType.ok) return returnType;
 	return ok({ kind: "Function", attributes: e.value.a, parameterType: parameterType.value, returnType: returnType.value });
 }
