@@ -12,10 +12,11 @@ const temp = (): string => {
 	dirs.push(d);
 	return d;
 };
-afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { force: true, recursive: true }); });
+afterEach(() => {
+	for (const d of dirs.splice(0)) rmSync(d, { force: true, recursive: true });
+});
 
-const okCase = (topic: string, n: string) =>
-	`## ${topic}-${n}: a case\n\`\`\`yaml canonical\na: 1\n\`\`\`\n`;
+const okCase = (topic: string, n: string) => `## ${topic}-${n}: a case\n\`\`\`yaml canonical\na: 1\n\`\`\`\n`;
 
 describe("loadKit", () => {
 	test("loads every kit file except README and reports no errors", async () => {

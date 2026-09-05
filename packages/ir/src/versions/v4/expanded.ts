@@ -13,10 +13,10 @@
 // The two readers differ only in which attribute reader they hand over, so
 // that is the parameter — which is also why this lives beside them rather
 // than in the codec layer, where the v4 wire names do not belong.
-import { type Ctx, at, expectObject, fail, members, warn } from "../../codec/json/cursor.ts";
+import { at, type Ctx, expectObject, fail, members, warn } from "../../codec/json/cursor.ts";
 import type { JsonValue } from "../../codec/json/value.ts";
 import type { Diagnostic } from "../../model/diagnostic.ts";
-import { type Result, ok } from "../../model/result.ts";
+import { ok, type Result } from "../../model/result.ts";
 
 export interface ExpandedPayload<A> {
 	readonly m: ReadonlyMap<string, JsonValue>;

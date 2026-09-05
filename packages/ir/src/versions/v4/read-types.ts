@@ -19,11 +19,11 @@
 // Legacy tagged arrays for type *expressions* belong to the v3 reader and are
 // not accepted here; legacy tagged arrays for specifications and definitions
 // are, because the v4 schema still lists them.
-import { type Ctx, at, expectArray, expectObject, expectString, fail, guardDepth, members, singleKey, warn, windowed } from "../../codec/json/cursor.ts";
-import { type JsonObject, type JsonValue, isObject } from "../../codec/json/value.ts";
+import { at, type Ctx, expectArray, expectObject, expectString, fail, guardDepth, members, singleKey, warn, windowed } from "../../codec/json/cursor.ts";
+import { isObject, type JsonObject, type JsonValue } from "../../codec/json/value.ts";
 import type { Diagnostic } from "../../model/diagnostic.ts";
 import type { FQName, Name } from "../../model/names.ts";
-import { type Result, ok } from "../../model/result.ts";
+import { ok, type Result } from "../../model/result.ts";
 import type {
 	Access,
 	Annotation,
@@ -37,7 +37,7 @@ import type {
 	TypeDefinition,
 	TypeSpecification,
 } from "../../model/types.ts";
-import { EMPTY_TYPE_ATTRIBUTES, type TA, type VA, readTypeAttributes } from "./attributes.ts";
+import { EMPTY_TYPE_ATTRIBUTES, readTypeAttributes, type TA, type VA } from "./attributes.ts";
 import { type ExpandedPayload, expandedPayload } from "./expanded.ts";
 import { readAccess, readAccessControlled } from "./read-definitions.ts";
 import { isFQNameString, readFQName, readName } from "./read-names.ts";
@@ -94,12 +94,8 @@ function readFields(ctx: Ctx, v: JsonValue): Result<readonly Field<TA>[], Diagno
 // Every expanded payload starts the same way; expanded.ts holds the rule and
 // the value reader shares it. All this side has to say is which attribute
 // reader the payload's "attributes" (or its "attrs" window spelling) goes to.
-const expanded = (
-	ctx: Ctx,
-	v: JsonValue,
-	required: readonly string[],
-	optional: readonly string[],
-): Result<ExpandedPayload<TA>, Diagnostic> => expandedPayload(ctx, v, required, optional, readTypeAttributes);
+const expanded = (ctx: Ctx, v: JsonValue, required: readonly string[], optional: readonly string[]): Result<ExpandedPayload<TA>, Diagnostic> =>
+	expandedPayload(ctx, v, required, optional, readTypeAttributes);
 
 // ------------------------------------------------------------ expressions
 
@@ -124,14 +120,22 @@ export function readType(ctx: Ctx, v: JsonValue): Result<Type<TA>, Diagnostic> {
 	const [key, payload] = kv.value;
 	const inner = at(ctx, key);
 	switch (key) {
-		case "Variable": return readVariableType(inner, payload);
-		case "Reference": return readReferenceType(inner, payload);
-		case "Tuple": return readTupleType(inner, payload);
-		case "Record": return readRecordType(inner, payload);
-		case "ExtensibleRecord": return readExtensibleRecordType(inner, payload);
-		case "Function": return readFunctionType(inner, payload);
-		case "Unit": return readUnitType(inner, payload);
-		default: return fail(ctx, "unknown_node", `unknown type node "${key}"`, v);
+		case "Variable":
+			return readVariableType(inner, payload);
+		case "Reference":
+			return readReferenceType(inner, payload);
+		case "Tuple":
+			return readTupleType(inner, payload);
+		case "Record":
+			return readRecordType(inner, payload);
+		case "ExtensibleRecord":
+			return readExtensibleRecordType(inner, payload);
+		case "Function":
+			return readFunctionType(inner, payload);
+		case "Unit":
+			return readUnitType(inner, payload);
+		default:
+			return fail(ctx, "unknown_node", `unknown type node "${key}"`, v);
 	}
 }
 
@@ -380,9 +384,7 @@ export function readAnnotations(ctx: Ctx, v: JsonValue | undefined): Result<read
 // unknown_node and must be reported before the payload's shape is judged;
 // otherwise a misspelled wrapper around a non-object would surface as
 // invalid_type.
-const SPECIFICATION_KEYS: readonly string[] = [
-	"OpaqueTypeSpecification", "TypeAliasSpecification", "CustomTypeSpecification", "DerivedTypeSpecification",
-];
+const SPECIFICATION_KEYS: readonly string[] = ["OpaqueTypeSpecification", "TypeAliasSpecification", "CustomTypeSpecification", "DerivedTypeSpecification"];
 const DEFINITION_KEYS: readonly string[] = ["TypeAliasDefinition", "CustomTypeDefinition", "IncompleteTypeDefinition"];
 const HOLE_REASON_KEYS: readonly string[] = ["UnresolvedReference", "DeletedDuringRefactor", "TypeMismatch"];
 const INCOMPLETENESS_KEYS: readonly string[] = ["Hole", "Draft"];
@@ -390,9 +392,7 @@ const INCOMPLETENESS_KEYS: readonly string[] = ["Hole", "Draft"];
 // Returns a failure when the tagged array is the wrong length, null when it is
 // the right one, so callers can guard with a single `if`.
 function legacyArity(ctx: Ctx, items: readonly JsonValue[], tag: string, arity: number): Result<never, Diagnostic> | null {
-	return items.length === arity
-		? null
-		: fail(ctx, "invalid_type", `expected a ${arity}-element ["${tag}", ...] array, found ${items.length} elements`);
+	return items.length === arity ? null : fail(ctx, "invalid_type", `expected a ${arity}-element ["${tag}", ...] array, found ${items.length} elements`);
 }
 
 function readLegacySpecification(ctx: Ctx, items: readonly JsonValue[]): Result<TypeSpecification<TA, VA>, Diagnostic> {
@@ -483,9 +483,7 @@ export function readTypeSpecification(ctx: Ctx, v: JsonValue): Result<TypeSpecif
 			const raw = m.value.get("typeParams");
 			if (raw === undefined) return ok({ kind: "OpaqueTypeSpecification", annotations: annotations.value, typeParams: [] });
 			const typeParams = readNames(at(inner, "typeParams"), raw);
-			return typeParams.ok
-				? ok({ kind: "OpaqueTypeSpecification", annotations: annotations.value, typeParams: typeParams.value })
-				: typeParams;
+			return typeParams.ok ? ok({ kind: "OpaqueTypeSpecification", annotations: annotations.value, typeParams: typeParams.value }) : typeParams;
 		}
 		case "TypeAliasSpecification": {
 			const m = members(inner, body.value, ["typeParams", "typeExp"], ["annotations"]);

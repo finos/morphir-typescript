@@ -24,11 +24,17 @@ async function main(argv: readonly string[]): Promise<number> {
 	}
 	const kit = await loadKit(path.resolve(dir));
 	if (json) {
-		console.log(JSON.stringify({
-			files: kit.files,
-			cases: kit.cases.map((c) => c.id),
-			errors: kit.errors,
-		}, null, "\t"));
+		console.log(
+			JSON.stringify(
+				{
+					files: kit.files,
+					cases: kit.cases.map((c) => c.id),
+					errors: kit.errors,
+				},
+				null,
+				"\t",
+			),
+		);
 		return kit.errors.length === 0 ? 0 : 1;
 	}
 	for (const e of kit.errors) console.error(`${e.file}:${e.line}: ${e.message}`);

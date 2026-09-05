@@ -7,11 +7,23 @@ import type { ValueDefinition, ValueSpecification } from "./values.ts";
 
 export type { Access };
 
-export interface AccessControlled<T> { readonly access: Access; readonly value: T }
-export interface Documented<T> { readonly doc: string | null; readonly value: T }
+export interface AccessControlled<T> {
+	readonly access: Access;
+	readonly value: T;
+}
+export interface Documented<T> {
+	readonly doc: string | null;
+	readonly value: T;
+}
 
-export interface Named<T> { readonly name: Name; readonly value: T }
-export interface NamedModule<T> { readonly name: ModuleName; readonly value: T }
+export interface Named<T> {
+	readonly name: Name;
+	readonly value: T;
+}
+export interface NamedModule<T> {
+	readonly name: ModuleName;
+	readonly value: T;
+}
 
 export interface ModuleSpecification<TA, VA> {
 	readonly annotations: readonly Annotation<TA, VA>[];

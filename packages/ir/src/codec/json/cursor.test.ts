@@ -5,8 +5,8 @@
 // the legacy spelling still inside decision 0006's one-release window.
 // Run with: bun test packages/ir/src/codec/json/cursor.test.ts
 import { describe, expect, test } from "bun:test";
-import { type JsonObject, isObject, parseJson } from "./value.ts";
 import { at, newRoot, warn, windowed } from "./cursor.ts";
+import { isObject, type JsonObject, parseJson } from "./value.ts";
 
 describe("warnings", () => {
 	test("children share the root's warning list", () => {
@@ -15,11 +15,15 @@ describe("warnings", () => {
 		expect(root.warnings.map((w) => [w.code, w.cursor])).toEqual([["legacy_spelling", "/a"]]);
 	});
 	test("windowed prefers canonical, warns on legacy, refuses both, and reports missing", () => {
-		const obj = (text: string): JsonObject => { const p = parseJson(text); if (!p.ok || !isObject(p.value)) throw new Error("not an object"); return p.value; };
+		const obj = (text: string): JsonObject => {
+			const p = parseJson(text);
+			if (!p.ok || !isObject(p.value)) throw new Error("not an object");
+			return p.value;
+		};
 		const both = obj('{ "then": 1, "thenBranch": 2 }');
 		const canonical = obj('{ "then": 1 }');
 		const legacy = obj('{ "thenBranch": 2 }');
-		const none = obj('{}');
+		const none = obj("{}");
 		const m = (v: JsonObject) => v.members;
 		let ctx = newRoot();
 		const dup = windowed(ctx, m(both), "then", "thenBranch", both);

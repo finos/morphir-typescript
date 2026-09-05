@@ -13,11 +13,11 @@
 //
 // This is also the one place access is read: read-types.ts calls in for the
 // legacy CustomTypeDefinition array rather than keeping a second copy.
-import { type Ctx, at, expectObject, expectString, fail, members, optionalString, singleKey, warn } from "../../codec/json/cursor.ts";
-import { type JsonValue, isObject, jsonObject } from "../../codec/json/value.ts";
+import { at, type Ctx, expectObject, expectString, fail, members, optionalString, singleKey, warn } from "../../codec/json/cursor.ts";
+import { isObject, type JsonValue, jsonObject } from "../../codec/json/value.ts";
 import type { Diagnostic } from "../../model/diagnostic.ts";
 import type { AccessControlled, Documented, ModuleDefinition, ModuleSpecification, Named } from "../../model/modules.ts";
-import { type Result, ok } from "../../model/result.ts";
+import { ok, type Result } from "../../model/result.ts";
 import type { Access, TypeDefinition, TypeSpecification } from "../../model/types.ts";
 import type { ValueDefinition, ValueSpecification } from "../../model/values.ts";
 import type { TA, VA } from "./attributes.ts";
@@ -34,9 +34,15 @@ export function readAccess(ctx: Ctx, v: JsonValue): Result<Access, Diagnostic> {
 	const s = expectString(ctx, v);
 	if (!s.ok) return s;
 	switch (s.value) {
-		case "Public": case "public": case "pub": return ok("Public");
-		case "Private": case "private": return ok("Private");
-		default: return fail(ctx, "invalid_access", `unknown access "${s.value}"`);
+		case "Public":
+		case "public":
+		case "pub":
+			return ok("Public");
+		case "Private":
+		case "private":
+			return ok("Private");
+		default:
+			return fail(ctx, "invalid_access", `unknown access "${s.value}"`);
 	}
 }
 
@@ -45,9 +51,7 @@ export function readAccess(ctx: Ctx, v: JsonValue): Result<Access, Diagnostic> {
 // members and is handed on as an object in its own right.
 function payloadOf(ctx: Ctx, rest: readonly Entry[]): readonly [Ctx, JsonValue] {
 	const only = rest[0];
-	return rest.length === 1 && only !== undefined && only[0] === "value"
-		? [at(ctx, "value"), only[1]]
-		: [ctx, jsonObject(rest)];
+	return rest.length === 1 && only !== undefined && only[0] === "value" ? [at(ctx, "value"), only[1]] : [ctx, jsonObject(rest)];
 }
 
 export function readAccessControlled<T>(ctx: Ctx, v: JsonValue, read: Read<T>): Result<AccessControlled<T>, Diagnostic> {
@@ -110,17 +114,11 @@ export function readDocumented<T>(ctx: Ctx, v: JsonValue, read: Read<T>): Result
 	return value.ok ? ok({ doc: null, value: value.value }) : value;
 }
 
-export function readAccessControlledTypeDefinition(
-	ctx: Ctx,
-	v: JsonValue,
-): Result<AccessControlled<Documented<TypeDefinition<TA>>>, Diagnostic> {
+export function readAccessControlledTypeDefinition(ctx: Ctx, v: JsonValue): Result<AccessControlled<Documented<TypeDefinition<TA>>>, Diagnostic> {
 	return readAccessControlled(ctx, v, (c, x) => readDocumented(c, x, readTypeDefinition));
 }
 
-export function readAccessControlledValueDefinition(
-	ctx: Ctx,
-	v: JsonValue,
-): Result<AccessControlled<Documented<ValueDefinition<TA, VA>>>, Diagnostic> {
+export function readAccessControlledValueDefinition(ctx: Ctx, v: JsonValue): Result<AccessControlled<Documented<ValueDefinition<TA, VA>>>, Diagnostic> {
 	return readAccessControlled(ctx, v, (c, x) => readDocumented(c, x, readValueDefinition));
 }
 
@@ -142,12 +140,7 @@ export function readNamedMap<T>(ctx: Ctx, v: JsonValue, read: Read<T>): Result<r
 	return ok(out);
 }
 
-function optionalNamedMap<T>(
-	ctx: Ctx,
-	m: ReadonlyMap<string, JsonValue>,
-	key: string,
-	read: Read<T>,
-): Result<readonly Named<T>[], Diagnostic> {
+function optionalNamedMap<T>(ctx: Ctx, m: ReadonlyMap<string, JsonValue>, key: string, read: Read<T>): Result<readonly Named<T>[], Diagnostic> {
 	const raw = m.get(key);
 	return raw === undefined ? ok([]) : readNamedMap(at(ctx, key), raw, read);
 }

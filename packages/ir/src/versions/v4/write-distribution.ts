@@ -8,14 +8,7 @@
 // { "formatVersion": 4, "distribution": .. } in that order, with the version in
 // its canonical spelling — the integer for a x.0.0 release.
 import { type JsonValue, jsonObject } from "../../codec/json/value.ts";
-import type {
-	Distribution,
-	EntryPoint,
-	IRFile,
-	NamedPackage,
-	PackageDefinition,
-	PackageSpecification,
-} from "../../model/distribution.ts";
+import type { Distribution, EntryPoint, IRFile, NamedPackage, PackageDefinition, PackageSpecification } from "../../model/distribution.ts";
 import type { NamedModule } from "../../model/modules.ts";
 import { ModuleName, PackageName } from "../../model/names.ts";
 import type { TA, VA } from "./attributes.ts";
@@ -46,11 +39,16 @@ export function writePackageSpecification(p: PackageSpecification<TA, VA>): Json
 // ----------------------------------------------------------- entry points
 
 function writeEntryPoints(entryPoints: readonly EntryPoint[]): JsonValue {
-	return jsonObject(entryPoints.map((e) => {
-		const entries: Entry[] = [["target", writeFQName(e.target)], ["kind", e.kind]];
-		if (e.doc !== null) entries.push(["doc", e.doc]);
-		return [e.name, jsonObject(entries)] as const;
-	}));
+	return jsonObject(
+		entryPoints.map((e) => {
+			const entries: Entry[] = [
+				["target", writeFQName(e.target)],
+				["kind", e.kind],
+			];
+			if (e.doc !== null) entries.push(["doc", e.doc]);
+			return [e.name, jsonObject(entries)] as const;
+		}),
+	);
 }
 
 // ---------------------------------------------------------- distributions
@@ -59,24 +57,39 @@ export function writeDistribution(d: Distribution<TA, VA>): JsonValue {
 	const packageName = PackageName.canonical(d.packageName);
 	switch (d.kind) {
 		case "Library":
-			return jsonObject([["Library", jsonObject([
-				["packageName", packageName],
-				["dependencies", writePackageMap(d.dependencies, writePackageSpecification)],
-				["def", writePackageDefinition(d.def)],
-			])]]);
+			return jsonObject([
+				[
+					"Library",
+					jsonObject([
+						["packageName", packageName],
+						["dependencies", writePackageMap(d.dependencies, writePackageSpecification)],
+						["def", writePackageDefinition(d.def)],
+					]),
+				],
+			]);
 		case "Specs":
-			return jsonObject([["Specs", jsonObject([
-				["packageName", packageName],
-				["dependencies", writePackageMap(d.dependencies, writePackageSpecification)],
-				["spec", writePackageSpecification(d.spec)],
-			])]]);
+			return jsonObject([
+				[
+					"Specs",
+					jsonObject([
+						["packageName", packageName],
+						["dependencies", writePackageMap(d.dependencies, writePackageSpecification)],
+						["spec", writePackageSpecification(d.spec)],
+					]),
+				],
+			]);
 		case "Application":
-			return jsonObject([["Application", jsonObject([
-				["packageName", packageName],
-				["dependencies", writePackageMap(d.dependencies, writePackageDefinition)],
-				["def", writePackageDefinition(d.def)],
-				["entryPoints", writeEntryPoints(d.entryPoints)],
-			])]]);
+			return jsonObject([
+				[
+					"Application",
+					jsonObject([
+						["packageName", packageName],
+						["dependencies", writePackageMap(d.dependencies, writePackageDefinition)],
+						["def", writePackageDefinition(d.def)],
+						["entryPoints", writeEntryPoints(d.entryPoints)],
+					]),
+				],
+			]);
 	}
 }
 

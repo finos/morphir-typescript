@@ -8,7 +8,11 @@ import { readNodeChecked, writeNode } from "./index.ts";
 import { readType, readTypeDefinition, readTypeSpecification } from "./read-types.ts";
 import { writeType, writeTypeDefinition, writeTypeSpecification } from "./write-types.ts";
 
-const json = (s: string) => { const r = parseJson(s); if (!r.ok) throw new Error(r.error.message); return r.value; };
+const json = (s: string) => {
+	const r = parseJson(s);
+	if (!r.ok) throw new Error(r.error.message);
+	return r.value;
+};
 const roundTrip = (s: string, expected = s): void => {
 	const r = readType(newRoot(), json(s));
 	expect(r.ok).toBe(true);
@@ -97,7 +101,8 @@ describe("specifications and definitions", () => {
 		expect(r.ok && writeJson(writeTypeDefinition(r.value))).toBe(s);
 	});
 	test("derived spec", () => {
-		const s = '{ "DerivedTypeSpecification": { "typeParams": [], "baseType": "morphir/SDK:string#string", "fromBaseType": "my-org/sdk:local-date#from-string", "toBaseType": "my-org/sdk:local-date#to-string" } }';
+		const s =
+			'{ "DerivedTypeSpecification": { "typeParams": [], "baseType": "morphir/SDK:string#string", "fromBaseType": "my-org/sdk:local-date#from-string", "toBaseType": "my-org/sdk:local-date#to-string" } }';
 		const r = readTypeSpecification(newRoot(), json(s));
 		expect(r.ok && writeJson(writeTypeSpecification(r.value))).toBe(s);
 	});

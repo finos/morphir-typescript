@@ -2,13 +2,16 @@
 //
 // The v3-and-later formatVersion contract (docs/spec/ir/format-version.md):
 // recognition, normalization, canonical spelling, and the support table.
-import { type Ctx, at, fail } from "../../codec/json/cursor.ts";
-import { type JsonObject, type JsonValue, isNumber, jsonNumber } from "../../codec/json/value.ts";
+import { at, type Ctx, fail } from "../../codec/json/cursor.ts";
+import { isNumber, type JsonObject, type JsonValue, jsonNumber } from "../../codec/json/value.ts";
 import type { Diagnostic } from "../../model/diagnostic.ts";
 import type { FormatVersion } from "../../model/distribution.ts";
-import { type Result, ok } from "../../model/result.ts";
+import { ok, type Result } from "../../model/result.ts";
 
-export interface Recognized { readonly normalized: FormatVersion; readonly canonical: JsonValue }
+export interface Recognized {
+	readonly normalized: FormatVersion;
+	readonly canonical: JsonValue;
+}
 export const SUPPORTED: readonly string[] = ["3.0.0", "4.0.0"];
 const MAX = 4294967295;
 const COMPONENT = /^(0|[1-9][0-9]*)$/;
@@ -41,7 +44,8 @@ export function recognize(ctx: Ctx, v: JsonValue): Result<Recognized, Diagnostic
 		}
 		const [major, minor, patch] = parts.map(Number) as [number, number, number];
 		if (major < 3) return fail(ctx, "invalid_format_version_syntax", `release strings are valid only for major 3 and later, got "${v}"`);
-		if (major > MAX || minor > MAX || patch > MAX) return fail(ctx, "format_version_out_of_range", `formatVersion "${v}" has a component above the 32-bit range`);
+		if (major > MAX || minor > MAX || patch > MAX)
+			return fail(ctx, "format_version_out_of_range", `formatVersion "${v}" has a component above the 32-bit range`);
 		const normalized = { major, minor, patch };
 		return ok({ normalized, canonical: canonicalFormatVersion(normalized) });
 	}

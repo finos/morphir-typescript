@@ -11,7 +11,7 @@
 // A module always writes both "types" and "values", empty or not, and its own
 // "doc" last; a module specification writes "annotations" first when it has
 // any.
-import { type JsonValue, isObject, jsonObject } from "../../codec/json/value.ts";
+import { isObject, type JsonValue, jsonObject } from "../../codec/json/value.ts";
 import type { AccessControlled, Documented, ModuleDefinition, ModuleSpecification, Named } from "../../model/modules.ts";
 import type { TypeDefinition, TypeSpecification } from "../../model/types.ts";
 import type { ValueDefinition, ValueSpecification } from "../../model/values.ts";
@@ -81,10 +81,7 @@ export function writeModuleDefinition(d: ModuleDefinition<TA, VA>): JsonValue {
 export function writeModuleSpecification(s: ModuleSpecification<TA, VA>): JsonValue {
 	const entries: Entry[] = [];
 	if (s.annotations.length > 0) entries.push(["annotations", writeAnnotations(s.annotations)]);
-	entries.push(
-		["types", writeNamedMap(s.types, writeDocumentedTypeSpecification)],
-		["values", writeNamedMap(s.values, writeDocumentedValueSpecification)],
-	);
+	entries.push(["types", writeNamedMap(s.types, writeDocumentedTypeSpecification)], ["values", writeNamedMap(s.values, writeDocumentedValueSpecification)]);
 	if (s.doc !== null) entries.push(["doc", s.doc]);
 	return jsonObject(entries);
 }

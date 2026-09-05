@@ -9,20 +9,12 @@
 // exactly formatVersion and distribution, in either order; the version is read
 // and checked for support before the document under it is read at all (kit
 // distributions-0001, distributions-0002).
-import { type Ctx, at, describeJson, expectObject, expectString, fail, members, newRoot, optionalString } from "../../codec/json/cursor.ts";
-import { type JsonValue, isObject } from "../../codec/json/value.ts";
+import { at, type Ctx, describeJson, expectObject, expectString, fail, members, newRoot, optionalString } from "../../codec/json/cursor.ts";
+import { isObject, type JsonValue } from "../../codec/json/value.ts";
 import type { Diagnostic } from "../../model/diagnostic.ts";
-import type {
-	Distribution,
-	EntryPoint,
-	EntryPointKind,
-	IRFile,
-	NamedPackage,
-	PackageDefinition,
-	PackageSpecification,
-} from "../../model/distribution.ts";
+import type { Distribution, EntryPoint, EntryPointKind, IRFile, NamedPackage, PackageDefinition, PackageSpecification } from "../../model/distribution.ts";
 import type { AccessControlled, ModuleDefinition, ModuleSpecification, NamedModule } from "../../model/modules.ts";
-import { type Result, ok } from "../../model/result.ts";
+import { ok, type Result } from "../../model/result.ts";
 import type { TA, VA } from "./attributes.ts";
 import { compatibility, readFormatVersionMember } from "./format-version.ts";
 import { readAccessControlled, readModuleDefinition, readModuleSpecification } from "./read-definitions.ts";
@@ -71,10 +63,7 @@ function readPackageMap<T>(ctx: Ctx, v: JsonValue, read: Read<T>): Result<readon
 	return ok(out);
 }
 
-function readAccessControlledModuleDefinition(
-	ctx: Ctx,
-	v: JsonValue,
-): Result<AccessControlled<ModuleDefinition<TA, VA>>, Diagnostic> {
+function readAccessControlledModuleDefinition(ctx: Ctx, v: JsonValue): Result<AccessControlled<ModuleDefinition<TA, VA>>, Diagnostic> {
 	return readAccessControlled(ctx, v, readModuleDefinition);
 }
 
@@ -96,8 +85,7 @@ export function readPackageSpecification(ctx: Ctx, v: JsonValue): Result<Package
 	if (!m.ok) return m;
 	const raw = m.value.get("modules");
 	if (raw === undefined) return ok({ modules: [] });
-	const modules: Result<readonly NamedModule<ModuleSpecification<TA, VA>>[], Diagnostic> =
-		readModuleMap(at(ctx, "modules"), raw, readModuleSpecification);
+	const modules: Result<readonly NamedModule<ModuleSpecification<TA, VA>>[], Diagnostic> = readModuleMap(at(ctx, "modules"), raw, readModuleSpecification);
 	return modules.ok ? ok({ modules: modules.value }) : modules;
 }
 
@@ -170,8 +158,7 @@ export function readDistribution(ctx: Ctx, v: JsonValue): Result<Distribution<TA
 	if (!dependencies.ok) return dependencies;
 	if (key === "Specs") {
 		const raw = m.value.get("spec");
-		const spec: Result<PackageSpecification<TA, VA>, Diagnostic> =
-			raw === undefined ? ok({ modules: [] }) : readPackageSpecification(at(inner, "spec"), raw);
+		const spec: Result<PackageSpecification<TA, VA>, Diagnostic> = raw === undefined ? ok({ modules: [] }) : readPackageSpecification(at(inner, "spec"), raw);
 		if (!spec.ok) return spec;
 		return ok({ kind: "Specs", packageName: packageName.value, dependencies: dependencies.value, spec: spec.value });
 	}
@@ -180,20 +167,12 @@ export function readDistribution(ctx: Ctx, v: JsonValue): Result<Distribution<TA
 	return ok({ kind: "Library", packageName: packageName.value, dependencies: dependencies.value, def: def.value });
 }
 
-function readDependencies<T>(
-	ctx: Ctx,
-	m: ReadonlyMap<string, JsonValue>,
-	read: Read<T>,
-): Result<readonly NamedPackage<T>[], Diagnostic> {
+function readDependencies<T>(ctx: Ctx, m: ReadonlyMap<string, JsonValue>, read: Read<T>): Result<readonly NamedPackage<T>[], Diagnostic> {
 	const raw = m.get("dependencies");
 	return raw === undefined ? ok([]) : readPackageMap(at(ctx, "dependencies"), raw, read);
 }
 
-function readOptionalPackageDefinition(
-	ctx: Ctx,
-	m: ReadonlyMap<string, JsonValue>,
-	key: string,
-): Result<PackageDefinition<TA, VA>, Diagnostic> {
+function readOptionalPackageDefinition(ctx: Ctx, m: ReadonlyMap<string, JsonValue>, key: string): Result<PackageDefinition<TA, VA>, Diagnostic> {
 	const raw = m.get(key);
 	return raw === undefined ? ok({ modules: [] }) : readPackageDefinition(at(ctx, key), raw);
 }

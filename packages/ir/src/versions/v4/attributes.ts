@@ -4,10 +4,10 @@
 // their readers, and their canonical writers. Attributes are optional on the
 // wire and overwhelmingly empty, so the writers return null when there is
 // nothing to say and the node writers omit the member entirely.
-import { type Ctx, at, expectNumber, expectObject, fail, members } from "../../codec/json/cursor.ts";
-import { type JsonObject, type JsonValue, isInteger, jsonNumber, jsonObject } from "../../codec/json/value.ts";
+import { at, type Ctx, expectNumber, expectObject, fail, members } from "../../codec/json/cursor.ts";
+import { isInteger, type JsonObject, type JsonValue, jsonNumber, jsonObject } from "../../codec/json/value.ts";
 import type { Diagnostic } from "../../model/diagnostic.ts";
-import { type Result, ok } from "../../model/result.ts";
+import { ok, type Result } from "../../model/result.ts";
 import type { Type } from "../../model/types.ts";
 import { readType } from "./read-types.ts";
 import { writeType } from "./write-types.ts";
@@ -44,7 +44,9 @@ export interface ValueAttributes<TA> {
 // shared const because the v4 readers form an import cycle: read-values.ts
 // builds its empty value attributes while this module is still initializing,
 // when a function declaration is already bound and a const is not.
-function emptyPayload(): JsonObject { return jsonObject([]); }
+function emptyPayload(): JsonObject {
+	return jsonObject([]);
+}
 
 export const EMPTY_TYPE_ATTRIBUTES: TypeAttributes = { source: null, constraints: emptyPayload(), extensions: emptyPayload() };
 export function emptyValueAttributes<TA>(): ValueAttributes<TA> {

@@ -1,7 +1,8 @@
 // Public surface of @finos/morphir-mck. Plan 1 exposes the case-file parser
 // and report types; the driver and coverage script arrive in plan 2.
-export { tokenize, type Block } from "./kit/markdown.ts";
-export { parseInfoString, isInfoError, type FenceInfo, type Language, type Role } from "./kit/info-string.ts";
-export { parseKitFile, topicOf, type KitCase, type KitFence, type KitError, type ParsedFile } from "./kit/case.ts";
-export { loadKit, type Kit } from "./kit/load.ts";
-export { emptyReport, type Report, type ReportRecord, type ReportDiagnostic, type ReportResult, type ReportProfile, type ReportRole } from "./report.ts";
+
+export { type KitCase, type KitError, type KitFence, type ParsedFile, parseKitFile, topicOf } from "./kit/case.ts";
+export { type FenceInfo, isInfoError, type Language, parseInfoString, type Role } from "./kit/info-string.ts";
+export { type Kit, loadKit } from "./kit/load.ts";
+export { type Block, tokenize } from "./kit/markdown.ts";
+export { emptyReport, type Report, type ReportDiagnostic, type ReportProfile, type ReportRecord, type ReportResult, type ReportRole } from "./report.ts";

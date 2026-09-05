@@ -18,11 +18,14 @@ if (!existsSync(corpusPath) && process.env.MORPHIR_FIXTURES_OPTIONAL !== "1") {
 const corpus = existsSync(corpusPath) ? JSON.parse(readFileSync(corpusPath, "utf8")) : null;
 
 describe("recognize", () => {
-	test("integer 4 and \"4.0.0\" normalize to 4.0.0 with canonical integer 4", () => {
+	test('integer 4 and "4.0.0" normalize to 4.0.0 with canonical integer 4', () => {
 		for (const v of [jsonNumber("4"), "4.0.0"]) {
 			const r = recognize(newRoot(), v);
 			expect(r.ok).toBe(true);
-			if (r.ok) { expect(r.value.normalized).toEqual({ major: 4, minor: 0, patch: 0 }); expect(writeJson(r.value.canonical)).toBe("4"); }
+			if (r.ok) {
+				expect(r.value.normalized).toEqual({ major: 4, minor: 0, patch: 0 });
+				expect(writeJson(r.value.canonical)).toBe("4");
+			}
 		}
 	});
 	test("rejects prerelease, leading zeros, majors below 3 as strings, and zero", () => {

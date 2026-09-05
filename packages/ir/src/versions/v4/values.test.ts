@@ -16,15 +16,13 @@ import {
 	readValueSpecificationWithDoc,
 } from "./read-values.ts";
 import { writeType } from "./write-types.ts";
-import {
-	writeLiteral,
-	writePattern,
-	writeValue,
-	writeValueDefinition,
-	writeValueSpecification,
-} from "./write-values.ts";
+import { writeLiteral, writePattern, writeValue, writeValueDefinition, writeValueSpecification } from "./write-values.ts";
 
-const json = (s: string) => { const r = parseJson(s); if (!r.ok) throw new Error(r.error.message); return r.value; };
+const json = (s: string) => {
+	const r = parseJson(s);
+	if (!r.ok) throw new Error(r.error.message);
+	return r.value;
+};
 const rtValue = (s: string, expected = s): void => {
 	const r = readValue(newRoot(), json(s));
 	expect(r.ok ? "" : r.error.message).toBe("");
@@ -127,35 +125,40 @@ describe("values", () => {
 		rtValue('"morphir/SDK:basics#add"', '{ "Reference": "morphir/SDK:basics#add" }');
 	});
 	test("bare scalars and arrays are literals and lists (decision 0009)", () => {
-		expect(readWrite('true')).toBe('{ "Literal": { "BoolLiteral": true } }');
-		expect(readWrite('42')).toBe('{ "Literal": { "IntegerLiteral": 42 } }');
-		expect(readWrite('4.0')).toBe('{ "Literal": { "FloatLiteral": 4.0 } }');
+		expect(readWrite("true")).toBe('{ "Literal": { "BoolLiteral": true } }');
+		expect(readWrite("42")).toBe('{ "Literal": { "IntegerLiteral": 42 } }');
+		expect(readWrite("4.0")).toBe('{ "Literal": { "FloatLiteral": 4.0 } }');
 		expect(readWrite('[1, "x"]')).toBe('{ "List": [{ "Literal": { "IntegerLiteral": 1 } }, { "Variable": "x" }] }');
 	});
 	test("the lexeme decides, not the value (decision 0009)", () => {
 		// An exponent marks a float even with nothing after the point, and the
 		// writer keeps JavaScript's own spelling of the exponent rather than the
 		// document's: 1e21 comes back as 1e+21.
-		expect(readWrite('1e21')).toBe('{ "Literal": { "FloatLiteral": 1e+21 } }');
+		expect(readWrite("1e21")).toBe('{ "Literal": { "FloatLiteral": 1e+21 } }');
 		// No point and no exponent is an integer, so -0 is the integer zero; a
 		// BigInt has no negative zero to keep.
-		expect(readWrite('-0')).toBe('{ "Literal": { "IntegerLiteral": 0 } }');
+		expect(readWrite("-0")).toBe('{ "Literal": { "IntegerLiteral": 0 } }');
 		// The same digits with a point are a float, and the writer's floatText
 		// puts the point back, and the sign of negative zero is preserved:
 		// -0.0 and 0.0 are distinct IEEE-754 values.
-		expect(readWrite('-0.0')).toBe('{ "Literal": { "FloatLiteral": -0.0 } }');
+		expect(readWrite("-0.0")).toBe('{ "Literal": { "FloatLiteral": -0.0 } }');
 	});
 	test("a FloatLiteral round-trips the sign of negative zero", () => {
 		rtLiteral('{ "FloatLiteral": -0.0 }');
 	});
 	test("Native and External are not value expressions (decision 0008)", () => {
-		for (const text of ['{ "Native": { "fqname": "morphir/SDK:basics#add", "nativeInfo": { "hint": { "Arithmetic": {} } } } }', '{ "External": { "externalName": "console.log", "targetPlatform": "javascript" } }']) {
+		for (const text of [
+			'{ "Native": { "fqname": "morphir/SDK:basics#add", "nativeInfo": { "hint": { "Arithmetic": {} } } } }',
+			'{ "External": { "externalName": "console.log", "targetPlatform": "javascript" } }',
+		]) {
 			const r = readNodeChecked("Value", text);
 			expect(!r.ok && r.error.code).toBe("unknown_node");
 		}
 	});
 	test("the schema's member names round-trip untouched", () => {
-		rtValue('{ "IfThenElse": { "condition": { "Literal": { "BoolLiteral": true } }, "then": { "Literal": { "IntegerLiteral": 1 } }, "else": { "Literal": { "IntegerLiteral": 2 } } } }');
+		rtValue(
+			'{ "IfThenElse": { "condition": { "Literal": { "BoolLiteral": true } }, "then": { "Literal": { "IntegerLiteral": 1 } }, "else": { "Literal": { "IntegerLiteral": 2 } } } }',
+		);
 		rtValue('{ "Field": { "target": { "Variable": "record" }, "name": "field-name" } }');
 	});
 	test("an unknown wrapper key is unknown_node", () => {
@@ -203,11 +206,7 @@ describe("values", () => {
 				'{ "LetDefinition": { "name": "x", "definition": { "ExpressionBody": { "inputTypes": {}, "outputType": "morphir/SDK:basics#int", "body": { "Literal": { "IntegerLiteral": 1 } } } }, "in": { "Variable": "x" } } }',
 				["/LetDefinition/valueName", "/LetDefinition/valueDefinition", "/LetDefinition/inValue"],
 			],
-			[
-				'{ "Record": { "a": 1 } }',
-				'{ "Record": { "fields": { "a": { "Literal": { "IntegerLiteral": 1 } } } } }',
-				["/Record"],
-			],
+			['{ "Record": { "a": 1 } }', '{ "Record": { "fields": { "a": { "Literal": { "IntegerLiteral": 1 } } } } }', ["/Record"]],
 		];
 		for (const [legacy, canonical, cursors] of cases) {
 			const r = readNodeChecked("Value", legacy);
@@ -250,8 +249,10 @@ describe("values", () => {
 		);
 		// A lone "fields" member is the canonical payload, so what it holds must
 		// be a field map.
-		expect(readValue(newRoot(), json('{ "Record": { "fields": "x" } }')))
-			.toMatchObject({ ok: false, error: { code: "invalid_type", cursor: "/Record/fields" } });
+		expect(readValue(newRoot(), json('{ "Record": { "fields": "x" } }'))).toMatchObject({
+			ok: false,
+			error: { code: "invalid_type", cursor: "/Record/fields" },
+		});
 		rtValue('{ "Record": { "fields": { "fields": { "Variable": "x" } } } }');
 	});
 });
@@ -277,7 +278,10 @@ describe("decisions 0005 and 0006 at value position", () => {
 			['{ "IfThenElse": { "condition": true, "then": 1, "thenBranch": 1, "else": 2 } }', "/IfThenElse/thenBranch"],
 			['{ "Field": { "target": "r", "subject": "r", "name": "f" } }', "/Field/subject"],
 			['{ "Field": { "target": "r", "name": "f", "fieldName": "f" } }', "/Field/fieldName"],
-			['{ "LetDefinition": { "name": "x", "valueName": "x", "definition": { "ExpressionBody": { "inputTypes": {}, "outputType": "morphir/SDK:basics#int", "body": 1 } }, "in": "x" } }', "/LetDefinition/valueName"],
+			[
+				'{ "LetDefinition": { "name": "x", "valueName": "x", "definition": { "ExpressionBody": { "inputTypes": {}, "outputType": "morphir/SDK:basics#int", "body": 1 } }, "in": "x" } }',
+				"/LetDefinition/valueName",
+			],
 		];
 		for (const [text, cursor] of cases) {
 			const r = readNodeChecked("Value", text);
@@ -290,7 +294,11 @@ describe("decisions 0005 and 0006 at value position", () => {
 describe("patterns", () => {
 	test("tuple pattern forms and literal pattern shorthand", () => {
 		const canonical = '{ "TuplePattern": [{ "WildcardPattern": {} }, { "AsPattern": { "pattern": { "WildcardPattern": {} }, "name": "x" } }] }';
-		for (const s of [canonical, '[{ "WildcardPattern": {} }, { "AsPattern": { "pattern": { "WildcardPattern": {} }, "name": "x" } }]', '{ "TuplePattern": { "patterns": [{ "WildcardPattern": {} }, { "AsPattern": { "pattern": { "WildcardPattern": {} }, "name": "x" } }] } }']) {
+		for (const s of [
+			canonical,
+			'[{ "WildcardPattern": {} }, { "AsPattern": { "pattern": { "WildcardPattern": {} }, "name": "x" } }]',
+			'{ "TuplePattern": { "patterns": [{ "WildcardPattern": {} }, { "AsPattern": { "pattern": { "WildcardPattern": {} }, "name": "x" } }] } }',
+		]) {
 			const r = readPattern(newRoot(), json(s));
 			expect(r.ok && writeJson(writePattern(r.value))).toBe(canonical);
 		}
@@ -301,7 +309,9 @@ describe("patterns", () => {
 		rtPattern('{ "WildcardPattern": {} }');
 		rtPattern('{ "EmptyListPattern": {} }');
 		rtPattern('{ "UnitPattern": {} }');
-		rtPattern('{ "HeadTailPattern": { "head": { "AsPattern": { "pattern": { "WildcardPattern": {} }, "name": "x" } }, "tail": { "AsPattern": { "pattern": { "WildcardPattern": {} }, "name": "xs" } } } }');
+		rtPattern(
+			'{ "HeadTailPattern": { "head": { "AsPattern": { "pattern": { "WildcardPattern": {} }, "name": "x" } }, "tail": { "AsPattern": { "pattern": { "WildcardPattern": {} }, "name": "xs" } } } }',
+		);
 		rtPattern('{ "ConstructorPattern": { "fqname": "morphir/SDK:maybe#just", "patterns": [{ "WildcardPattern": {} }] } }');
 		rtPattern('{ "LiteralPattern": { "StringLiteral": "hello" } }');
 		rtPattern('{ "LiteralPattern": { "attributes": {}, "literal": 42 } }', '{ "LiteralPattern": { "IntegerLiteral": 42 } }');
@@ -335,21 +345,36 @@ describe("value definitions and specifications", () => {
 		}
 	});
 	test("ExternalBody carries bindings and an optional fallback body (decision 0008)", () => {
-		rtDefinition('{ "ExternalBody": { "inputTypes": { "msg": "morphir/SDK:string#string" }, "outputType": "morphir/SDK:basics#unit", "externals": [{ "targetPlatform": "javascript", "externalName": "console.log" }] } }');
-		rtDefinition('{ "ExternalBody": { "inputTypes": { "x": "a" }, "outputType": "a", "externals": [{ "targetPlatform": "erlang", "externalName": "math:abs" }, { "targetPlatform": "javascript", "externalName": "Math.abs" }], "body": { "Variable": "x" } } }');
-		const legacy = readNodeChecked("ValueDefinition", '{ "ExternalBody": { "inputTypes": {}, "outputType": "a", "externalName": "f", "targetPlatform": "p" } }');
+		rtDefinition(
+			'{ "ExternalBody": { "inputTypes": { "msg": "morphir/SDK:string#string" }, "outputType": "morphir/SDK:basics#unit", "externals": [{ "targetPlatform": "javascript", "externalName": "console.log" }] } }',
+		);
+		rtDefinition(
+			'{ "ExternalBody": { "inputTypes": { "x": "a" }, "outputType": "a", "externals": [{ "targetPlatform": "erlang", "externalName": "math:abs" }, { "targetPlatform": "javascript", "externalName": "Math.abs" }], "body": { "Variable": "x" } } }',
+		);
+		const legacy = readNodeChecked(
+			"ValueDefinition",
+			'{ "ExternalBody": { "inputTypes": {}, "outputType": "a", "externalName": "f", "targetPlatform": "p" } }',
+		);
 		expect(legacy.ok && legacy.value.warnings.map((w) => w.code)).toEqual(["legacy_spelling"]);
 		expect(legacy.ok && legacy.value.warnings.map((w) => w.cursor)).toEqual(["/ExternalBody"]);
-		expect(legacy.ok && writeNode(legacy.value.value)).toBe('{ "ExternalBody": { "inputTypes": {}, "outputType": "a", "externals": [{ "targetPlatform": "p", "externalName": "f" }] } }');
+		expect(legacy.ok && writeNode(legacy.value.value)).toBe(
+			'{ "ExternalBody": { "inputTypes": {}, "outputType": "a", "externals": [{ "targetPlatform": "p", "externalName": "f" }] } }',
+		);
 		const empty = readNodeChecked("ValueDefinition", '{ "ExternalBody": { "inputTypes": {}, "outputType": "a", "externals": [] } }');
 		expect(!empty.ok && empty.error.code).toBe("invalid_type");
 		expect(!empty.ok && empty.error.cursor).toBe("/ExternalBody/externals");
 	});
 	test("the legacy pair may not be mixed with externals, and a binding names exactly two members", () => {
-		const mixed = readNodeChecked("ValueDefinition", '{ "ExternalBody": { "inputTypes": {}, "outputType": "a", "externals": [{ "targetPlatform": "p", "externalName": "f" }], "externalName": "f" } }');
+		const mixed = readNodeChecked(
+			"ValueDefinition",
+			'{ "ExternalBody": { "inputTypes": {}, "outputType": "a", "externals": [{ "targetPlatform": "p", "externalName": "f" }], "externalName": "f" } }',
+		);
 		expect(!mixed.ok && mixed.error.code).toBe("unknown_member");
 		expect(!mixed.ok && mixed.error.cursor).toBe("/ExternalBody/externalName");
-		const extra = readNodeChecked("ValueDefinition", '{ "ExternalBody": { "inputTypes": {}, "outputType": "a", "externals": [{ "targetPlatform": "p", "externalName": "f", "note": "x" }] } }');
+		const extra = readNodeChecked(
+			"ValueDefinition",
+			'{ "ExternalBody": { "inputTypes": {}, "outputType": "a", "externals": [{ "targetPlatform": "p", "externalName": "f", "note": "x" }] } }',
+		);
 		expect(!extra.ok && extra.error.code).toBe("unknown_member");
 		expect(!extra.ok && extra.error.cursor).toBe("/ExternalBody/externals/0/note");
 		// Neither the list nor the pair: the canonical member is the one named.
@@ -362,15 +387,22 @@ describe("value definitions and specifications", () => {
 		expect(!half.ok && half.error.message).toBe('missing member "targetPlatform"');
 	});
 	test("a target platform may be bound only once (decision 0008)", () => {
-		const dup = readNodeChecked("ValueDefinition", '{ "ExternalBody": { "inputTypes": { "x": "morphir/SDK:basics#int" }, "outputType": "morphir/SDK:basics#int", "externals": [{ "targetPlatform": "javascript", "externalName": "a" }, { "targetPlatform": "javascript", "externalName": "b" }] } }');
+		const dup = readNodeChecked(
+			"ValueDefinition",
+			'{ "ExternalBody": { "inputTypes": { "x": "morphir/SDK:basics#int" }, "outputType": "morphir/SDK:basics#int", "externals": [{ "targetPlatform": "javascript", "externalName": "a" }, { "targetPlatform": "javascript", "externalName": "b" }] } }',
+		);
 		expect(!dup.ok && dup.error.code).toBe("duplicate_member");
 		// The second occurrence, because that is the binding an author deletes.
 		expect(!dup.ok && dup.error.cursor).toBe("/ExternalBody/externals/1/targetPlatform");
 	});
 	test("inputTypes accepts the legacy pair array", () => {
-		const r = readValueDefinition(newRoot(), json('{ "ExpressionBody": { "inputTypes": [["x", "morphir/SDK:basics#int"]], "outputType": "morphir/SDK:basics#int", "body": { "Variable": "x" } } }'));
-		expect(r.ok && writeJson(writeValueDefinition(r.value)))
-			.toBe('{ "ExpressionBody": { "inputTypes": { "x": "morphir/SDK:basics#int" }, "outputType": "morphir/SDK:basics#int", "body": { "Variable": "x" } } }');
+		const r = readValueDefinition(
+			newRoot(),
+			json('{ "ExpressionBody": { "inputTypes": [["x", "morphir/SDK:basics#int"]], "outputType": "morphir/SDK:basics#int", "body": { "Variable": "x" } } }'),
+		);
+		expect(r.ok && writeJson(writeValueDefinition(r.value))).toBe(
+			'{ "ExpressionBody": { "inputTypes": { "x": "morphir/SDK:basics#int" }, "outputType": "morphir/SDK:basics#int", "body": { "Variable": "x" } } }',
+		);
 	});
 	test("value specification: object map and legacy pairs", () => {
 		const canonical = '{ "inputs": { "a": "morphir/SDK:basics#int", "b": "morphir/SDK:basics#int" }, "output": "morphir/SDK:basics#int" }';
@@ -392,7 +424,6 @@ describe("value definitions and specifications", () => {
 describe("record types with a field named attributes", () => {
 	test("the type writer keeps it under fields, so the reader round-trips", () => {
 		const r = readType(newRoot(), json('{ "Record": { "attributes": {}, "fields": { "attributes": "morphir/SDK:basics#int" } } }'));
-		expect(r.ok && writeJson(writeType(r.value)))
-			.toBe('{ "Record": { "fields": { "attributes": "morphir/SDK:basics#int" } } }');
+		expect(r.ok && writeJson(writeType(r.value))).toBe('{ "Record": { "fields": { "attributes": "morphir/SDK:basics#int" } } }');
 	});
 });

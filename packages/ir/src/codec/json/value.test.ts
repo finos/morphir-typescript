@@ -1,7 +1,7 @@
 // packages/ir/src/codec/json/value.test.ts
 // Run with: bun test packages/ir/src/codec/json/value.test.ts
 import { describe, expect, test } from "bun:test";
-import { type JsonValue, isInteger, isObject, jsonNumber, jsonObject, locationOf, parseJson, writeJson } from "./value.ts";
+import { isInteger, isObject, type JsonValue, jsonNumber, jsonObject, locationOf, parseJson, writeJson } from "./value.ts";
 
 describe("parseJson", () => {
 	test("keeps number lexemes and member order", () => {
@@ -17,12 +17,18 @@ describe("parseJson", () => {
 	test("rejects duplicate members with a cursor", () => {
 		const r = parseJson('{ "a": 1, "a": 2 }');
 		expect(r.ok).toBe(false);
-		if (!r.ok) { expect(r.error.code).toBe("duplicate_member"); expect(r.error.cursor).toBe("/a"); }
+		if (!r.ok) {
+			expect(r.error.code).toBe("duplicate_member");
+			expect(r.error.cursor).toBe("/a");
+		}
 	});
 	test("reports syntax errors with line and column", () => {
 		const r = parseJson('{\n  "a": tru }');
 		expect(r.ok).toBe(false);
-		if (!r.ok) { expect(r.error.code).toBe("invalid_json"); expect(r.error.line).toBe(2); }
+		if (!r.ok) {
+			expect(r.error.code).toBe("invalid_json");
+			expect(r.error.line).toBe(2);
+		}
 	});
 	test("rejects trailing content and non-finite numbers", () => {
 		expect(parseJson("1 2").ok).toBe(false);
@@ -49,7 +55,12 @@ describe("parseJson", () => {
 
 describe("writeJson", () => {
 	test("canonical one-line style", () => {
-		const v = jsonObject([["Reference", ["morphir/SDK:list#list", "a"]], ["n", jsonNumber("42")], ["e", jsonObject([])], ["l", []]]);
+		const v = jsonObject([
+			["Reference", ["morphir/SDK:list#list", "a"]],
+			["n", jsonNumber("42")],
+			["e", jsonObject([])],
+			["l", []],
+		]);
 		expect(writeJson(v)).toBe('{ "Reference": ["morphir/SDK:list#list", "a"], "n": 42, "e": {}, "l": [] }');
 	});
 	test("round-trips through parse", () => {

@@ -13,9 +13,23 @@ const kitDir = process.env.MORPHIR_MCK_DIR ?? path.resolve(import.meta.dir, "../
 // The kit names a node; this is the node kind that name reads as, including the
 // kit's own spellings that differ from the module's.
 const NODE_KINDS: readonly NodeKind[] = [
-	"Name", "Path", "FQName", "FormatVersion", "Type", "Literal", "Pattern", "Value", "TypeSpecification", "TypeDefinition",
-	"ValueSpecification", "ValueDefinition", "AccessControlledTypeDefinition", "AccessControlledValueDefinition",
-	"ModuleDefinition", "ModuleSpecification", "IRFile",
+	"Name",
+	"Path",
+	"FQName",
+	"FormatVersion",
+	"Type",
+	"Literal",
+	"Pattern",
+	"Value",
+	"TypeSpecification",
+	"TypeDefinition",
+	"ValueSpecification",
+	"ValueDefinition",
+	"AccessControlledTypeDefinition",
+	"AccessControlledValueDefinition",
+	"ModuleDefinition",
+	"ModuleSpecification",
+	"IRFile",
 ];
 const NODES: ReadonlyMap<string, NodeKind> = new Map<string, NodeKind>([
 	...NODE_KINDS.map((k): readonly [string, NodeKind] => [k, k]),
@@ -48,7 +62,7 @@ function runCase(c: KitCase, node: NodeKind): void {
 			// strings and a code the codec never emits simply never matches.
 			const codes: readonly string[] = r.value.warnings.map((w) => w.code);
 			const seen = r.value.warnings.map((w) => `${w.code} at ${w.cursor}`).join("; ");
-			const wanted = f.info.keys["warning"];
+			const wanted = f.info.keys.warning;
 			if (wanted === undefined) {
 				expect(codes.length === 0 ? "" : `${f.info.role} fence ${f.index} warned unexpectedly: ${seen}`).toBe("");
 			} else {
@@ -63,8 +77,8 @@ function runCase(c: KitCase, node: NodeKind): void {
 			checked += 1;
 		} else if (f.info.role === "rejected") {
 			const r = readNodeChecked(node, body);
-			const expectKind = f.info.keys["expect"];
-			const code = f.info.keys["diagnostic"];
+			const expectKind = f.info.keys.expect;
+			const code = f.info.keys.diagnostic;
 			if (expectKind !== undefined) {
 				expect(r.ok ? "" : `expected a ${expectKind}, got ${r.error.code}: ${r.error.message}`).toBe("");
 				if (r.ok) expect(nodeKindOf(r.value.value)).toBe(expectKind);
@@ -91,10 +105,20 @@ describe.skipIf(kit === null)("Morphir Compatibility Kit (JSON fences)", () => {
 	});
 	let run = 0;
 	for (const c of kit.cases) {
-		if (c.status !== "active") { skipped += c.fences.length; continue; }
-		if (c.version !== null && c.version !== 4) { skipped += c.fences.length; continue; }
+		if (c.status !== "active") {
+			skipped += c.fences.length;
+			continue;
+		}
+		if (c.version !== null && c.version !== 4) {
+			skipped += c.fences.length;
+			continue;
+		}
 		const node = c.node === null ? undefined : NODES.get(c.node);
-		if (node === undefined) { console.log(`kit: skipping ${c.id} (node ${c.node ?? "unset"} not runnable in process yet)`); skipped += c.fences.length; continue; }
+		if (node === undefined) {
+			console.log(`kit: skipping ${c.id} (node ${c.node ?? "unset"} not runnable in process yet)`);
+			skipped += c.fences.length;
+			continue;
+		}
 		run += 1;
 		test(c.id, () => runCase(c, node));
 	}

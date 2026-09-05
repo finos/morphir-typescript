@@ -3,9 +3,9 @@
 // A strict JSON value layer. JSON.parse cannot reject duplicate members or
 // preserve number lexemes, and both are required by the v4 JSON profile, so
 // this is a small hand-written RFC 8259 parser and a canonical one-line writer.
-import { type Json, type JsonNumber, type JsonObject, isJsonNumber, isJsonObject } from "../../model/attributes.ts";
+import { isJsonNumber, isJsonObject, type Json, type JsonNumber, type JsonObject } from "../../model/attributes.ts";
 import { type Diagnostic, diagnostic } from "../../model/diagnostic.ts";
-import { type Result, err, ok } from "../../model/result.ts";
+import { err, ok, type Result } from "../../model/result.ts";
 
 // The value tree is declared in the model, because an opaque attribute payload
 // is one of these trees carried through unread. There is one tree, not two that
@@ -14,15 +14,26 @@ import { type Result, err, ok } from "../../model/result.ts";
 export type { Json, JsonNumber, JsonObject };
 export type JsonValue = Json;
 
-export function jsonNumber(text: string): JsonNumber { return { kind: "number", text }; }
+export function jsonNumber(text: string): JsonNumber {
+	return { kind: "number", text };
+}
 export function jsonObject(entries: readonly (readonly [string, JsonValue])[]): JsonObject {
 	return { kind: "object", members: new Map(entries) };
 }
-export function isObject(v: JsonValue): v is JsonObject { return isJsonObject(v); }
-export function isNumber(v: JsonValue): v is JsonNumber { return isJsonNumber(v); }
-export function isInteger(n: JsonNumber): boolean { return !/[.eE]/.test(n.text); }
+export function isObject(v: JsonValue): v is JsonObject {
+	return isJsonObject(v);
+}
+export function isNumber(v: JsonValue): v is JsonNumber {
+	return isJsonNumber(v);
+}
+export function isInteger(n: JsonNumber): boolean {
+	return !/[.eE]/.test(n.text);
+}
 
-export interface JsonLocation { readonly line: number; readonly column: number }
+export interface JsonLocation {
+	readonly line: number;
+	readonly column: number;
+}
 
 // Where a value started in the source. JsonValue stays a plain structural type
 // — a reader can build one by hand, and two trees that mean the same thing
@@ -32,7 +43,7 @@ export interface JsonLocation { readonly line: number; readonly column: number }
 const locations = new WeakMap<object, JsonLocation>();
 
 export function locationOf(v: JsonValue): JsonLocation | null {
-	return typeof v === "object" && v !== null ? locations.get(v) ?? null : null;
+	return typeof v === "object" && v !== null ? (locations.get(v) ?? null) : null;
 }
 
 const NUMBER = /^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?/;
@@ -54,15 +65,26 @@ class Parser {
 	private tooDeep(cursor: string): Diagnostic {
 		return diagnostic("nesting_too_deep", "syntax", cursor || "/", `nesting deeper than ${MAX_DEPTH} is not accepted`, { line: this.line, column: this.col });
 	}
-	private peek(): string { return this.text[this.pos] ?? ""; }
+	private peek(): string {
+		return this.text[this.pos] ?? "";
+	}
 	private advance(n: number): void {
 		for (let i = 0; i < n; i += 1) {
-			if (this.text[this.pos] === "\n") { this.line += 1; this.col = 1; } else { this.col += 1; }
+			if (this.text[this.pos] === "\n") {
+				this.line += 1;
+				this.col = 1;
+			} else {
+				this.col += 1;
+			}
 			this.pos += 1;
 		}
 	}
-	private ws(): void { while (/[ \t\n\r]/.test(this.peek())) this.advance(1); }
-	private here(): JsonLocation { return { line: this.line, column: this.col }; }
+	private ws(): void {
+		while (/[ \t\n\r]/.test(this.peek())) this.advance(1);
+	}
+	private here(): JsonLocation {
+		return { line: this.line, column: this.col };
+	}
 	private located<T extends object>(node: T, at: JsonLocation): T {
 		locations.set(node, at);
 		return node;
@@ -82,9 +104,18 @@ class Parser {
 		if (c === "{") return this.parseObject(cursor, depth);
 		if (c === "[") return this.parseArray(cursor, depth);
 		if (c === '"') return this.parseString();
-		if (this.text.startsWith("true", this.pos)) { this.advance(4); return ok(true); }
-		if (this.text.startsWith("false", this.pos)) { this.advance(5); return ok(false); }
-		if (this.text.startsWith("null", this.pos)) { this.advance(4); return ok(null); }
+		if (this.text.startsWith("true", this.pos)) {
+			this.advance(4);
+			return ok(true);
+		}
+		if (this.text.startsWith("false", this.pos)) {
+			this.advance(5);
+			return ok(false);
+		}
+		if (this.text.startsWith("null", this.pos)) {
+			this.advance(4);
+			return ok(null);
+		}
 		const m = NUMBER.exec(this.text.slice(this.pos));
 		if (m !== null) {
 			const start = this.here();
@@ -103,7 +134,10 @@ class Parser {
 		// recorded against the identity the caller will see.
 		const node = this.located<JsonObject>({ kind: "object", members }, start);
 		this.ws();
-		if (this.peek() === "}") { this.advance(1); return ok(node); }
+		if (this.peek() === "}") {
+			this.advance(1);
+			return ok(node);
+		}
 		for (;;) {
 			this.ws();
 			if (this.peek() !== '"') return err(this.fail("expected a member name"));
@@ -121,8 +155,14 @@ class Parser {
 			}
 			members.set(name, value.value);
 			this.ws();
-			if (this.peek() === ",") { this.advance(1); continue; }
-			if (this.peek() === "}") { this.advance(1); return ok(node); }
+			if (this.peek() === ",") {
+				this.advance(1);
+				continue;
+			}
+			if (this.peek() === "}") {
+				this.advance(1);
+				return ok(node);
+			}
 			return err(this.fail('expected "," or "}"'));
 		}
 	}
@@ -133,15 +173,24 @@ class Parser {
 		this.advance(1);
 		const items = this.located<JsonValue[]>([], start);
 		this.ws();
-		if (this.peek() === "]") { this.advance(1); return ok(items); }
+		if (this.peek() === "]") {
+			this.advance(1);
+			return ok(items);
+		}
 		for (;;) {
 			this.ws();
 			const v = this.parseValue(`${cursor}/${items.length}`, depth + 1);
 			if (!v.ok) return v;
 			items.push(v.value);
 			this.ws();
-			if (this.peek() === ",") { this.advance(1); continue; }
-			if (this.peek() === "]") { this.advance(1); return ok(items); }
+			if (this.peek() === ",") {
+				this.advance(1);
+				continue;
+			}
+			if (this.peek() === "]") {
+				this.advance(1);
+				return ok(items);
+			}
 			return err(this.fail('expected "," or "]"'));
 		}
 	}
@@ -152,11 +201,18 @@ class Parser {
 		for (;;) {
 			const c = this.peek();
 			if (c === "") return err(this.fail("unterminated string"));
-			if (c === '"') { this.advance(1); return ok(out); }
+			if (c === '"') {
+				this.advance(1);
+				return ok(out);
+			}
 			if (c === "\\") {
 				const e = this.text[this.pos + 1] ?? "";
 				const simple: Record<string, string> = { '"': '"', "\\": "\\", "/": "/", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t" };
-				if (e in simple) { out += simple[e]; this.advance(2); continue; }
+				if (e in simple) {
+					out += simple[e];
+					this.advance(2);
+					continue;
+				}
 				if (e === "u") {
 					const hex = this.text.slice(this.pos + 2, this.pos + 6);
 					if (!/^[0-9a-fA-F]{4}$/.test(hex)) return err(this.fail("invalid \\u escape"));
@@ -178,11 +234,25 @@ export function parseJson(text: string): Result<JsonValue, Diagnostic> {
 }
 
 function writeString(s: string): string {
+	// biome-ignore lint/suspicious/noControlCharactersInRegex: JSON requires escaping every U+0000 through U+001F control character.
 	return `"${s.replace(/[\\"\u0000-\u001f]/g, (ch) => {
 		switch (ch) {
-			case '"': return '\\"'; case "\\": return "\\\\"; case "\n": return "\\n"; case "\r": return "\\r";
-			case "\t": return "\\t"; case "\b": return "\\b"; case "\f": return "\\f";
-			default: return `\\u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`;
+			case '"':
+				return '\\"';
+			case "\\":
+				return "\\\\";
+			case "\n":
+				return "\\n";
+			case "\r":
+				return "\\r";
+			case "\t":
+				return "\\t";
+			case "\b":
+				return "\\b";
+			case "\f":
+				return "\\f";
+			default:
+				return `\\u${ch.charCodeAt(0).toString(16).padStart(4, "0")}`;
 		}
 	})}"`;
 }
