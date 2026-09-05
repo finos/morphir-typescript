@@ -2,7 +2,7 @@
 // Hand cases for v4 literal, pattern and value reading and canonical writing; the kit runner covers the rest.
 // Run with: bun test packages/ir/src/versions/v4/values.test.ts
 import { describe, expect, test } from "bun:test";
-import { root } from "../../codec/json/cursor.ts";
+import { newRoot } from "../../codec/json/cursor.ts";
 import { parseJson, writeJson } from "../../codec/json/value.ts";
 import { readType } from "./read-types.ts";
 import {
@@ -25,12 +25,12 @@ import {
 
 const json = (s: string) => { const r = parseJson(s); if (!r.ok) throw new Error(r.error.message); return r.value; };
 const rtValue = (s: string, expected = s): void => {
-	const r = readValue(root, json(s));
+	const r = readValue(newRoot(), json(s));
 	expect(r.ok ? "" : r.error.message).toBe("");
 	if (r.ok) expect(writeJson(writeValue(r.value))).toBe(expected);
 };
 const rtPattern = (s: string, expected = s): void => {
-	const r = readPattern(root, json(s));
+	const r = readPattern(newRoot(), json(s));
 	expect(r.ok ? "" : r.error.message).toBe("");
 	if (r.ok) expect(writeJson(writePattern(r.value))).toBe(expected);
 };
@@ -38,27 +38,27 @@ const rtPattern = (s: string, expected = s): void => {
 describe("literals", () => {
 	test("compact, expanded and legacy names", () => {
 		for (const s of ['{ "IntegerLiteral": 42 }', '{ "IntegerLiteral": { "value": 42 } }', '{ "WholeNumberLiteral": 42 }']) {
-			const r = readLiteral(root, json(s));
+			const r = readLiteral(newRoot(), json(s));
 			expect(r.ok && writeJson(writeLiteral(r.value))).toBe('{ "IntegerLiteral": 42 }');
 		}
-		const d = readLiteral(root, json('{ "DecimalLiteral": "10.50" }'));
+		const d = readLiteral(newRoot(), json('{ "DecimalLiteral": "10.50" }'));
 		expect(d.ok && writeJson(writeLiteral(d.value))).toBe('{ "DecimalLiteral": "10.50" }');
-		const f = readLiteral(root, json('{ "FloatLiteral": 0.0 }'));
+		const f = readLiteral(newRoot(), json('{ "FloatLiteral": 0.0 }'));
 		expect(f.ok && writeJson(writeLiteral(f.value))).toBe('{ "FloatLiteral": 0.0 }');
 	});
 	test("a non-integer lexeme is not an IntegerLiteral", () => {
-		expect(readLiteral(root, json('{ "IntegerLiteral": 4.5 }')).ok).toBe(false);
+		expect(readLiteral(newRoot(), json('{ "IntegerLiteral": 4.5 }')).ok).toBe(false);
 	});
 	test("bool, char and string round-trip; a two-character CharLiteral does not", () => {
 		for (const s of ['{ "BoolLiteral": true }', '{ "CharLiteral": "A" }', '{ "StringLiteral": "hello" }']) {
-			const r = readLiteral(root, json(s));
+			const r = readLiteral(newRoot(), json(s));
 			expect(r.ok && writeJson(writeLiteral(r.value))).toBe(s);
 		}
-		const bad = readLiteral(root, json('{ "CharLiteral": "AB" }'));
+		const bad = readLiteral(newRoot(), json('{ "CharLiteral": "AB" }'));
 		expect(!bad.ok && bad.error.code).toBe("invalid_literal");
 	});
 	test("an unknown wrapper key is invalid_literal", () => {
-		const r = readLiteral(root, json('{ "BigIntLiteral": 42 }'));
+		const r = readLiteral(newRoot(), json('{ "BigIntLiteral": 42 }'));
 		expect(!r.ok && r.error.code).toBe("invalid_literal");
 	});
 	test("the shorthand reader types bare JSON scalars", () => {
@@ -70,7 +70,7 @@ describe("literals", () => {
 			['{ "FloatLiteral": 3 }', '{ "FloatLiteral": 3.0 }'],
 		];
 		for (const [input, expected] of cases) {
-			const r = readLiteralShorthand(root, json(input));
+			const r = readLiteralShorthand(newRoot(), json(input));
 			expect(r.ok && writeJson(writeLiteral(r.value))).toBe(expected);
 		}
 	});
@@ -93,20 +93,20 @@ describe("values", () => {
 	});
 	test("bare arrays, booleans and numbers are ambiguous", () => {
 		for (const s of ["[1, 2, 3]", "true", "42", "2.5"]) {
-			const r = readValue(root, json(s));
+			const r = readValue(newRoot(), json(s));
 			expect(!r.ok && r.error.code).toBe("ambiguous_shorthand");
 		}
 	});
 	test("member names are the schema's", () => {
 		rtValue('{ "IfThenElse": { "condition": { "Literal": { "BoolLiteral": true } }, "then": { "Literal": { "IntegerLiteral": 1 } }, "else": { "Literal": { "IntegerLiteral": 2 } } } }');
 		rtValue('{ "Field": { "target": { "Variable": "record" }, "name": "field-name" } }');
-		const bad = readValue(root, json('{ "IfThenElse": { "condition": true, "thenBranch": 1, "elseBranch": 2 } }'));
+		const bad = readValue(newRoot(), json('{ "IfThenElse": { "condition": true, "thenBranch": 1, "elseBranch": 2 } }'));
 		expect(!bad.ok && bad.error.code).toBe("unknown_member");
-		const field = readValue(root, json('{ "Field": { "subject": { "Variable": "record" }, "fieldName": "field-name" } }'));
+		const field = readValue(newRoot(), json('{ "Field": { "subject": { "Variable": "record" }, "fieldName": "field-name" } }'));
 		expect(!field.ok && field.error.code).toBe("unknown_member");
 	});
 	test("an unknown wrapper key is unknown_node", () => {
-		const r = readValue(root, json('{ "Comprehension": { "over": "xs" } }'));
+		const r = readValue(newRoot(), json('{ "Comprehension": { "over": "xs" } }'));
 		expect(!r.ok && r.error.code).toBe("unknown_node");
 	});
 	test("tuple and list forms", () => {
@@ -166,7 +166,7 @@ describe("values", () => {
 		);
 		// A lone "fields" member is the expanded form, so its payload must be a
 		// field map.
-		expect(readValue(root, json('{ "Record": { "fields": "x" } }')))
+		expect(readValue(newRoot(), json('{ "Record": { "fields": "x" } }')))
 			.toMatchObject({ ok: false, error: { code: "invalid_type", cursor: "/Record/fields" } });
 		rtValue('{ "Record": { "attributes": {}, "fields": { "fields": { "Variable": "x" } } } }');
 	});
@@ -176,10 +176,10 @@ describe("patterns", () => {
 	test("tuple pattern forms and literal pattern shorthand", () => {
 		const canonical = '{ "TuplePattern": [{ "WildcardPattern": {} }, { "AsPattern": { "pattern": { "WildcardPattern": {} }, "name": "x" } }] }';
 		for (const s of [canonical, '[{ "WildcardPattern": {} }, { "AsPattern": { "pattern": { "WildcardPattern": {} }, "name": "x" } }]', '{ "TuplePattern": { "patterns": [{ "WildcardPattern": {} }, { "AsPattern": { "pattern": { "WildcardPattern": {} }, "name": "x" } }] } }']) {
-			const r = readPattern(root, json(s));
+			const r = readPattern(newRoot(), json(s));
 			expect(r.ok && writeJson(writePattern(r.value))).toBe(canonical);
 		}
-		const lp = readPattern(root, json('{ "LiteralPattern": 42 }'));
+		const lp = readPattern(newRoot(), json('{ "LiteralPattern": 42 }'));
 		expect(lp.ok && writeJson(writePattern(lp.value))).toBe('{ "LiteralPattern": { "IntegerLiteral": 42 } }');
 	});
 	test("the remaining pattern wrappers round-trip in canonical form", () => {
@@ -199,7 +199,7 @@ describe("patterns", () => {
 		rtPattern(`{ "AsPattern": { "attributes": ${source}, "pattern": { "WildcardPattern": {} }, "name": "x" } }`);
 	});
 	test("an unknown pattern wrapper is unknown_node", () => {
-		const r = readPattern(root, json('{ "RegexPattern": {} }'));
+		const r = readPattern(newRoot(), json('{ "RegexPattern": {} }'));
 		expect(!r.ok && r.error.code).toBe("unknown_node");
 	});
 });
@@ -207,7 +207,7 @@ describe("patterns", () => {
 describe("value definitions and specifications", () => {
 	test("expression body round-trips", () => {
 		const s = '{ "ExpressionBody": { "inputTypes": { "x": "morphir/SDK:basics#int" }, "outputType": "morphir/SDK:basics#int", "body": { "Variable": "x" } } }';
-		const r = readValueDefinition(root, json(s));
+		const r = readValueDefinition(newRoot(), json(s));
 		expect(r.ok && writeJson(writeValueDefinition(r.value))).toBe(s);
 	});
 	test("native, external and incomplete bodies round-trip", () => {
@@ -217,28 +217,28 @@ describe("value definitions and specifications", () => {
 			'{ "IncompleteBody": { "inputTypes": {}, "outputType": "morphir/SDK:basics#int", "incompleteness": { "Draft": {} } } }',
 			'{ "IncompleteBody": { "inputTypes": {}, "incompleteness": { "Hole": { "reason": { "UnresolvedReference": { "target": "a/b:c#d" } } } }, "partialBody": { "Variable": "x" } } }',
 		]) {
-			const r = readValueDefinition(root, json(s));
+			const r = readValueDefinition(newRoot(), json(s));
 			expect(r.ok ? "" : r.error.message).toBe("");
 			if (r.ok) expect(writeJson(writeValueDefinition(r.value))).toBe(s);
 		}
 	});
 	test("inputTypes accepts the legacy pair array", () => {
-		const r = readValueDefinition(root, json('{ "ExpressionBody": { "inputTypes": [["x", "morphir/SDK:basics#int"]], "outputType": "morphir/SDK:basics#int", "body": { "Variable": "x" } } }'));
+		const r = readValueDefinition(newRoot(), json('{ "ExpressionBody": { "inputTypes": [["x", "morphir/SDK:basics#int"]], "outputType": "morphir/SDK:basics#int", "body": { "Variable": "x" } } }'));
 		expect(r.ok && writeJson(writeValueDefinition(r.value)))
 			.toBe('{ "ExpressionBody": { "inputTypes": { "x": "morphir/SDK:basics#int" }, "outputType": "morphir/SDK:basics#int", "body": { "Variable": "x" } } }');
 	});
 	test("value specification: object map and legacy pairs", () => {
 		const canonical = '{ "inputs": { "a": "morphir/SDK:basics#int", "b": "morphir/SDK:basics#int" }, "output": "morphir/SDK:basics#int" }';
 		for (const s of [canonical, '{ "inputs": [["a", "morphir/SDK:basics#int"], ["b", "morphir/SDK:basics#int"]], "output": "morphir/SDK:basics#int" }']) {
-			const r = readValueSpecification(root, json(s));
+			const r = readValueSpecification(newRoot(), json(s));
 			expect(r.ok && writeJson(writeValueSpecification(r.value))).toBe(canonical);
 		}
-		const noInputs = readValueSpecification(root, json('{ "output": "morphir/SDK:basics#int" }'));
+		const noInputs = readValueSpecification(newRoot(), json('{ "output": "morphir/SDK:basics#int" }'));
 		expect(noInputs.ok && writeJson(writeValueSpecification(noInputs.value))).toBe('{ "output": "morphir/SDK:basics#int" }');
 	});
 	test("doc on a specification is read out of band and never written back", () => {
 		const s = '{ "inputs": {}, "output": "morphir/SDK:string#string", "doc": "Returns a greeting" }';
-		const r = readValueSpecificationWithDoc(root, json(s));
+		const r = readValueSpecificationWithDoc(newRoot(), json(s));
 		expect(r.ok && r.value.doc).toBe("Returns a greeting");
 		expect(r.ok && writeJson(writeValueSpecification(r.value.spec))).toBe('{ "output": "morphir/SDK:string#string" }');
 	});
@@ -246,7 +246,7 @@ describe("value definitions and specifications", () => {
 
 describe("record types with a field named attributes", () => {
 	test("the type writer expands so the reader round-trips", () => {
-		const r = readType(root, json('{ "Record": { "attributes": {}, "fields": { "attributes": "morphir/SDK:basics#int" } } }'));
+		const r = readType(newRoot(), json('{ "Record": { "attributes": {}, "fields": { "attributes": "morphir/SDK:basics#int" } } }'));
 		expect(r.ok && writeJson(writeType(r.value)))
 			.toBe('{ "Record": { "attributes": {}, "fields": { "attributes": "morphir/SDK:basics#int" } } }');
 	});

@@ -5,7 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { root } from "../../codec/json/cursor.ts";
+import { newRoot } from "../../codec/json/cursor.ts";
 import { isObject, jsonNumber, parseJson, writeJson } from "../../codec/json/value.ts";
 import { compatibility, readFormatVersionMember, recognize } from "./format-version.ts";
 
@@ -20,19 +20,19 @@ const corpus = existsSync(corpusPath) ? JSON.parse(readFileSync(corpusPath, "utf
 describe("recognize", () => {
 	test("integer 4 and \"4.0.0\" normalize to 4.0.0 with canonical integer 4", () => {
 		for (const v of [jsonNumber("4"), "4.0.0"]) {
-			const r = recognize(root, v);
+			const r = recognize(newRoot(), v);
 			expect(r.ok).toBe(true);
 			if (r.ok) { expect(r.value.normalized).toEqual({ major: 4, minor: 0, patch: 0 }); expect(writeJson(r.value.canonical)).toBe("4"); }
 		}
 	});
 	test("rejects prerelease, leading zeros, majors below 3 as strings, and zero", () => {
-		for (const bad of ["4.0.0-beta", "4.01.0", "2.0.0", "0.0.0"]) expect(recognize(root, bad).ok).toBe(false);
-		expect(recognize(root, jsonNumber("0")).ok).toBe(false);
-		expect(recognize(root, jsonNumber("4.5")).ok).toBe(false);
-		expect(recognize(root, true).ok).toBe(false);
+		for (const bad of ["4.0.0-beta", "4.01.0", "2.0.0", "0.0.0"]) expect(recognize(newRoot(), bad).ok).toBe(false);
+		expect(recognize(newRoot(), jsonNumber("0")).ok).toBe(false);
+		expect(recognize(newRoot(), jsonNumber("4.5")).ok).toBe(false);
+		expect(recognize(newRoot(), true).ok).toBe(false);
 	});
 	test("out of range", () => {
-		const r = recognize(root, "3.4294967296.0");
+		const r = recognize(newRoot(), "3.4294967296.0");
 		expect(!r.ok && r.error.code).toBe("format_version_out_of_range");
 	});
 	test("compatibility against the reference table", () => {
@@ -46,7 +46,7 @@ describe.skipIf(corpus === null)("format-version-conformance.json", () => {
 	test("scalarCases", () => {
 		for (const c of corpus.scalarCases) {
 			const value = typeof c.value === "number" ? jsonNumber(String(c.value)) : c.value;
-			const r = recognize(root, value);
+			const r = recognize(newRoot(), value);
 			// The corpus nests the expected diagnostic under `normalization.diagnostic`
 			// rather than a top-level `diagnostic` field; adapted here per the task's
 			// resolution note (adapt the key access, not the assertion).
@@ -79,7 +79,7 @@ describe.skipIf(corpus === null)("format-version-conformance.json", () => {
 			const o = parsed.value;
 			expect(isObject(o)).toBe(true);
 			if (isObject(o)) {
-				const r = readFormatVersionMember(root, o);
+				const r = readFormatVersionMember(newRoot(), o);
 				expect(!r.ok && r.error.code).toBe(c.diagnostic);
 			}
 		}

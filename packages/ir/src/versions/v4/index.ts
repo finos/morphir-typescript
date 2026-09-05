@@ -12,11 +12,18 @@
 // spellings can be compared on meaning alone. A node travels as a NodeValue —
 // the node's name and its value in one discriminated union — so the dispatch
 // is checked rather than cast.
-import { type Ctx, fail, root } from "../../codec/json/cursor.ts";
+//
+// `readChecked` and `readNodeChecked` are the same reads with the warnings
+// kept: a legacy spelling inside decision 0006's window is accepted and
+// reported, so a caller that wants to see what it accepted asks for a
+// Checked<T> and one that does not keeps the plain reader.
+import { type Ctx, fail, newRoot } from "../../codec/json/cursor.ts";
 import { type JsonValue, parseJson, writeJson } from "../../codec/json/value.ts";
 import {
 	type AttributeMapper,
 	mapAttributes,
+	mapModuleDefinition,
+	mapModuleSpecification,
 	mapPattern,
 	mapType,
 	mapTypeDefinition,
@@ -31,12 +38,12 @@ import type { AccessControlled, Documented } from "../../model/modules.ts";
 import { type Result, ok } from "../../model/result.ts";
 import { EMPTY_TYPE_ATTRIBUTES, type TA, type VA, emptyValueAttributes } from "./attributes.ts";
 import { canonicalFormatVersion, compatibility, recognize } from "./format-version.ts";
-import { readAccessControlledTypeDefinition, readAccessControlledValueDefinition } from "./read-definitions.ts";
+import { readAccessControlledTypeDefinition, readAccessControlledValueDefinition, readModuleDefinition, readModuleSpecification } from "./read-definitions.ts";
 import { SUPPORTED_VERSIONS, readIRFile } from "./read-distribution.ts";
 import { readFQName, readName, readPath } from "./read-names.ts";
 import { readType, readTypeDefinition, readTypeSpecification } from "./read-types.ts";
 import { readLiteral, readPattern, readValue, readValueDefinition, readValueSpecification } from "./read-values.ts";
-import { writeAccessControlledTypeDefinition, writeAccessControlledValueDefinition } from "./write-definitions.ts";
+import { writeAccessControlledTypeDefinition, writeAccessControlledValueDefinition, writeModuleDefinition, writeModuleSpecification } from "./write-definitions.ts";
 import { writeIRFile } from "./write-distribution.ts";
 import { writeFQName, writeName, writePath } from "./write-names.ts";
 import { writeType, writeTypeDefinition, writeTypeSpecification } from "./write-types.ts";
@@ -84,9 +91,16 @@ export type NodeValue =
 	| { readonly node: "ValueDefinition"; readonly value: ValueDefinition }
 	| { readonly node: "AccessControlledTypeDefinition"; readonly value: AccessControlledTypeDefinition }
 	| { readonly node: "AccessControlledValueDefinition"; readonly value: AccessControlledValueDefinition }
+	| { readonly node: "ModuleDefinition"; readonly value: ModuleDefinition }
+	| { readonly node: "ModuleSpecification"; readonly value: ModuleSpecification }
 	| { readonly node: "IRFile"; readonly value: IRFile };
 
 export type NodeKind = NodeValue["node"];
+
+// What a read produces: the value, and the legacy spellings it accepted on the
+// way (decision 0006). A caller that does not care drops the warnings; the
+// compatibility kit's `warning=` fences check them.
+export interface Checked<T> { readonly value: T; readonly warnings: readonly Diagnostic[] }
 
 // The compatibility kit names the whole-document node "Distribution"; here that
 // name belongs to the distribution inside the file, so the kit's spelling is an
@@ -112,28 +126,44 @@ function nodeOf<K extends NodeKind, T>(node: K, r: Result<T, Diagnostic>): Resul
 	return r.ok ? ok({ node, value: r.value }) : r;
 }
 
-export function readNode(node: NodeKind, text: string): Result<NodeValue, Diagnostic> {
+// The node entry point that keeps the warnings. Each call starts from its own
+// root context, so one node's legacy spellings never show up on the next.
+export function readNodeChecked(node: NodeKind, text: string): Result<Checked<NodeValue>, Diagnostic> {
 	const parsed = parseJson(text);
 	if (!parsed.ok) return parsed;
 	const v = parsed.value;
+	const ctx = newRoot();
+	const r = readNodeValue(node, ctx, v);
+	return r.ok ? ok({ value: r.value, warnings: ctx.warnings }) : r;
+}
+
+// Drops the warnings; the value and the diagnostics are unchanged.
+export function readNode(node: NodeKind, text: string): Result<NodeValue, Diagnostic> {
+	const r = readNodeChecked(node, text);
+	return r.ok ? ok(r.value.value) : r;
+}
+
+function readNodeValue(node: NodeKind, ctx: Ctx, v: JsonValue): Result<NodeValue, Diagnostic> {
 	switch (node) {
-		case "Name": return nodeOf("Name", readName(root, v));
-		case "Path": return nodeOf("Path", readPath(root, v));
-		case "FQName": return nodeOf("FQName", readFQName(root, v));
-		case "FormatVersion": return nodeOf("FormatVersion", readFormatVersionNode(root, v));
-		case "Type": return nodeOf("Type", readType(root, v));
-		case "Literal": return nodeOf("Literal", readLiteral(root, v));
-		case "Pattern": return nodeOf("Pattern", readPattern(root, v));
-		case "Value": return nodeOf("Value", readValue(root, v));
-		case "TypeSpecification": return nodeOf("TypeSpecification", readTypeSpecification(root, v));
-		case "TypeDefinition": return nodeOf("TypeDefinition", readTypeDefinition(root, v));
-		case "ValueSpecification": return nodeOf("ValueSpecification", readValueSpecification(root, v));
-		case "ValueDefinition": return nodeOf("ValueDefinition", readValueDefinition(root, v));
-		case "AccessControlledTypeDefinition": return nodeOf("AccessControlledTypeDefinition", readAccessControlledTypeDefinition(root, v));
-		case "AccessControlledValueDefinition": return nodeOf("AccessControlledValueDefinition", readAccessControlledValueDefinition(root, v));
+		case "Name": return nodeOf("Name", readName(ctx, v));
+		case "Path": return nodeOf("Path", readPath(ctx, v));
+		case "FQName": return nodeOf("FQName", readFQName(ctx, v));
+		case "FormatVersion": return nodeOf("FormatVersion", readFormatVersionNode(ctx, v));
+		case "Type": return nodeOf("Type", readType(ctx, v));
+		case "Literal": return nodeOf("Literal", readLiteral(ctx, v));
+		case "Pattern": return nodeOf("Pattern", readPattern(ctx, v));
+		case "Value": return nodeOf("Value", readValue(ctx, v));
+		case "TypeSpecification": return nodeOf("TypeSpecification", readTypeSpecification(ctx, v));
+		case "TypeDefinition": return nodeOf("TypeDefinition", readTypeDefinition(ctx, v));
+		case "ValueSpecification": return nodeOf("ValueSpecification", readValueSpecification(ctx, v));
+		case "ValueDefinition": return nodeOf("ValueDefinition", readValueDefinition(ctx, v));
+		case "AccessControlledTypeDefinition": return nodeOf("AccessControlledTypeDefinition", readAccessControlledTypeDefinition(ctx, v));
+		case "AccessControlledValueDefinition": return nodeOf("AccessControlledValueDefinition", readAccessControlledValueDefinition(ctx, v));
+		case "ModuleDefinition": return nodeOf("ModuleDefinition", readModuleDefinition(ctx, v));
+		case "ModuleSpecification": return nodeOf("ModuleSpecification", readModuleSpecification(ctx, v));
 		// An IRFile node is a whole document: the kit's fences carry the root's
 		// formatVersion beside the distribution itself.
-		case "IRFile": return nodeOf("IRFile", readIRFile(v));
+		case "IRFile": return nodeOf("IRFile", readIRFile(v, ctx));
 		default: { const _: never = node; return _; }
 	}
 }
@@ -154,6 +184,8 @@ function writeNodeValue(v: NodeValue): JsonValue {
 		case "ValueDefinition": return writeValueDefinition(v.value);
 		case "AccessControlledTypeDefinition": return writeAccessControlledTypeDefinition(v.value);
 		case "AccessControlledValueDefinition": return writeAccessControlledValueDefinition(v.value);
+		case "ModuleDefinition": return writeModuleDefinition(v.value);
+		case "ModuleSpecification": return writeModuleSpecification(v.value);
 		case "IRFile": return writeIRFile(v.value);
 		default: { const _: never = v; return _; }
 	}
@@ -169,6 +201,7 @@ export function writeNode(v: NodeValue): string {
 export function nodeKindOf(v: NodeValue): string {
 	switch (v.node) {
 		case "Name": case "Path": case "FQName": case "FormatVersion": case "ValueSpecification":
+		case "ModuleDefinition": case "ModuleSpecification":
 			return v.node;
 		case "Type": case "Literal": case "Pattern": case "Value":
 		case "TypeSpecification": case "TypeDefinition": case "ValueDefinition":
@@ -213,6 +246,8 @@ export function stripNode(v: NodeValue): NodeValue {
 				node: "AccessControlledValueDefinition",
 				value: { access: v.value.access, value: { doc: v.value.value.doc, value: mapValueDefinition(v.value.value.value, cleared) } },
 			};
+		case "ModuleDefinition": return { node: "ModuleDefinition", value: mapModuleDefinition(v.value, cleared) };
+		case "ModuleSpecification": return { node: "ModuleSpecification", value: mapModuleSpecification(v.value, cleared) };
 		case "IRFile": return { node: "IRFile", value: mapAttributes(v.value, cleared.onType, cleared.onValue) };
 		default: { const _: never = v; return _; }
 	}
@@ -225,9 +260,17 @@ export const json = {
 		const parsed = parseJson(text);
 		return parsed.ok ? readIRFile(parsed.value) : parsed;
 	},
+	readChecked(text: string): Result<Checked<IRFile>, Diagnostic> {
+		const parsed = parseJson(text);
+		if (!parsed.ok) return parsed;
+		const ctx = newRoot();
+		const r = readIRFile(parsed.value, ctx);
+		return r.ok ? ok({ value: r.value, warnings: ctx.warnings }) : r;
+	},
 	write(file: IRFile): string {
 		return writeJson(writeIRFile(file));
 	},
 	readNode,
+	readNodeChecked,
 	writeNode,
 };

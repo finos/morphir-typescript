@@ -9,6 +9,8 @@ export type DiagnosticCode =
 	| "invalid_json" | "duplicate_member" | "nesting_too_deep" | "invalid_type" | "missing_member" | "unknown_member"
 	| "unknown_node" | "ambiguous_shorthand" | "invalid_name" | "invalid_path" | "invalid_fqname"
 	| "invalid_literal" | "invalid_access" | "invalid_distribution_shape"
+	// A spelling in decision 0006's one-release window; reported, never fatal.
+	| "legacy_spelling"
 	// The contract names duplicate_format_version, so the code stays; the strict
 	// JSON parser rejects any duplicate member as duplicate_member before the
 	// formatVersion contract sees the document, so a JSON source never reports it.
