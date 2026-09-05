@@ -7,7 +7,11 @@ import { newRoot } from "../../codec/json/cursor.ts";
 import { type JsonValue, parseJson, writeJson } from "../../codec/json/value.ts";
 import { readTypeAttributes, writeTypeAttributes } from "./attributes.ts";
 
-const json = (s: string): JsonValue => { const r = parseJson(s); if (!r.ok) throw new Error(r.error.message); return r.value; };
+const json = (s: string): JsonValue => {
+	const r = parseJson(s);
+	if (!r.ok) throw new Error(r.error.message);
+	return r.value;
+};
 
 describe("readTypeAttributes/writeTypeAttributes", () => {
 	test("opaque payload numbers survive byte for byte", () => {

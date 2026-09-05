@@ -99,27 +99,11 @@ describe("parseKitFile", () => {
 	});
 
 	test("canonical count is per profile, not per language", () => {
-		const withDupe = [
-			"## types-0001: dupe profile",
-			"```json canonical",
-			'{ "a": 1 }',
-			"```",
-			"```text canonical",
-			"x.json",
-			"```",
-		].join("\n");
+		const withDupe = ["## types-0001: dupe profile", "```json canonical", '{ "a": 1 }', "```", "```text canonical", "x.json", "```"].join("\n");
 		const { errors } = parseKitFile(file, withDupe);
 		expect(errors.map((e) => e.message).join("\n")).toMatch(/more than one canonical json fence/);
 
-		const withoutDupe = [
-			"## types-0001: distinct profiles",
-			"```yaml canonical",
-			"a: 1",
-			"```",
-			"```text canonical",
-			"x.json",
-			"```",
-		].join("\n");
+		const withoutDupe = ["## types-0001: distinct profiles", "```yaml canonical", "a: 1", "```", "```text canonical", "x.json", "```"].join("\n");
 		expect(parseKitFile(file, withoutDupe).errors).toEqual([]);
 	});
 });

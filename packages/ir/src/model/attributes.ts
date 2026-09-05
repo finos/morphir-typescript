@@ -13,8 +13,14 @@
 // whose members map holds those two strings, so no payload can imitate a
 // number, and the writer can never splice a non-numeric text into the output.
 
-export interface JsonNumber { readonly kind: "number"; readonly text: string }
-export interface JsonObject { readonly kind: "object"; readonly members: ReadonlyMap<string, Json> }
+export interface JsonNumber {
+	readonly kind: "number";
+	readonly text: string;
+}
+export interface JsonObject {
+	readonly kind: "object";
+	readonly members: ReadonlyMap<string, Json>;
+}
 export type Json = null | boolean | string | JsonNumber | readonly Json[] | JsonObject;
 
 export function isJsonNumber(j: Json): j is JsonNumber {

@@ -29,11 +29,25 @@
 // Decision 0013: DocumentLiteral is the seventh literal and its payload is the
 // document itself, so it is the one literal whose payload is never unwrapped,
 // and the one literal a LiteralPattern refuses.
-import { type Ctx, at, describeJson, expectArray, expectObject, expectString, fail, guardDepth, members, optionalString, singleKey, warn, windowed } from "../../codec/json/cursor.ts";
-import { type JsonObject, type JsonValue, isInteger, isNumber, isObject } from "../../codec/json/value.ts";
+import {
+	at,
+	type Ctx,
+	describeJson,
+	expectArray,
+	expectObject,
+	expectString,
+	fail,
+	guardDepth,
+	members,
+	optionalString,
+	singleKey,
+	warn,
+	windowed,
+} from "../../codec/json/cursor.ts";
+import { isInteger, isNumber, isObject, type JsonObject, type JsonValue } from "../../codec/json/value.ts";
 import type { Diagnostic } from "../../model/diagnostic.ts";
 import type { Name } from "../../model/names.ts";
-import { type Result, ok } from "../../model/result.ts";
+import { ok, type Result } from "../../model/result.ts";
 import type { Type } from "../../model/types.ts";
 import type {
 	ExternalBinding,
@@ -49,7 +63,7 @@ import type {
 	ValueDefinition,
 	ValueSpecification,
 } from "../../model/values.ts";
-import { type TA, type VA, emptyValueAttributes, readValueAttributes } from "./attributes.ts";
+import { emptyValueAttributes, readValueAttributes, type TA, type VA } from "./attributes.ts";
 import { type ExpandedPayload, expandedPayload } from "./expanded.ts";
 import { isFQNameString, readFQName, readName } from "./read-names.ts";
 import { readAnnotations, readHoleReason, readIncompleteness, readType } from "./read-types.ts";
@@ -61,20 +75,12 @@ const EMPTY_VA: VA = emptyValueAttributes<TA>();
 // Every expanded payload starts the same way; expanded.ts holds the rule and
 // the type reader shares it. All this side has to say is which attribute
 // reader the payload's "attributes" (or its "attrs" window spelling) goes to.
-const expanded = (
-	ctx: Ctx,
-	v: JsonValue,
-	required: readonly string[],
-	optional: readonly string[],
-): Result<ExpandedPayload<VA>, Diagnostic> => expandedPayload(ctx, v, required, optional, readValueAttributes);
+const expanded = (ctx: Ctx, v: JsonValue, required: readonly string[], optional: readonly string[]): Result<ExpandedPayload<VA>, Diagnostic> =>
+	expandedPayload(ctx, v, required, optional, readValueAttributes);
 
 // A named map is a JSON object whose member names are Morphir names: record
 // fields, record updates, let-recursion bindings, input types.
-function readNamedMap<T>(
-	ctx: Ctx,
-	v: JsonValue,
-	read: (c: Ctx, x: JsonValue) => Result<T, Diagnostic>,
-): Result<readonly (readonly [Name, T])[], Diagnostic> {
+function readNamedMap<T>(ctx: Ctx, v: JsonValue, read: (c: Ctx, x: JsonValue) => Result<T, Diagnostic>): Result<readonly (readonly [Name, T])[], Diagnostic> {
 	const o = expectObject(ctx, v);
 	if (!o.ok) return o;
 	const out: (readonly [Name, T])[] = [];
@@ -142,9 +148,7 @@ function literalPayload(ctx: Ctx, v: JsonValue): Result<JsonValue, Diagnostic> {
 
 function floatLiteral(ctx: Ctx, text: string): Result<Literal, Diagnostic> {
 	const value = Number(text);
-	return Number.isFinite(value)
-		? ok({ kind: "FloatLiteral", value })
-		: fail(ctx, "invalid_literal", `float literal ${text} is out of range`);
+	return Number.isFinite(value) ? ok({ kind: "FloatLiteral", value }) : fail(ctx, "invalid_literal", `float literal ${text} is out of range`);
 }
 
 export function readLiteral(ctx: Ctx, v: JsonValue): Result<Literal, Diagnostic> {
@@ -164,8 +168,7 @@ export function readLiteral(ctx: Ctx, v: JsonValue): Result<Literal, Diagnostic>
 	const unwrapped = literalPayload(inner, raw);
 	if (!unwrapped.ok) return unwrapped;
 	const p = unwrapped.value;
-	const wrong = (what: string): Result<never, Diagnostic> =>
-		fail(inner, "invalid_literal", `${key} expects ${what}, found ${describeJson(p)}`, p);
+	const wrong = (what: string): Result<never, Diagnostic> => fail(inner, "invalid_literal", `${key} expects ${what}, found ${describeJson(p)}`, p);
 	switch (key) {
 		case "BoolLiteral":
 			return typeof p === "boolean" ? ok({ kind: "BoolLiteral", value: p }) : wrong("a boolean");
@@ -175,7 +178,8 @@ export function readLiteral(ctx: Ctx, v: JsonValue): Result<Literal, Diagnostic>
 		case "StringLiteral":
 			return typeof p === "string" ? ok({ kind: "StringLiteral", value: p }) : wrong("a string");
 		// WholeNumberLiteral is the old spelling; it is read and never written.
-		case "IntegerLiteral": case "WholeNumberLiteral":
+		case "IntegerLiteral":
+		case "WholeNumberLiteral":
 			return isNumber(p) && isInteger(p) ? ok({ kind: "IntegerLiteral", value: BigInt(p.text) }) : wrong("an integer lexeme");
 		case "FloatLiteral":
 			return isNumber(p) ? floatLiteral(inner, p.text) : wrong("a number");
@@ -231,7 +235,9 @@ export function readPattern(ctx: Ctx, v: JsonValue): Result<Pattern<VA>, Diagnos
 	const [key, payload] = kv.value;
 	const inner = at(ctx, key);
 	switch (key) {
-		case "WildcardPattern": case "EmptyListPattern": case "UnitPattern": {
+		case "WildcardPattern":
+		case "EmptyListPattern":
+		case "UnitPattern": {
 			const e = expanded(inner, payload, [], []);
 			return e.ok ? ok({ kind: key, attributes: e.value.a }) : e;
 		}
@@ -321,11 +327,18 @@ export function readValue(ctx: Ctx, v: JsonValue): Result<Value<TA, VA>, Diagnos
 			const l = readLiteralPayload(inner, payload);
 			return l.ok ? ok({ kind: "Literal", attributes: l.value.a, literal: l.value.literal }) : l;
 		}
-		case "Constructor": case "Reference": return readFQNameValue(inner, key, payload);
-		case "Variable": case "FieldFunction": return readNameValue(inner, key, payload);
-		case "Tuple": return readSequenceValue(inner, "Tuple", "elements", payload);
-		case "List": return readSequenceValue(inner, "List", "items", payload);
-		case "Record": return readRecordValue(inner, payload);
+		case "Constructor":
+		case "Reference":
+			return readFQNameValue(inner, key, payload);
+		case "Variable":
+		case "FieldFunction":
+			return readNameValue(inner, key, payload);
+		case "Tuple":
+			return readSequenceValue(inner, "Tuple", "elements", payload);
+		case "List":
+			return readSequenceValue(inner, "List", "items", payload);
+		case "Record":
+			return readRecordValue(inner, payload);
 		case "Unit": {
 			const e = expanded(inner, payload, [], []);
 			return e.ok ? ok({ kind: "Unit", attributes: e.value.a }) : e;
@@ -449,9 +462,7 @@ export function readValue(ctx: Ctx, v: JsonValue): Result<Value<TA, VA>, Diagnos
 			const raw = e.value.m.get("expectedType");
 			if (raw === undefined) return ok({ kind: "Hole", attributes: e.value.a, reason: reason.value, expectedType: null });
 			const expectedType = readType(at(inner, "expectedType"), raw);
-			return expectedType.ok
-				? ok({ kind: "Hole", attributes: e.value.a, reason: reason.value, expectedType: expectedType.value })
-				: expectedType;
+			return expectedType.ok ? ok({ kind: "Hole", attributes: e.value.a, reason: reason.value, expectedType: expectedType.value }) : expectedType;
 		}
 		// Decision 0008: "Native" and "External" fall through to unknown_node.
 		default:
@@ -483,26 +494,17 @@ function readNameValue(ctx: Ctx, kind: "Variable" | "FieldFunction", v: JsonValu
 	return n.ok ? ok({ kind, attributes: EMPTY_VA, name: n.value }) : n;
 }
 
-function readSequenceValue(
-	ctx: Ctx,
-	kind: "Tuple" | "List",
-	member: "elements" | "items",
-	v: JsonValue,
-): Result<Value<TA, VA>, Diagnostic> {
+function readSequenceValue(ctx: Ctx, kind: "Tuple" | "List", member: "elements" | "items", v: JsonValue): Result<Value<TA, VA>, Diagnostic> {
 	if (isObject(v)) {
 		const e = expanded(ctx, v, [member], []);
 		if (!e.ok) return e;
 		const items = readValues(at(ctx, member), e.value.m.get(member) as JsonValue);
 		if (!items.ok) return items;
-		return ok(kind === "Tuple"
-			? { kind: "Tuple", attributes: e.value.a, elements: items.value }
-			: { kind: "List", attributes: e.value.a, items: items.value });
+		return ok(kind === "Tuple" ? { kind: "Tuple", attributes: e.value.a, elements: items.value } : { kind: "List", attributes: e.value.a, items: items.value });
 	}
 	const items = readValues(ctx, v);
 	if (!items.ok) return items;
-	return ok(kind === "Tuple"
-		? { kind: "Tuple", attributes: EMPTY_VA, elements: items.value }
-		: { kind: "List", attributes: EMPTY_VA, items: items.value });
+	return ok(kind === "Tuple" ? { kind: "Tuple", attributes: EMPTY_VA, elements: items.value } : { kind: "List", attributes: EMPTY_VA, items: items.value });
 }
 
 // The type-side twin of this rule lives in read-types.ts: Record's legacy
@@ -622,20 +624,18 @@ export function readValueDefinition(ctx: Ctx, v: JsonValue): Result<ValueDefinit
 	const inner = at(ctx, key);
 	const body = expectObject(inner, payload);
 	if (!body.ok) return body;
-	const required = key === "ExpressionBody"
-		? ["inputTypes", "outputType", "body"]
-		: key === "NativeBody"
-			? ["inputTypes", "outputType", "nativeInfo"]
-			: key === "ExternalBody"
-				// Decision 0008: which of "externals" and the window's top-level pair
-				// has to be there is settled by readExternals, not by this list.
-				? ["inputTypes", "outputType"]
-				: ["inputTypes", "incompleteness"];
-	const optional = key === "IncompleteBody"
-		? ["outputType", "partialBody"]
-		: key === "ExternalBody"
-			? ["externals", "externalName", "targetPlatform", "body"]
-			: [];
+	const required =
+		key === "ExpressionBody"
+			? ["inputTypes", "outputType", "body"]
+			: key === "NativeBody"
+				? ["inputTypes", "outputType", "nativeInfo"]
+				: key === "ExternalBody"
+					? // Decision 0008: which of "externals" and the window's top-level pair
+						// has to be there is settled by readExternals, not by this list.
+						["inputTypes", "outputType"]
+					: ["inputTypes", "incompleteness"];
+	const optional =
+		key === "IncompleteBody" ? ["outputType", "partialBody"] : key === "ExternalBody" ? ["externals", "externalName", "targetPlatform", "body"] : [];
 	const m = members(inner, body.value, required, optional);
 	if (!m.ok) return m;
 	const inputTypes = readInputTypes(at(inner, "inputTypes"), m.value.get("inputTypes") as JsonValue);
@@ -663,15 +663,11 @@ export function readValueDefinition(ctx: Ctx, v: JsonValue): Result<ValueDefinit
 	if (!outputType.ok) return outputType;
 	if (key === "ExpressionBody") {
 		const value = readValue(at(inner, "body"), m.value.get("body") as JsonValue);
-		return value.ok
-			? ok({ kind: "ExpressionBody", inputTypes: inputTypes.value, outputType: outputType.value, body: value.value })
-			: value;
+		return value.ok ? ok({ kind: "ExpressionBody", inputTypes: inputTypes.value, outputType: outputType.value, body: value.value }) : value;
 	}
 	if (key === "NativeBody") {
 		const nativeInfo = readNativeInfo(at(inner, "nativeInfo"), m.value.get("nativeInfo") as JsonValue);
-		return nativeInfo.ok
-			? ok({ kind: "NativeBody", inputTypes: inputTypes.value, outputType: outputType.value, nativeInfo: nativeInfo.value })
-			: nativeInfo;
+		return nativeInfo.ok ? ok({ kind: "NativeBody", inputTypes: inputTypes.value, outputType: outputType.value, nativeInfo: nativeInfo.value }) : nativeInfo;
 	}
 	const externals = readExternals(inner, m.value, payload);
 	if (!externals.ok) return externals;

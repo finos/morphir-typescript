@@ -5,7 +5,7 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { FQName, Name, Path, type NameStyle } from "./names.ts";
+import { FQName, Name, type NameStyle, Path } from "./names.ts";
 
 const corpusPath = path.resolve(import.meta.dir, "../../../../../../docs/spec/ir/fixtures/naming-conformance.json");
 // A missing corpus would quietly skip the conformance cases, so it is an error
@@ -21,9 +21,12 @@ describe("Name grammar (hand cases)", () => {
 		for (const text of ["value-in-USD", "value-in--usd"]) {
 			const r = Name.parse(text);
 			expect(r.ok).toBe(true);
-			if (r.ok) expect(r.value.segments).toEqual([
-				{ kind: "word", text: "value" }, { kind: "word", text: "in" }, { kind: "initialism", text: "usd" },
-			]);
+			if (r.ok)
+				expect(r.value.segments).toEqual([
+					{ kind: "word", text: "value" },
+					{ kind: "word", text: "in" },
+					{ kind: "initialism", text: "usd" },
+				]);
 		}
 	});
 	test("rejects mixed case, empty, and bad separators", () => {

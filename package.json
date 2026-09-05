@@ -2,14 +2,20 @@
 	"name": "morphir-typescript",
 	"private": true,
 	"type": "module",
+	"packageManager": "bun@1.4.2",
 	"description": "TypeScript binding for the Morphir IR: reference model, codecs, and the Morphir Compatibility Kit (MCK) driver.",
-	"workspaces": ["packages/*"],
+	"workspaces": [
+		"packages/*"
+	],
 	"scripts": {
+		"format": "biome check --write .",
+		"lint": "biome check .",
 		"typecheck": "bun run --filter '*' typecheck",
 		"test": "bun test"
 	},
 	"devDependencies": {
-		"@types/bun": "^1.4.0",
-		"typescript": "~7.0.0"
+		"@biomejs/biome": "2.5.12",
+		"@types/bun": "1.4.1",
+		"typescript": "7.0.2"
 	}
 }

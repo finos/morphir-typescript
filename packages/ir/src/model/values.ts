@@ -28,14 +28,29 @@ export type Pattern<VA> =
 	| { readonly kind: "LiteralPattern"; readonly attributes: VA; readonly literal: Literal }
 	| { readonly kind: "UnitPattern"; readonly attributes: VA };
 
-export interface RecordField<TA, VA> { readonly name: Name; readonly value: Value<TA, VA> }
-export interface PatternCase<TA, VA> { readonly pattern: Pattern<VA>; readonly body: Value<TA, VA> }
-export interface LetBinding<TA, VA> { readonly name: Name; readonly definition: ValueDefinition<TA, VA> }
+export interface RecordField<TA, VA> {
+	readonly name: Name;
+	readonly value: Value<TA, VA>;
+}
+export interface PatternCase<TA, VA> {
+	readonly pattern: Pattern<VA>;
+	readonly body: Value<TA, VA>;
+}
+export interface LetBinding<TA, VA> {
+	readonly name: Name;
+	readonly definition: ValueDefinition<TA, VA>;
+}
 
 export type NativeHint =
-	| { readonly kind: "Arithmetic" } | { readonly kind: "Comparison" } | { readonly kind: "StringOp" }
-	| { readonly kind: "CollectionOp" } | { readonly kind: "PlatformSpecific"; readonly platform: string };
-export interface NativeInfo { readonly hint: NativeHint; readonly description: string | null }
+	| { readonly kind: "Arithmetic" }
+	| { readonly kind: "Comparison" }
+	| { readonly kind: "StringOp" }
+	| { readonly kind: "CollectionOp" }
+	| { readonly kind: "PlatformSpecific"; readonly platform: string };
+export interface NativeInfo {
+	readonly hint: NativeHint;
+	readonly description: string | null;
+}
 
 export type Value<TA, VA> =
 	| { readonly kind: "Literal"; readonly attributes: VA; readonly literal: Literal }
@@ -58,11 +73,17 @@ export type Value<TA, VA> =
 	| { readonly kind: "Unit"; readonly attributes: VA }
 	| { readonly kind: "Hole"; readonly attributes: VA; readonly reason: HoleReason; readonly expectedType: Type<TA> | null };
 
-export interface InputType<TA> { readonly name: Name; readonly type: Type<TA> }
+export interface InputType<TA> {
+	readonly name: Name;
+	readonly type: Type<TA>;
+}
 
 // Decision 0008: an external definition names one binding per target platform,
 // so a value that is external on two platforms is one definition, not two.
-export interface ExternalBinding { readonly targetPlatform: string; readonly externalName: string }
+export interface ExternalBinding {
+	readonly targetPlatform: string;
+	readonly externalName: string;
+}
 
 export interface ValueSpecification<TA, VA> {
 	readonly annotations: readonly Annotation<TA, VA>[];
@@ -75,5 +96,17 @@ export type ValueDefinition<TA, VA> =
 	| { readonly kind: "NativeBody"; readonly inputTypes: readonly InputType<TA>[]; readonly outputType: Type<TA>; readonly nativeInfo: NativeInfo }
 	// Decision 0008: the bindings are a non-empty list, and "body" is the
 	// fallback a platform without a binding falls through to.
-	| { readonly kind: "ExternalBody"; readonly inputTypes: readonly InputType<TA>[]; readonly outputType: Type<TA>; readonly externals: readonly ExternalBinding[]; readonly body: Value<TA, VA> | null }
-	| { readonly kind: "IncompleteBody"; readonly inputTypes: readonly InputType<TA>[]; readonly outputType: Type<TA> | null; readonly incompleteness: Incompleteness<TA>; readonly partialBody: Value<TA, VA> | null };
+	| {
+			readonly kind: "ExternalBody";
+			readonly inputTypes: readonly InputType<TA>[];
+			readonly outputType: Type<TA>;
+			readonly externals: readonly ExternalBinding[];
+			readonly body: Value<TA, VA> | null;
+	  }
+	| {
+			readonly kind: "IncompleteBody";
+			readonly inputTypes: readonly InputType<TA>[];
+			readonly outputType: Type<TA> | null;
+			readonly incompleteness: Incompleteness<TA>;
+			readonly partialBody: Value<TA, VA> | null;
+	  };

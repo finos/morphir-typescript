@@ -1,66 +1,119 @@
 [![FINOS - Graduated](https://cdn.jsdelivr.net/gh/finos/contrib-toolbox@master/images/badge-graduated.svg)](https://community.finos.org/docs/governance/lifecycle-stages/graduated)
+[![CI](https://github.com/finos/morphir-typescript/actions/workflows/ci.yml/badge.svg)](https://github.com/finos/morphir-typescript/actions/workflows/ci.yml)
 
 # morphir-typescript
 
-Short blurb about what your project does.
+`morphir-typescript` is the TypeScript reference binding for the [Morphir Intermediate Representation](https://morphir.finos.org/docs/spec/ir/morphir-ir-specification). It provides a version-agnostic semantic model, the Morphir IR v4 model and JSON codec, and the parser, structural checker, and binding-side conformance runner for the Morphir Compatibility Kit.
 
-## Installation
+Morphir captures business logic and domain models as language-independent data so tools can analyze, transform, serialize, and execute the same model across platforms. The authoritative specifications and compatibility corpus live in the [`finos/morphir`](https://github.com/finos/morphir) repository. This project implements those contracts for TypeScript. It is separate from the [Morphir TypeScript code-generation backend](https://morphir.finos.org/docs/reference/backends/other-platforms/typescript-api), which generates TypeScript APIs from Morphir models.
 
-OS X & Linux:
+## Project status
+
+The packages are under active development. Both are currently private workspace packages at version `0.0.0` and are not published to npm. Use this repository from source for now; package publishing is planned as follow-up work.
+
+Standalone CI temporarily skips conformance tests that require the upstream Morphir fixture and MCK directories. Unit tests still run. The upstream integration work will remove this opt-out once a compatible pinned corpus is available to standalone clones.
+
+## Packages
+
+| Package | Purpose |
+| --- | --- |
+| `@finos/morphir-ir` | Generic Morphir IR semantic types, pinned v4 types, JSON readers and canonical writers, diagnostics, and attribute mapping. |
+| `@finos/morphir-mck` | MCK Markdown case parser, kit loader, structural checker CLI, and report model. |
+
+## Morphir specifications
+
+- [Morphir documentation](https://morphir.finos.org/docs/)
+- [Core Morphir repository](https://github.com/finos/morphir)
+- [Morphir IR specification](https://morphir.finos.org/docs/spec/ir/morphir-ir-specification)
+- [IR v4 specifications](https://morphir.finos.org/docs/spec/draft/)
+- [IR v4 schemas and serialization profiles](https://morphir.finos.org/docs/spec/ir/schemas/v4/)
+- [Morphir Compatibility Kit](https://github.com/finos/morphir/tree/main/spec/ir/mck)
+
+## Source setup
+
+Install [mise](https://mise.jdx.dev/), then clone and set up the repository:
 
 ```sh
-npm install my-crazy-module --save
+git clone https://github.com/finos/morphir-typescript.git
+cd morphir-typescript
+mise install
+mise run setup
 ```
 
-Windows:
+mise installs the pinned Bun version. The setup task installs workspace dependencies from `bun.lock` without changing the lockfile.
+
+## Usage
+
+### Read and write Morphir IR v4 JSON
+
+From a TypeScript file at the repository root:
+
+```ts
+import { json } from "./packages/ir/src/index.ts";
+
+const source = `{ "formatVersion": 4, "distribution": { "Library": { "packageName": "example", "dependencies": {}, "def": { "modules": {} } } } }`;
+const result = json.read(source);
+
+if (!result.ok) {
+	throw new Error(`${result.error.code} at ${result.error.cursor}: ${result.error.message}`);
+}
+
+console.log(json.write(result.value));
+```
+
+The reader returns a typed result with structured diagnostics. The writer emits the canonical v4 JSON representation.
+
+### Check an MCK directory
+
+The current MCK CLI validates the structure of a kit directory:
 
 ```sh
-edit autoexec.bat
+mise exec -- bun run packages/mck/src/cli.ts check /path/to/morphir/spec/ir/mck
 ```
 
-## Usage example
+Add `--json` for machine-readable output.
 
-A few motivating and useful examples of how your project can be used. Spice this up with code blocks and potentially screenshots / videos ([LiceCap](https://www.cockos.com/licecap/) is great for this kind of thing).
+## Development
 
-_For more examples and usage, please refer to the [Wiki][wiki]._
+TypeScript is the implementation language. Bun supplies the runtime, package manager, task runtime, and default `bun:test` testing framework. Biome handles linting and formatting.
 
-## Development setup
+Effect is the preferred foundation for future service and integration work. It is not currently a dependency and must remain outside the core `@finos/morphir-ir` package; add it to a specific non-core package when that package begins using it.
 
-Describe how to install all development dependencies and how to run an automated test-suite of some kind. Potentially do this for multiple platforms.
+Use mise tasks for repository automation:
+
+| Command | Purpose |
+| --- | --- |
+| `mise run setup` | Install dependencies from the frozen Bun lockfile. |
+| `mise run check:lint` | Check Biome lint rules, formatting, and imports. |
+| `mise run check:typecheck` | Typecheck every workspace package. |
+| `mise run test` | Run the available Bun test suite. |
+| `mise run ci` | Run the same checks as GitHub Actions. |
+
+To apply formatting and safe lint fixes, run:
 
 ```sh
-make install
-npm test
+mise exec -- bun run format
 ```
 
-## Roadmap
+## Repository layout
 
-List the roadmap steps; alternatively link the Confluence Wiki page where the project roadmap is published.
-
-1. Item 1
-2. Item 2
-3. ....
+```text
+packages/ir/        @finos/morphir-ir
+packages/mck/       @finos/morphir-mck
+.config/mise/tasks/ local development and CI tasks
+.github/workflows/  GitHub Actions orchestration
+```
 
 ## Contributing
-For any questions, bugs or feature requests please open an [issue](https://github.com/finos/morphir-typescript/issues)
-For anything else please send an email to {project mailing list}.
 
-To submit a contribution:
-1. Fork it (<https://github.com/finos/morphir-typescript/fork>)
-2. Create your feature branch (`git checkout -b feature/fooBar`)
-3. Read our [contribution guidelines](CONTRIBUTING.md) and [Community Code of Conduct](https://www.finos.org/code-of-conduct)
-4. Commit your changes (`git commit -am 'Add some fooBar'`)
-5. Push to the branch (`git push origin feature/fooBar`)
-6. Create a new Pull Request
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a pull request. Contributions must follow FINOS contribution requirements, including the repository's DCO sign-off policy and the [FINOS Code of Conduct](https://www.finos.org/code-of-conduct).
 
-_NOTE:_ Pull requests must follow this repository’s contribution policy. FINOS projects typically use **DCO** (signed commits) and/or **CLA** via [EasyCLA](https://community.finos.org/docs/governance/Software-Projects/easycla), depending on configuration. Read [FINOS Contribution Requirements](https://community.finos.org/docs/governance/Software-Projects/contribution-compliance-requirements) and the [CONTRIBUTING.md](CONTRIBUTING.md) file before contributing.
-
-*Questions about CLA, DCO, or EasyCLA? Email [help@finos.org](mailto:help@finos.org)*
+Use [GitHub issues](https://github.com/finos/morphir-typescript/issues) for bugs, feature requests, and support questions.
 
 ## License
 
 Copyright 2026 FINOS
 
-Distributed under the [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0).
+Distributed under the [Apache License, Version 2.0](LICENSE).
 
-SPDX-License-Identifier: [Apache-2.0](https://spdx.org/licenses/Apache-2.0)
+SPDX-License-Identifier: Apache-2.0

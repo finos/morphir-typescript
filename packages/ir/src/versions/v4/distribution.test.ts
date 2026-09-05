@@ -9,7 +9,11 @@ import { json, readNode } from "./index.ts";
 import { readModuleSpecification } from "./read-definitions.ts";
 import { writeModuleSpecification } from "./write-definitions.ts";
 
-const parse = (s: string): JsonValue => { const r = parseJson(s); if (!r.ok) throw new Error(r.error.message); return r.value; };
+const parse = (s: string): JsonValue => {
+	const r = parseJson(s);
+	if (!r.ok) throw new Error(r.error.message);
+	return r.value;
+};
 
 describe("json.read / json.write", () => {
 	test("empty library round-trips and accepts either root order", () => {
@@ -25,8 +29,14 @@ describe("json.read / json.write", () => {
 		expect(!r.ok && r.error.code).toBe("invalid_distribution_shape");
 	});
 	test("4.1.0 is unsupported_format_version_revision; 5 is unsupported major", () => {
-		expect(json.read('{ "formatVersion": "4.1.0", "distribution": { "Library": { "packageName": "x" } } }')).toMatchObject({ ok: false, error: { code: "unsupported_format_version_revision" } });
-		expect(json.read('{ "formatVersion": 5, "distribution": { "Library": { "packageName": "x" } } }')).toMatchObject({ ok: false, error: { code: "unsupported_format_version_major" } });
+		expect(json.read('{ "formatVersion": "4.1.0", "distribution": { "Library": { "packageName": "x" } } }')).toMatchObject({
+			ok: false,
+			error: { code: "unsupported_format_version_revision" },
+		});
+		expect(json.read('{ "formatVersion": 5, "distribution": { "Library": { "packageName": "x" } } }')).toMatchObject({
+			ok: false,
+			error: { code: "unsupported_format_version_major" },
+		});
 	});
 	test("three access spellings normalize to the tag form", () => {
 		const def = '"TypeAliasDefinition": { "typeParams": [], "typeExp": "morphir/SDK:string#string" }';
@@ -57,7 +67,8 @@ describe("json.read / json.write", () => {
 		for (const m of models) if (m !== null) expect(writeJson(writeModuleSpecification(m))).toBe(canonical);
 	});
 	test("a module with a documented type", () => {
-		const s = '{ "formatVersion": 4, "distribution": { "Library": { "packageName": "my-org/my-project", "dependencies": {}, "def": { "modules": { "domain": { "Public": { "types": { "user-ID": { "Public": { "doc": "An id", "TypeAliasDefinition": { "typeParams": [], "typeExp": "morphir/SDK:string#string" } } } }, "values": {} } } } } } } }';
+		const s =
+			'{ "formatVersion": 4, "distribution": { "Library": { "packageName": "my-org/my-project", "dependencies": {}, "def": { "modules": { "domain": { "Public": { "types": { "user-ID": { "Public": { "doc": "An id", "TypeAliasDefinition": { "typeParams": [], "typeExp": "morphir/SDK:string#string" } } } }, "values": {} } } } } } } }';
 		const r = json.read(s);
 		expect(r.ok ? "" : r.error.message).toBe("");
 		if (r.ok) expect(json.write(r.value)).toBe(s);

@@ -5,7 +5,7 @@
 // (decision 0001). The brand is unreachable outside this module, so the only
 // way to obtain a Name is through a parse function that validated it.
 import { type Diagnostic, diagnostic } from "./diagnostic.ts";
-import { type Result, err, ok } from "./result.ts";
+import { err, ok, type Result } from "./result.ts";
 
 export interface Segment {
 	readonly kind: "word" | "initialism";
@@ -13,11 +13,27 @@ export interface Segment {
 }
 
 declare const nameBrand: unique symbol;
-export interface Name { readonly [nameBrand]: "Name"; readonly segments: readonly Segment[] }
-export interface Path { readonly [nameBrand]: "Path"; readonly names: readonly Name[] }
-export interface PackageName { readonly [nameBrand]: "PackageName"; readonly path: Path }
-export interface ModuleName { readonly [nameBrand]: "ModuleName"; readonly path: Path }
-export interface QName { readonly [nameBrand]: "QName"; readonly module: ModuleName; readonly local: Name }
+export interface Name {
+	readonly [nameBrand]: "Name";
+	readonly segments: readonly Segment[];
+}
+export interface Path {
+	readonly [nameBrand]: "Path";
+	readonly names: readonly Name[];
+}
+export interface PackageName {
+	readonly [nameBrand]: "PackageName";
+	readonly path: Path;
+}
+export interface ModuleName {
+	readonly [nameBrand]: "ModuleName";
+	readonly path: Path;
+}
+export interface QName {
+	readonly [nameBrand]: "QName";
+	readonly module: ModuleName;
+	readonly local: Name;
+}
 export interface FQName {
 	readonly [nameBrand]: "FQName";
 	readonly package: PackageName;
@@ -29,9 +45,30 @@ export type NameStyle = "uppercase" | "doubledHyphen";
 export const CANONICAL_STYLE: NameStyle = "uppercase";
 
 export const RESERVED_DEVICE_STEMS: ReadonlySet<string> = new Set([
-	"con", "prn", "aux", "nul",
-	"com0", "com1", "com2", "com3", "com4", "com5", "com6", "com7", "com8", "com9",
-	"lpt0", "lpt1", "lpt2", "lpt3", "lpt4", "lpt5", "lpt6", "lpt7", "lpt8", "lpt9",
+	"con",
+	"prn",
+	"aux",
+	"nul",
+	"com0",
+	"com1",
+	"com2",
+	"com3",
+	"com4",
+	"com5",
+	"com6",
+	"com7",
+	"com8",
+	"com9",
+	"lpt0",
+	"lpt1",
+	"lpt2",
+	"lpt3",
+	"lpt4",
+	"lpt5",
+	"lpt6",
+	"lpt7",
+	"lpt8",
+	"lpt9",
 ]);
 
 const UPPERCASE_STYLE = /^([a-z0-9]+|[A-Z0-9]+)(-([a-z0-9]+|[A-Z0-9]+))*$/;
@@ -58,8 +95,12 @@ function parseSegments(text: string): readonly Segment[] | null {
 		let first = true;
 		while (rest.length > 0) {
 			let initialism = false;
-			if (rest.startsWith("--")) { initialism = true; rest = rest.slice(2); }
-			else if (!first && rest.startsWith("-")) { rest = rest.slice(1); }
+			if (rest.startsWith("--")) {
+				initialism = true;
+				rest = rest.slice(2);
+			} else if (!first && rest.startsWith("-")) {
+				rest = rest.slice(1);
+			}
 			const m = /^[a-z0-9]+/.exec(rest);
 			if (m === null) return null;
 			segments.push({ kind: initialism ? "initialism" : "word", text: m[0] });
@@ -78,9 +119,7 @@ function renderSegments(segments: readonly Segment[], style: NameStyle): string 
 	// Doubled-hyphen style: an initialism is always preceded by "--" (whether
 	// it is the first segment or not); a non-initial word is preceded by a
 	// single "-" separator; the first word carries no prefix at all.
-	return segments
-		.map((s, i) => (s.kind === "initialism" ? `--${s.text}` : `${i === 0 ? "" : "-"}${s.text}`))
-		.join("");
+	return segments.map((s, i) => (s.kind === "initialism" ? `--${s.text}` : `${i === 0 ? "" : "-"}${s.text}`)).join("");
 }
 
 export const Name = {
@@ -121,8 +160,7 @@ export const Name = {
 		return RESERVED_DEVICE_STEMS.has(stem) ? `${stem}_` : stem;
 	},
 	equals(a: Name, b: Name): boolean {
-		return a.segments.length === b.segments.length
-			&& a.segments.every((s, i) => s.kind === b.segments[i]?.kind && s.text === b.segments[i]?.text);
+		return a.segments.length === b.segments.length && a.segments.every((s, i) => s.kind === b.segments[i]?.kind && s.text === b.segments[i]?.text);
 	},
 };
 
@@ -162,27 +200,41 @@ export const Path = {
 };
 
 export const PackageName = {
-	of(path: Path): PackageName { return brand<PackageName>({ path }); },
+	of(path: Path): PackageName {
+		return brand<PackageName>({ path });
+	},
 	parse(text: string): Result<PackageName, Diagnostic> {
 		const r = Path.parse(text);
 		return r.ok ? ok(PackageName.of(r.value)) : r;
 	},
-	canonical(p: PackageName, style: NameStyle = CANONICAL_STYLE): string { return Path.canonical(p.path, style); },
-	equals(a: PackageName, b: PackageName): boolean { return Path.equals(a.path, b.path); },
+	canonical(p: PackageName, style: NameStyle = CANONICAL_STYLE): string {
+		return Path.canonical(p.path, style);
+	},
+	equals(a: PackageName, b: PackageName): boolean {
+		return Path.equals(a.path, b.path);
+	},
 };
 
 export const ModuleName = {
-	of(path: Path): ModuleName { return brand<ModuleName>({ path }); },
+	of(path: Path): ModuleName {
+		return brand<ModuleName>({ path });
+	},
 	parse(text: string): Result<ModuleName, Diagnostic> {
 		const r = Path.parse(text);
 		return r.ok ? ok(ModuleName.of(r.value)) : r;
 	},
-	canonical(m: ModuleName, style: NameStyle = CANONICAL_STYLE): string { return Path.canonical(m.path, style); },
-	equals(a: ModuleName, b: ModuleName): boolean { return Path.equals(a.path, b.path); },
+	canonical(m: ModuleName, style: NameStyle = CANONICAL_STYLE): string {
+		return Path.canonical(m.path, style);
+	},
+	equals(a: ModuleName, b: ModuleName): boolean {
+		return Path.equals(a.path, b.path);
+	},
 };
 
 export const QName = {
-	of(module: ModuleName, local: Name): QName { return brand<QName>({ module, local }); },
+	of(module: ModuleName, local: Name): QName {
+		return brand<QName>({ module, local });
+	},
 	canonical(q: QName, style: NameStyle = CANONICAL_STYLE): string {
 		return `${ModuleName.canonical(q.module, style)}#${Name.canonical(q.local, style)}`;
 	},

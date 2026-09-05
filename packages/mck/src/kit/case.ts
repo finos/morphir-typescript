@@ -129,15 +129,30 @@ export function parseKitFile(file: string, source: string): ParsedFile {
 		seen.add(id);
 
 		const next: Draft = {
-			id, topic, number, title,
-			node: null, version: null, status: "active", compare: "stripped",
-			prose: [], fences: [], file, line: block.line,
+			id,
+			topic,
+			number,
+			title,
+			node: null,
+			version: null,
+			status: "active",
+			compare: "stripped",
+			prose: [],
+			fences: [],
+			file,
+			line: block.line,
 		};
-		for (const token of (match[4] ?? "").trim().split(/\s+/).filter((t) => t.length > 0)) {
+		for (const token of (match[4] ?? "")
+			.trim()
+			.split(/\s+/)
+			.filter((t) => t.length > 0)) {
 			const eq = token.indexOf("=");
 			const key = eq > 0 ? token.slice(0, eq) : token;
 			const value = eq > 0 ? token.slice(eq + 1) : "";
-			if (!HEADING_KEYS.has(key)) { fail(block.line, `unknown heading key "${key}"`); continue; }
+			if (!HEADING_KEYS.has(key)) {
+				fail(block.line, `unknown heading key "${key}"`);
+				continue;
+			}
 			if (key === "node") next.node = value;
 			if (key === "version") {
 				const v = Number.parseInt(value, 10);
@@ -181,8 +196,14 @@ export function parseKitFile(file: string, source: string): ParsedFile {
 					if (!info.message.startsWith("not a data fence")) fail(block.line, info.message);
 					break;
 				}
-				if (draft === null) { fail(block.line, "data fence before the first case"); break; }
-				if (!block.closed) { fail(block.line, "unterminated fence"); break; }
+				if (draft === null) {
+					fail(block.line, "data fence before the first case");
+					break;
+				}
+				if (!block.closed) {
+					fail(block.line, "unterminated fence");
+					break;
+				}
 				draft.fences.push({ info, body: block.body, line: block.line, index: draft.fences.length });
 				break;
 			}

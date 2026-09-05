@@ -45,7 +45,7 @@ describe("warning key", () => {
 	test("accepted takes warning=<code>", () => {
 		const r = parseInfoString("json accepted warning=legacy_spelling");
 		expect(isInfoError(r)).toBe(false);
-		if (!isInfoError(r)) expect(r.keys["warning"]).toBe("legacy_spelling");
+		if (!isInfoError(r)) expect(r.keys.warning).toBe("legacy_spelling");
 	});
 	test("canonical does not take warning", () => {
 		const r = parseInfoString("json canonical warning=legacy_spelling");

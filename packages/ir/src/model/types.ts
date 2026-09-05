@@ -5,7 +5,10 @@
 import type { FQName, Name } from "./names.ts";
 import type { Value } from "./values.ts";
 
-export interface Field<A> { readonly name: Name; readonly type: Type<A> }
+export interface Field<A> {
+	readonly name: Name;
+	readonly type: Type<A>;
+}
 
 export type Type<A> =
 	| { readonly kind: "Variable"; readonly attributes: A; readonly name: Name }
@@ -16,8 +19,14 @@ export type Type<A> =
 	| { readonly kind: "Function"; readonly attributes: A; readonly parameterType: Type<A>; readonly returnType: Type<A> }
 	| { readonly kind: "Unit"; readonly attributes: A };
 
-export interface ConstructorParameter<A> { readonly name: Name; readonly type: Type<A> }
-export interface Constructor<A> { readonly name: Name; readonly parameters: readonly ConstructorParameter<A>[] }
+export interface ConstructorParameter<A> {
+	readonly name: Name;
+	readonly type: Type<A>;
+}
+export interface Constructor<A> {
+	readonly name: Name;
+	readonly parameters: readonly ConstructorParameter<A>[];
+}
 
 export type AnnotationArgument<TA, VA> =
 	| { readonly kind: "Positional"; readonly value: Value<TA, VA> }
@@ -31,19 +40,44 @@ export type HoleReason =
 	| { readonly kind: "DeletedDuringRefactor"; readonly txId: string }
 	| { readonly kind: "TypeMismatch"; readonly expected: string; readonly found: string };
 
-export type Incompleteness<A> =
-	| { readonly kind: "Hole"; readonly reason: HoleReason; readonly partialBody: Type<A> | null }
-	| { readonly kind: "Draft" };
+export type Incompleteness<A> = { readonly kind: "Hole"; readonly reason: HoleReason; readonly partialBody: Type<A> | null } | { readonly kind: "Draft" };
 
 export type TypeSpecification<TA, VA> =
-	| { readonly kind: "TypeAliasSpecification"; readonly annotations: readonly Annotation<TA, VA>[]; readonly typeParams: readonly Name[]; readonly typeExp: Type<TA> }
+	| {
+			readonly kind: "TypeAliasSpecification";
+			readonly annotations: readonly Annotation<TA, VA>[];
+			readonly typeParams: readonly Name[];
+			readonly typeExp: Type<TA>;
+	  }
 	| { readonly kind: "OpaqueTypeSpecification"; readonly annotations: readonly Annotation<TA, VA>[]; readonly typeParams: readonly Name[] }
-	| { readonly kind: "CustomTypeSpecification"; readonly annotations: readonly Annotation<TA, VA>[]; readonly typeParams: readonly Name[]; readonly constructors: readonly Constructor<TA>[] }
-	| { readonly kind: "DerivedTypeSpecification"; readonly annotations: readonly Annotation<TA, VA>[]; readonly typeParams: readonly Name[]; readonly baseType: Type<TA>; readonly fromBaseType: FQName; readonly toBaseType: FQName };
+	| {
+			readonly kind: "CustomTypeSpecification";
+			readonly annotations: readonly Annotation<TA, VA>[];
+			readonly typeParams: readonly Name[];
+			readonly constructors: readonly Constructor<TA>[];
+	  }
+	| {
+			readonly kind: "DerivedTypeSpecification";
+			readonly annotations: readonly Annotation<TA, VA>[];
+			readonly typeParams: readonly Name[];
+			readonly baseType: Type<TA>;
+			readonly fromBaseType: FQName;
+			readonly toBaseType: FQName;
+	  };
 
 export type Access = "Public" | "Private";
 
 export type TypeDefinition<TA> =
 	| { readonly kind: "TypeAliasDefinition"; readonly typeParams: readonly Name[]; readonly typeExp: Type<TA> }
-	| { readonly kind: "CustomTypeDefinition"; readonly typeParams: readonly Name[]; readonly constructorsAccess: Access; readonly constructors: readonly Constructor<TA>[] }
-	| { readonly kind: "IncompleteTypeDefinition"; readonly typeParams: readonly Name[]; readonly incompleteness: Incompleteness<TA>; readonly partialTypeExp: Type<TA> | null };
+	| {
+			readonly kind: "CustomTypeDefinition";
+			readonly typeParams: readonly Name[];
+			readonly constructorsAccess: Access;
+			readonly constructors: readonly Constructor<TA>[];
+	  }
+	| {
+			readonly kind: "IncompleteTypeDefinition";
+			readonly typeParams: readonly Name[];
+			readonly incompleteness: Incompleteness<TA>;
+			readonly partialTypeExp: Type<TA> | null;
+	  };

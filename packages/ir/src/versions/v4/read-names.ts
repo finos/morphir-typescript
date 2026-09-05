@@ -5,11 +5,11 @@
 // document may have been produced by a transitional encoder. The model's
 // parse functions own the grammar; this module only decides which shape is
 // in front of it and re-anchors the resulting diagnostic on the cursor.
-import { type Ctx, at, expectString, fail } from "../../codec/json/cursor.ts";
+import { at, type Ctx, expectString, fail } from "../../codec/json/cursor.ts";
 import type { JsonValue } from "../../codec/json/value.ts";
 import { type Diagnostic, diagnostic } from "../../model/diagnostic.ts";
 import { FQName, ModuleName, Name, PackageName, Path } from "../../model/names.ts";
-import { type Result, err, ok } from "../../model/result.ts";
+import { err, ok, type Result } from "../../model/result.ts";
 
 // A canonical FQName string is "pkg:mod#local"; a Name or Path string never
 // carries either separator, so these two characters are enough to tell a

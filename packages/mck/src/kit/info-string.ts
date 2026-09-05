@@ -32,7 +32,10 @@ export function isInfoError(value: FenceInfo | InfoError): value is InfoError {
 }
 
 export function parseInfoString(info: string): FenceInfo | InfoError {
-	const tokens = info.trim().split(/\s+/).filter((t) => t.length > 0);
+	const tokens = info
+		.trim()
+		.split(/\s+/)
+		.filter((t) => t.length > 0);
 	const [language, role, ...rest] = tokens;
 	if (language === undefined || role === undefined) {
 		return { message: `not a data fence: "${info}"` };

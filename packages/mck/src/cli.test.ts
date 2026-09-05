@@ -7,8 +7,14 @@ import path from "node:path";
 
 const cli = path.join(import.meta.dir, "cli.ts");
 const dirs: string[] = [];
-const temp = (): string => { const d = mkdtempSync(path.join(tmpdir(), "mck-cli-")); dirs.push(d); return d; };
-afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { force: true, recursive: true }); });
+const temp = (): string => {
+	const d = mkdtempSync(path.join(tmpdir(), "mck-cli-"));
+	dirs.push(d);
+	return d;
+};
+afterEach(() => {
+	for (const d of dirs.splice(0)) rmSync(d, { force: true, recursive: true });
+});
 
 const run = (...args: string[]) => {
 	const r = Bun.spawnSync(["bun", "run", cli, ...args], { stdout: "pipe", stderr: "pipe" });

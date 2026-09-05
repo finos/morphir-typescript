@@ -1,0 +1,10 @@
+# Copyright 2026 FINOS
+# SPDX-License-Identifier: Apache-2.0
+
+min_version = "2026.9.1"
+
+[tools]
+bun = "1.4.2"
+
+[task_config]
+# File tasks are discovered under .config/mise/tasks/.

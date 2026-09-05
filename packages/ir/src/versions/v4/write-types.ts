@@ -10,7 +10,7 @@
 // map directly under "Record", "argumentType", "arg"/"result", "attrs" —
 // are never written here.
 import { type JsonValue, jsonObject } from "../../codec/json/value.ts";
-import { Name } from "../../model/names.ts";
+import type { Name } from "../../model/names.ts";
 import type {
 	Annotation,
 	AnnotationArgument,
@@ -30,8 +30,7 @@ type Entry = readonly [string, JsonValue];
 
 const wrap = (key: string, payload: JsonValue): JsonValue => jsonObject([[key, payload]]);
 const writeNames = (ns: readonly Name[]): JsonValue => ns.map(writeName);
-const writeFieldMap = (fields: readonly Field<TA>[]): JsonValue =>
-	jsonObject(fields.map((f) => [nameKey(f.name), writeType(f.type)] as const));
+const writeFieldMap = (fields: readonly Field<TA>[]): JsonValue => jsonObject(fields.map((f) => [nameKey(f.name), writeType(f.type)] as const));
 
 // ------------------------------------------------------------ expressions
 
@@ -39,7 +38,15 @@ export function writeType(t: Type<TA>): JsonValue {
 	const a = writeTypeAttributes(t.attributes);
 	switch (t.kind) {
 		case "Variable":
-			return a === null ? writeName(t.name) : wrap("Variable", jsonObject([["attributes", a], ["name", writeName(t.name)]]));
+			return a === null
+				? writeName(t.name)
+				: wrap(
+						"Variable",
+						jsonObject([
+							["attributes", a],
+							["name", writeName(t.name)],
+						]),
+					);
 		case "Reference": {
 			const fqname = writeFQName(t.fqname);
 			if (a === null) {
@@ -47,19 +54,40 @@ export function writeType(t: Type<TA>): JsonValue {
 				// arguments it is the wrapper array, never a bare array.
 				return t.args.length === 0 ? fqname : wrap("Reference", [fqname, ...t.args.map(writeType)]);
 			}
-			const entries: Entry[] = [["attributes", a], ["fqname", fqname]];
+			const entries: Entry[] = [
+				["attributes", a],
+				["fqname", fqname],
+			];
 			if (t.args.length > 0) entries.push(["args", t.args.map(writeType)]);
 			return wrap("Reference", jsonObject(entries));
 		}
 		case "Tuple": {
 			const elements = t.elements.map(writeType);
-			return wrap("Tuple", a === null ? elements : jsonObject([["attributes", a], ["elements", elements]]));
+			return wrap(
+				"Tuple",
+				a === null
+					? elements
+					: jsonObject([
+							["attributes", a],
+							["elements", elements],
+						]),
+			);
 		}
 		case "Record": {
 			// Decision 0004: the fields always go under "fields", so a field
 			// called "fields" or "attributes" needs no special case.
 			const fields = writeFieldMap(t.fields);
-			return wrap("Record", jsonObject(a === null ? [["fields", fields]] : [["attributes", a], ["fields", fields]]));
+			return wrap(
+				"Record",
+				jsonObject(
+					a === null
+						? [["fields", fields]]
+						: [
+								["attributes", a],
+								["fields", fields],
+							],
+				),
+			);
 		}
 		case "ExtensibleRecord": {
 			const entries: Entry[] = a === null ? [] : [["attributes", a]];
@@ -79,10 +107,7 @@ export function writeType(t: Type<TA>): JsonValue {
 // ----------------------------------------------------------- constructors
 
 export function writeConstructors(cs: readonly Constructor<TA>[]): JsonValue {
-	return jsonObject(cs.map((c) => [
-		nameKey(c.name),
-		c.parameters.map((p) => [writeName(p.name), writeType(p.type)] as JsonValue),
-	] as const));
+	return jsonObject(cs.map((c) => [nameKey(c.name), c.parameters.map((p) => [writeName(p.name), writeType(p.type)] as JsonValue)] as const));
 }
 
 // ------------------------------------------------------------ annotations
@@ -90,7 +115,10 @@ export function writeConstructors(cs: readonly Constructor<TA>[]): JsonValue {
 function writeAnnotationArgument(arg: AnnotationArgument<TA, VA>): JsonValue {
 	return arg.kind === "Positional"
 		? writeValue(arg.value)
-		: jsonObject([["name", writeName(arg.name)], ["value", writeValue(arg.value)]]);
+		: jsonObject([
+				["name", writeName(arg.name)],
+				["value", writeValue(arg.value)],
+			]);
 }
 
 function writeAnnotation(a: Annotation<TA, VA>): JsonValue {
@@ -144,7 +172,13 @@ export function writeHoleReason(r: HoleReason): JsonValue {
 			// The model spells it txId; the wire key is "tx-id".
 			return wrap("DeletedDuringRefactor", jsonObject([["tx-id", r.txId]]));
 		case "TypeMismatch":
-			return wrap("TypeMismatch", jsonObject([["expected", r.expected], ["found", r.found]]));
+			return wrap(
+				"TypeMismatch",
+				jsonObject([
+					["expected", r.expected],
+					["found", r.found],
+				]),
+			);
 	}
 }
 

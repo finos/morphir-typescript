@@ -21,17 +21,7 @@
 // never the window's top-level pair, and writes "body" only when there is a
 // fallback to write.
 import { type JsonValue, jsonNumber, jsonObject } from "../../codec/json/value.ts";
-import type {
-	InputType,
-	Literal,
-	NativeHint,
-	NativeInfo,
-	Pattern,
-	RecordField,
-	Value,
-	ValueDefinition,
-	ValueSpecification,
-} from "../../model/values.ts";
+import type { InputType, Literal, NativeHint, NativeInfo, Pattern, RecordField, Value, ValueDefinition, ValueSpecification } from "../../model/values.ts";
 import { type TA, type VA, writeValueAttributes } from "./attributes.ts";
 import { nameKey, writeFQName, writeName } from "./write-names.ts";
 import { writeAnnotations, writeHoleReason, writeIncompleteness, writeType } from "./write-types.ts";
@@ -54,15 +44,22 @@ function floatText(n: number): string {
 
 export function writeLiteral(l: Literal): JsonValue {
 	switch (l.kind) {
-		case "BoolLiteral": return wrap("BoolLiteral", l.value);
-		case "CharLiteral": return wrap("CharLiteral", l.value);
-		case "StringLiteral": return wrap("StringLiteral", l.value);
+		case "BoolLiteral":
+			return wrap("BoolLiteral", l.value);
+		case "CharLiteral":
+			return wrap("CharLiteral", l.value);
+		case "StringLiteral":
+			return wrap("StringLiteral", l.value);
 		// WholeNumberLiteral is read but never written.
-		case "IntegerLiteral": return wrap("IntegerLiteral", jsonNumber(l.value.toString()));
-		case "FloatLiteral": return wrap("FloatLiteral", jsonNumber(floatText(l.value)));
-		case "DecimalLiteral": return wrap("DecimalLiteral", l.value);
+		case "IntegerLiteral":
+			return wrap("IntegerLiteral", jsonNumber(l.value.toString()));
+		case "FloatLiteral":
+			return wrap("FloatLiteral", jsonNumber(floatText(l.value)));
+		case "DecimalLiteral":
+			return wrap("DecimalLiteral", l.value);
 		// The payload is the document, so there is nothing to encode.
-		case "DocumentLiteral": return wrap("DocumentLiteral", l.value);
+		case "DocumentLiteral":
+			return wrap("DocumentLiteral", l.value);
 	}
 }
 
@@ -72,25 +69,39 @@ export function writePattern(p: Pattern<VA>): JsonValue {
 	const a = writeValueAttributes(p.attributes);
 	const head: Entry[] = a === null ? [] : [["attributes", a]];
 	switch (p.kind) {
-		case "WildcardPattern": case "EmptyListPattern": case "UnitPattern":
+		case "WildcardPattern":
+		case "EmptyListPattern":
+		case "UnitPattern":
 			return wrap(p.kind, jsonObject(head));
 		case "AsPattern":
 			return wrap("AsPattern", jsonObject([...head, ["pattern", writePattern(p.pattern)], ["name", writeName(p.name)]]));
 		case "TuplePattern": {
 			const patterns = p.patterns.map(writePattern);
-			return wrap("TuplePattern", a === null ? patterns : jsonObject([["attributes", a], ["patterns", patterns]]));
+			return wrap(
+				"TuplePattern",
+				a === null
+					? patterns
+					: jsonObject([
+							["attributes", a],
+							["patterns", patterns],
+						]),
+			);
 		}
 		case "ConstructorPattern":
-			return wrap("ConstructorPattern", jsonObject([
-				...head,
-				["fqname", writeFQName(p.fqname)],
-				["patterns", p.patterns.map(writePattern)],
-			]));
+			return wrap("ConstructorPattern", jsonObject([...head, ["fqname", writeFQName(p.fqname)], ["patterns", p.patterns.map(writePattern)]]));
 		case "HeadTailPattern":
 			return wrap("HeadTailPattern", jsonObject([...head, ["head", writePattern(p.head)], ["tail", writePattern(p.tail)]]));
 		case "LiteralPattern": {
 			const literal = writeLiteral(p.literal);
-			return wrap("LiteralPattern", a === null ? literal : jsonObject([["attributes", a], ["literal", literal]]));
+			return wrap(
+				"LiteralPattern",
+				a === null
+					? literal
+					: jsonObject([
+							["attributes", a],
+							["literal", literal],
+						]),
+			);
 		}
 	}
 }
@@ -98,9 +109,7 @@ export function writePattern(p: Pattern<VA>): JsonValue {
 // ------------------------------------------------------------ native info
 
 export function writeNativeHint(h: NativeHint): JsonValue {
-	return h.kind === "PlatformSpecific"
-		? wrap("PlatformSpecific", jsonObject([["platform", h.platform]]))
-		: wrap(h.kind, jsonObject([]));
+	return h.kind === "PlatformSpecific" ? wrap("PlatformSpecific", jsonObject([["platform", h.platform]])) : wrap(h.kind, jsonObject([]));
 }
 
 export function writeNativeInfo(i: NativeInfo): JsonValue {
@@ -111,8 +120,7 @@ export function writeNativeInfo(i: NativeInfo): JsonValue {
 
 // ------------------------------------------------------------------ values
 
-const writeFieldValues = (fields: readonly RecordField<TA, VA>[]): JsonValue =>
-	jsonObject(fields.map((f) => [nameKey(f.name), writeValue(f.value)] as const));
+const writeFieldValues = (fields: readonly RecordField<TA, VA>[]): JsonValue => jsonObject(fields.map((f) => [nameKey(f.name), writeValue(f.value)] as const));
 
 export function writeValue(v: Value<TA, VA>): JsonValue {
 	const a = writeValueAttributes(v.attributes);
@@ -120,29 +128,81 @@ export function writeValue(v: Value<TA, VA>): JsonValue {
 	switch (v.kind) {
 		case "Literal": {
 			const literal = writeLiteral(v.literal);
-			return wrap("Literal", a === null ? literal : jsonObject([["attributes", a], ["literal", literal]]));
+			return wrap(
+				"Literal",
+				a === null
+					? literal
+					: jsonObject([
+							["attributes", a],
+							["literal", literal],
+						]),
+			);
 		}
-		case "Constructor": case "Reference": {
+		case "Constructor":
+		case "Reference": {
 			const fqname = writeFQName(v.fqname);
-			return wrap(v.kind, a === null ? fqname : jsonObject([["attributes", a], ["fqname", fqname]]));
+			return wrap(
+				v.kind,
+				a === null
+					? fqname
+					: jsonObject([
+							["attributes", a],
+							["fqname", fqname],
+						]),
+			);
 		}
-		case "Variable": case "FieldFunction": {
+		case "Variable":
+		case "FieldFunction": {
 			const name = writeName(v.name);
-			return wrap(v.kind, a === null ? name : jsonObject([["attributes", a], ["name", name]]));
+			return wrap(
+				v.kind,
+				a === null
+					? name
+					: jsonObject([
+							["attributes", a],
+							["name", name],
+						]),
+			);
 		}
 		case "Tuple": {
 			const elements = v.elements.map(writeValue);
-			return wrap("Tuple", a === null ? elements : jsonObject([["attributes", a], ["elements", elements]]));
+			return wrap(
+				"Tuple",
+				a === null
+					? elements
+					: jsonObject([
+							["attributes", a],
+							["elements", elements],
+						]),
+			);
 		}
 		case "List": {
 			const items = v.items.map(writeValue);
-			return wrap("List", a === null ? items : jsonObject([["attributes", a], ["items", items]]));
+			return wrap(
+				"List",
+				a === null
+					? items
+					: jsonObject([
+							["attributes", a],
+							["items", items],
+						]),
+			);
 		}
 		case "Record": {
 			// Decision 0004, the same rule the type writer follows: the fields
 			// always go under "fields".
 			const fields = writeFieldValues(v.fields);
-			return wrap("Record", jsonObject(a === null ? [["fields", fields]] : [["attributes", a], ["fields", fields]]));
+			return wrap(
+				"Record",
+				jsonObject(
+					a === null
+						? [["fields", fields]]
+						: [
+								["attributes", a],
+								["fields", fields],
+							],
+				),
+			);
 		}
 		case "Unit":
 			return wrap("Unit", jsonObject(head));
@@ -153,38 +213,41 @@ export function writeValue(v: Value<TA, VA>): JsonValue {
 		case "Lambda":
 			return wrap("Lambda", jsonObject([...head, ["pattern", writePattern(v.pattern)], ["body", writeValue(v.body)]]));
 		case "LetDefinition":
-			return wrap("LetDefinition", jsonObject([
-				...head,
-				["name", writeName(v.name)],
-				["definition", writeValueDefinition(v.definition)],
-				["in", writeValue(v.in)],
-			]));
+			return wrap(
+				"LetDefinition",
+				jsonObject([...head, ["name", writeName(v.name)], ["definition", writeValueDefinition(v.definition)], ["in", writeValue(v.in)]]),
+			);
 		case "LetRecursion":
-			return wrap("LetRecursion", jsonObject([
-				...head,
-				["definitions", jsonObject(v.definitions.map((d) => [nameKey(d.name), writeValueDefinition(d.definition)] as const))],
-				["in", writeValue(v.in)],
-			]));
+			return wrap(
+				"LetRecursion",
+				jsonObject([
+					...head,
+					["definitions", jsonObject(v.definitions.map((d) => [nameKey(d.name), writeValueDefinition(d.definition)] as const))],
+					["in", writeValue(v.in)],
+				]),
+			);
 		case "Destructure":
-			return wrap("Destructure", jsonObject([
-				...head,
-				["pattern", writePattern(v.pattern)],
-				["value", writeValue(v.value)],
-				["in", writeValue(v.in)],
-			]));
+			return wrap("Destructure", jsonObject([...head, ["pattern", writePattern(v.pattern)], ["value", writeValue(v.value)], ["in", writeValue(v.in)]]));
 		case "IfThenElse":
-			return wrap("IfThenElse", jsonObject([
-				...head,
-				["condition", writeValue(v.condition)],
-				["then", writeValue(v.then)],
-				["else", writeValue(v.else)],
-			]));
+			return wrap("IfThenElse", jsonObject([...head, ["condition", writeValue(v.condition)], ["then", writeValue(v.then)], ["else", writeValue(v.else)]]));
 		case "PatternMatch":
-			return wrap("PatternMatch", jsonObject([
-				...head,
-				["value", writeValue(v.value)],
-				["cases", v.cases.map((c) => jsonObject([["pattern", writePattern(c.pattern)], ["body", writeValue(c.body)]]) as JsonValue)],
-			]));
+			return wrap(
+				"PatternMatch",
+				jsonObject([
+					...head,
+					["value", writeValue(v.value)],
+					[
+						"cases",
+						v.cases.map(
+							(c) =>
+								jsonObject([
+									["pattern", writePattern(c.pattern)],
+									["body", writeValue(c.body)],
+								]) as JsonValue,
+						),
+					],
+				]),
+			);
 		case "UpdateRecord":
 			return wrap("UpdateRecord", jsonObject([...head, ["target", writeValue(v.target)], ["fields", writeFieldValues(v.fields)]]));
 		case "Hole": {
@@ -215,7 +278,15 @@ export function writeValueDefinition(d: ValueDefinition<TA, VA>): JsonValue {
 		case "ExternalBody":
 			entries.push(
 				["outputType", writeType(d.outputType)],
-				["externals", d.externals.map((b) => jsonObject([["targetPlatform", b.targetPlatform], ["externalName", b.externalName]]))],
+				[
+					"externals",
+					d.externals.map((b) =>
+						jsonObject([
+							["targetPlatform", b.targetPlatform],
+							["externalName", b.externalName],
+						]),
+					),
+				],
 			);
 			if (d.body !== null) entries.push(["body", writeValue(d.body)]);
 			break;
