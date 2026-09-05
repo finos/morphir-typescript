@@ -51,9 +51,7 @@ export type Value<TA, VA> =
 	| { readonly kind: "PatternMatch"; readonly attributes: VA; readonly value: Value<TA, VA>; readonly cases: readonly PatternCase<TA, VA>[] }
 	| { readonly kind: "UpdateRecord"; readonly attributes: VA; readonly target: Value<TA, VA>; readonly fields: readonly RecordField<TA, VA>[] }
 	| { readonly kind: "Unit"; readonly attributes: VA }
-	| { readonly kind: "Hole"; readonly attributes: VA; readonly reason: HoleReason; readonly expectedType: Type<TA> | null }
-	| { readonly kind: "Native"; readonly attributes: VA; readonly fqname: FQName; readonly nativeInfo: NativeInfo }
-	| { readonly kind: "External"; readonly attributes: VA; readonly externalName: string; readonly targetPlatform: string };
+	| { readonly kind: "Hole"; readonly attributes: VA; readonly reason: HoleReason; readonly expectedType: Type<TA> | null };
 
 export interface InputType<TA> { readonly name: Name; readonly type: Type<TA> }
 

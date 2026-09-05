@@ -4,6 +4,7 @@
 import { describe, expect, test } from "bun:test";
 import { newRoot } from "../../codec/json/cursor.ts";
 import { parseJson, writeJson } from "../../codec/json/value.ts";
+import { readNodeChecked, writeNode } from "./index.ts";
 import { readType } from "./read-types.ts";
 import {
 	readLiteral,
@@ -33,6 +34,11 @@ const rtPattern = (s: string, expected = s): void => {
 	const r = readPattern(newRoot(), json(s));
 	expect(r.ok ? "" : r.error.message).toBe("");
 	if (r.ok) expect(writeJson(writePattern(r.value))).toBe(expected);
+};
+const readWrite = (text: string): string => {
+	const r = readNodeChecked("Value", text);
+	if (!r.ok) throw new Error(r.error.message);
+	return writeNode(r.value.value);
 };
 
 describe("literals", () => {
@@ -91,19 +97,21 @@ describe("values", () => {
 		rtValue('"x"', '{ "Variable": "x" }');
 		rtValue('"morphir/SDK:basics#add"', '{ "Reference": "morphir/SDK:basics#add" }');
 	});
-	test("bare arrays, booleans and numbers are ambiguous", () => {
-		for (const s of ["[1, 2, 3]", "true", "42", "2.5"]) {
-			const r = readValue(newRoot(), json(s));
-			expect(!r.ok && r.error.code).toBe("ambiguous_shorthand");
+	test("bare scalars and arrays are literals and lists (decision 0009)", () => {
+		expect(readWrite('true')).toBe('{ "Literal": { "BoolLiteral": true } }');
+		expect(readWrite('42')).toBe('{ "Literal": { "IntegerLiteral": 42 } }');
+		expect(readWrite('4.0')).toBe('{ "Literal": { "FloatLiteral": 4.0 } }');
+		expect(readWrite('[1, "x"]')).toBe('{ "List": [{ "Literal": { "IntegerLiteral": 1 } }, { "Variable": "x" }] }');
+	});
+	test("Native and External are not value expressions (decision 0008)", () => {
+		for (const text of ['{ "Native": { "fqname": "morphir/SDK:basics#add", "nativeInfo": { "hint": { "Arithmetic": {} } } } }', '{ "External": { "externalName": "console.log", "targetPlatform": "javascript" } }']) {
+			const r = readNodeChecked("Value", text);
+			expect(!r.ok && r.error.code).toBe("unknown_node");
 		}
 	});
-	test("member names are the schema's", () => {
+	test("the schema's member names round-trip untouched", () => {
 		rtValue('{ "IfThenElse": { "condition": { "Literal": { "BoolLiteral": true } }, "then": { "Literal": { "IntegerLiteral": 1 } }, "else": { "Literal": { "IntegerLiteral": 2 } } } }');
 		rtValue('{ "Field": { "target": { "Variable": "record" }, "name": "field-name" } }');
-		const bad = readValue(newRoot(), json('{ "IfThenElse": { "condition": true, "thenBranch": 1, "elseBranch": 2 } }'));
-		expect(!bad.ok && bad.error.code).toBe("unknown_member");
-		const field = readValue(newRoot(), json('{ "Field": { "subject": { "Variable": "record" }, "fieldName": "field-name" } }'));
-		expect(!field.ok && field.error.code).toBe("unknown_member");
 	});
 	test("an unknown wrapper key is unknown_node", () => {
 		const r = readValue(newRoot(), json('{ "Comprehension": { "over": "xs" } }'));
@@ -131,22 +139,42 @@ describe("values", () => {
 		rtValue(`{ "LetDefinition": { "name": "x", "definition": ${definition}, "in": { "Variable": "x" } } }`);
 		rtValue(`{ "LetRecursion": { "definitions": { "f": ${definition} }, "in": { "Variable": "f" } } }`);
 	});
-	test("a record value spelled as a direct field map normalizes to fields", () => {
-		// Decision 0004 at value position. The value reader still takes the
-		// direct map silently; decision 0006's warning arrives with the rest of
-		// the value reader in task 5.
-		rtValue(
-			'{ "Record": { "name": { "Variable": "x" }, "age": { "Literal": { "IntegerLiteral": 25 } } } }',
-			'{ "Record": { "fields": { "name": { "Variable": "x" }, "age": { "Literal": { "IntegerLiteral": 25 } } } } }',
-		);
+	test("window spellings warn and normalize", () => {
+		// Each legacy member warns on its own cursor, so a payload that spells
+		// two slots the old way warns twice; the cursors are the assertion.
+		const cases: readonly [string, string, readonly string[]][] = [
+			[
+				'{ "IfThenElse": { "condition": true, "thenBranch": 1, "elseBranch": 2 } }',
+				'{ "IfThenElse": { "condition": { "Literal": { "BoolLiteral": true } }, "then": { "Literal": { "IntegerLiteral": 1 } }, "else": { "Literal": { "IntegerLiteral": 2 } } } }',
+				["/IfThenElse/thenBranch", "/IfThenElse/elseBranch"],
+			],
+			[
+				'{ "Field": { "subject": "r", "fieldName": "f" } }',
+				'{ "Field": { "target": { "Variable": "r" }, "name": "f" } }',
+				["/Field/subject", "/Field/fieldName"],
+			],
+			[
+				'{ "LetDefinition": { "valueName": "x", "valueDefinition": { "ExpressionBody": { "inputTypes": {}, "outputType": "morphir/SDK:basics#int", "body": 1 } }, "inValue": "x" } }',
+				'{ "LetDefinition": { "name": "x", "definition": { "ExpressionBody": { "inputTypes": {}, "outputType": "morphir/SDK:basics#int", "body": { "Literal": { "IntegerLiteral": 1 } } } }, "in": { "Variable": "x" } } }',
+				["/LetDefinition/valueName", "/LetDefinition/valueDefinition", "/LetDefinition/inValue"],
+			],
+			[
+				'{ "Record": { "a": 1 } }',
+				'{ "Record": { "fields": { "a": { "Literal": { "IntegerLiteral": 1 } } } } }',
+				["/Record"],
+			],
+		];
+		for (const [legacy, canonical, cursors] of cases) {
+			const r = readNodeChecked("Value", legacy);
+			expect(r.ok && r.value.warnings.map((w) => w.code)).toEqual(cursors.map(() => "legacy_spelling"));
+			expect(r.ok && r.value.warnings.map((w) => w.cursor)).toEqual([...cursors]);
+			expect(r.ok && writeNode(r.value.value)).toBe(canonical);
+		}
 	});
-	test("hole, native, external", () => {
+	test("hole", () => {
 		rtValue('{ "Hole": { "reason": { "UnresolvedReference": { "target": "a/b:c#d" } } } }');
 		rtValue('{ "Hole": { "reason": { "DeletedDuringRefactor": { "tx-id": "t1" } } } }');
 		rtValue('{ "Hole": { "reason": { "TypeMismatch": { "expected": "int", "found": "string" } }, "expectedType": "morphir/SDK:basics#int" } }');
-		rtValue('{ "Native": { "fqname": "morphir/SDK:basics#add", "nativeInfo": { "hint": { "Arithmetic": {} } } } }');
-		rtValue('{ "Native": { "fqname": "morphir/SDK:list#map", "nativeInfo": { "hint": { "PlatformSpecific": { "platform": "wasm" } }, "description": "List map" } } }');
-		rtValue('{ "External": { "externalName": "console.log", "targetPlatform": "javascript" } }');
 	});
 	test("value attributes produce and read the expanded form", () => {
 		const source = '{ "source": { "startLine": 1, "startColumn": 2, "endLine": 3, "endColumn": 4 } }';
@@ -180,6 +208,37 @@ describe("values", () => {
 		expect(readValue(newRoot(), json('{ "Record": { "fields": "x" } }')))
 			.toMatchObject({ ok: false, error: { code: "invalid_type", cursor: "/Record/fields" } });
 		rtValue('{ "Record": { "fields": { "fields": { "Variable": "x" } } } }');
+	});
+});
+
+describe("decisions 0005 and 0006 at value position", () => {
+	test("attrs is read as attributes with a warning", () => {
+		const r = readNodeChecked("Value", '{ "Variable": { "attrs": {}, "name": "x" } }');
+		expect(r.ok && r.value.warnings.map((w) => w.code)).toEqual(["legacy_spelling"]);
+		expect(r.ok && r.value.warnings.map((w) => w.cursor)).toEqual(["/Variable/attrs"]);
+		expect(r.ok && writeNode(r.value.value)).toBe('{ "Variable": "x" }');
+	});
+	test("a record whose only field is called fields is canonical, not legacy", () => {
+		const r = readNodeChecked("Value", '{ "Record": { "fields": { "fields": 1 } } }');
+		expect(r.ok && r.value.warnings).toEqual([]);
+		const v = r.ok && r.value.value.node === "Value" ? r.value.value.value : null;
+		expect(v !== null && v.kind === "Record" && v.fields.length).toBe(1);
+	});
+	// A payload that spells one slot twice is rejected at the key the author can
+	// delete, so each of these pins the cursor as well as the code.
+	test("a duplicated slot is unknown_member at the legacy key", () => {
+		const cases: readonly [string, string][] = [
+			['{ "Variable": { "attributes": {}, "attrs": {}, "name": "x" } }', "/Variable/attrs"],
+			['{ "IfThenElse": { "condition": true, "then": 1, "thenBranch": 1, "else": 2 } }', "/IfThenElse/thenBranch"],
+			['{ "Field": { "target": "r", "subject": "r", "name": "f" } }', "/Field/subject"],
+			['{ "Field": { "target": "r", "name": "f", "fieldName": "f" } }', "/Field/fieldName"],
+			['{ "LetDefinition": { "name": "x", "valueName": "x", "definition": { "ExpressionBody": { "inputTypes": {}, "outputType": "morphir/SDK:basics#int", "body": 1 } }, "in": "x" } }', "/LetDefinition/valueName"],
+		];
+		for (const [text, cursor] of cases) {
+			const r = readNodeChecked("Value", text);
+			expect(!r.ok && r.error.code).toBe("unknown_member");
+			expect(!r.ok && r.error.cursor).toBe(cursor);
+		}
 	});
 });
 

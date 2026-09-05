@@ -8,7 +8,10 @@
 //
 // A literal is always written in its typed form, never as the bare shorthand
 // the reader accepts (kit values-0001), because the shorthand only works where
-// the type is already known.
+// the type is already known. The same goes for the rest of decision 0009: a
+// list keeps its wrapper even though a bare array reads as one. A Record's
+// fields always go under "fields" (decision 0004), and none of decision
+// 0006's window spellings is ever written.
 import { type JsonValue, jsonNumber, jsonObject } from "../../codec/json/value.ts";
 import type {
 	InputType,
@@ -177,10 +180,6 @@ export function writeValue(v: Value<TA, VA>): JsonValue {
 			if (v.expectedType !== null) entries.push(["expectedType", writeType(v.expectedType)]);
 			return wrap("Hole", jsonObject(entries));
 		}
-		case "Native":
-			return wrap("Native", jsonObject([...head, ["fqname", writeFQName(v.fqname)], ["nativeInfo", writeNativeInfo(v.nativeInfo)]]));
-		case "External":
-			return wrap("External", jsonObject([...head, ["externalName", v.externalName], ["targetPlatform", v.targetPlatform]]));
 	}
 }
 

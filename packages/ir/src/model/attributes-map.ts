@@ -79,8 +79,6 @@ export function mapValue<TA, VA, TB, VB>(v: Value<TA, VA>, m: AttributeMapper<TA
 		case "UpdateRecord": return { kind: v.kind, attributes: va, target: val(v.target), fields: v.fields.map((x) => ({ name: x.name, value: val(x.value) })) };
 		case "Unit": return { kind: v.kind, attributes: va };
 		case "Hole": return { kind: v.kind, attributes: va, reason: v.reason, expectedType: v.expectedType === null ? null : mapType(v.expectedType, m.onType) };
-		case "Native": return { kind: v.kind, attributes: va, fqname: v.fqname, nativeInfo: v.nativeInfo };
-		case "External": return { kind: v.kind, attributes: va, externalName: v.externalName, targetPlatform: v.targetPlatform };
 		default: { const _: never = v; return _; }
 	}
 }
