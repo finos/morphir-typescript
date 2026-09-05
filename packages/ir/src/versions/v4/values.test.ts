@@ -141,8 +141,12 @@ describe("values", () => {
 		// BigInt has no negative zero to keep.
 		expect(readWrite('-0')).toBe('{ "Literal": { "IntegerLiteral": 0 } }');
 		// The same digits with a point are a float, and the writer's floatText
-		// puts the point back.
-		expect(readWrite('-0.0')).toBe('{ "Literal": { "FloatLiteral": 0.0 } }');
+		// puts the point back, and the sign of negative zero is preserved:
+		// -0.0 and 0.0 are distinct IEEE-754 values.
+		expect(readWrite('-0.0')).toBe('{ "Literal": { "FloatLiteral": -0.0 } }');
+	});
+	test("a FloatLiteral round-trips the sign of negative zero", () => {
+		rtLiteral('{ "FloatLiteral": -0.0 }');
 	});
 	test("Native and External are not value expressions (decision 0008)", () => {
 		for (const text of ['{ "Native": { "fqname": "morphir/SDK:basics#add", "nativeInfo": { "hint": { "Arithmetic": {} } } } }', '{ "External": { "externalName": "console.log", "targetPlatform": "javascript" } }']) {

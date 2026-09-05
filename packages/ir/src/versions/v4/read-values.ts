@@ -3,7 +3,7 @@
 // The v4 reader for literals, patterns, value expressions, value definitions
 // and value specifications.
 //
-// Three decisions shape this module. Decision 0009 settled every bare JSON
+// Four decisions shape this module. Decision 0009 settled every bare JSON
 // value at value position: a bare string is still a shorthand — an FQName
 // spells a Reference, a Name spells a Variable (kit values-0002, values-0003)
 // — a bare boolean and a bare number are literals typed by their lexeme (kit

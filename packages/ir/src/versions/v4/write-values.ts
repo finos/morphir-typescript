@@ -46,7 +46,9 @@ const wrap = (key: string, payload: JsonValue): JsonValue => jsonObject([[key, p
 // float keeps its point. Exponent spellings already carry a marker and are
 // left alone: "1e+21.0" is not JSON.
 function floatText(n: number): string {
-	const s = String(n);
+	// String(-0) is "0", which would silently discard the sign; -0.0 and 0.0
+	// are distinct IEEE-754 values that backends observe.
+	const s = Object.is(n, -0) ? "-0" : String(n);
 	return /[.eE]/.test(s) ? s : `${s}.0`;
 }
 
