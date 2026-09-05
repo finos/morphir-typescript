@@ -122,7 +122,10 @@ describe("values", () => {
 		rtValue('{ "Apply": { "function": { "Reference": "morphir/SDK:basics#negate" }, "argument": { "Literal": { "IntegerLiteral": 1 } } } }');
 		rtValue('{ "Constructor": "morphir/SDK:maybe#just" }');
 		rtValue('{ "FieldFunction": "name" }');
-		rtValue('{ "Record": { "name": { "Variable": "x" }, "age": { "Literal": { "IntegerLiteral": 25 } } } }');
+		rtValue(
+			'{ "Record": { "name": { "Variable": "x" }, "age": { "Literal": { "IntegerLiteral": 25 } } } }',
+			'{ "Record": { "fields": { "name": { "Variable": "x" }, "age": { "Literal": { "IntegerLiteral": 25 } } } } }',
+		);
 		rtValue('{ "UpdateRecord": { "target": { "Variable": "record" }, "fields": { "name": { "Literal": { "StringLiteral": "new" } } } } }');
 		rtValue('{ "Lambda": { "pattern": { "AsPattern": { "pattern": { "WildcardPattern": {} }, "name": "x" } }, "body": { "Variable": "x" } } }');
 		rtValue('{ "Destructure": { "pattern": { "WildcardPattern": {} }, "value": { "Variable": "y" }, "in": { "Variable": "x" } } }');
@@ -151,24 +154,26 @@ describe("values", () => {
 		rtValue(`{ "Literal": { "attributes": ${source}, "literal": { "IntegerLiteral": 1 } } }`);
 		rtValue(`{ "Apply": { "attributes": ${source}, "function": { "Variable": "f" }, "argument": { "Variable": "x" } } }`);
 	});
-	test("a record field named attributes forces the expanded form", () => {
+	test("a record field named attributes needs no special case", () => {
+		// Decision 0004: the fields always go under "fields", so an empty
+		// attributes member is dropped even here.
 		rtValue(
 			'{ "Record": { "attributes": {}, "fields": { "attributes": { "Variable": "x" } } } }',
-			'{ "Record": { "attributes": {}, "fields": { "attributes": { "Variable": "x" } } } }',
+			'{ "Record": { "fields": { "attributes": { "Variable": "x" } } } }',
 		);
 	});
-	test("record expanded-form detection reads the whole member set", () => {
+	test("record payload detection reads the whole member set", () => {
 		// "attributes" beside another name is a field, so this is a two-field
-		// record, and the writer expands it so it reads back the same way.
+		// record, written back under "fields".
 		rtValue(
 			'{ "Record": { "a": { "Variable": "x" }, "attributes": { "Variable": "y" } } }',
-			'{ "Record": { "attributes": {}, "fields": { "a": { "Variable": "x" }, "attributes": { "Variable": "y" } } } }',
+			'{ "Record": { "fields": { "a": { "Variable": "x" }, "attributes": { "Variable": "y" } } } }',
 		);
-		// A lone "fields" member is the expanded form, so its payload must be a
-		// field map.
+		// A lone "fields" member is the canonical payload, so what it holds must
+		// be a field map.
 		expect(readValue(newRoot(), json('{ "Record": { "fields": "x" } }')))
 			.toMatchObject({ ok: false, error: { code: "invalid_type", cursor: "/Record/fields" } });
-		rtValue('{ "Record": { "attributes": {}, "fields": { "fields": { "Variable": "x" } } } }');
+		rtValue('{ "Record": { "fields": { "fields": { "Variable": "x" } } } }');
 	});
 });
 
@@ -245,9 +250,9 @@ describe("value definitions and specifications", () => {
 });
 
 describe("record types with a field named attributes", () => {
-	test("the type writer expands so the reader round-trips", () => {
+	test("the type writer keeps it under fields, so the reader round-trips", () => {
 		const r = readType(newRoot(), json('{ "Record": { "attributes": {}, "fields": { "attributes": "morphir/SDK:basics#int" } } }'));
 		expect(r.ok && writeJson(writeType(r.value)))
-			.toBe('{ "Record": { "attributes": {}, "fields": { "attributes": "morphir/SDK:basics#int" } } }');
+			.toBe('{ "Record": { "fields": { "attributes": "morphir/SDK:basics#int" } } }');
 	});
 });

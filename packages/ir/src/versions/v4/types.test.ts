@@ -4,6 +4,7 @@
 import { describe, expect, test } from "bun:test";
 import { at, newRoot } from "../../codec/json/cursor.ts";
 import { type JsonValue, parseJson, writeJson } from "../../codec/json/value.ts";
+import { readNodeChecked, writeNode } from "./index.ts";
 import { readType, readTypeDefinition, readTypeSpecification } from "./read-types.ts";
 import { writeType, writeTypeDefinition, writeTypeSpecification } from "./write-types.ts";
 
@@ -20,9 +21,9 @@ describe("readType/writeType", () => {
 		roundTrip('"morphir/SDK:basics#int"');
 		roundTrip('{ "Reference": ["morphir/SDK:list#list", "a"] }');
 		roundTrip('{ "Tuple": ["morphir/SDK:basics#int", "morphir/SDK:string#string"] }');
-		roundTrip('{ "Record": { "name": "morphir/SDK:string#string", "age": "morphir/SDK:basics#int" } }');
+		roundTrip('{ "Record": { "fields": { "name": "morphir/SDK:string#string", "age": "morphir/SDK:basics#int" } } }');
 		roundTrip('{ "ExtensibleRecord": { "variable": "r", "fields": { "email": "morphir/SDK:string#string" } } }');
-		roundTrip('{ "Function": { "argumentType": "morphir/SDK:basics#int", "returnType": "morphir/SDK:string#string" } }');
+		roundTrip('{ "Function": { "parameterType": "morphir/SDK:basics#int", "returnType": "morphir/SDK:string#string" } }');
 		roundTrip('{ "Unit": {} }');
 	});
 	test("accepted spellings normalize to canonical", () => {
@@ -36,9 +37,11 @@ describe("readType/writeType", () => {
 		expect(r.ok && r.value.kind).toBe("Tuple");
 	});
 	test("renamed members are unknown_member, located in the source", () => {
-		const r = readType(newRoot(), json('{ "Function": { "arg": "a", "result": "b" } }'));
+		// "arg" and "argumentType" are window spellings and are accepted; a name
+		// the window does not cover is still unknown_member where it was written.
+		const r = readType(newRoot(), json('{ "Function": { "argType": "a", "returnType": "b" } }'));
 		expect(!r.ok && r.error.code).toBe("unknown_member");
-		expect(!r.ok && r.error.cursor).toBe("/Function/arg");
+		expect(!r.ok && r.error.cursor).toBe("/Function/argType");
 		expect(!r.ok && r.error.line).not.toBeNull();
 		expect(!r.ok && r.error.column).not.toBeNull();
 	});
@@ -62,22 +65,22 @@ describe("readType/writeType", () => {
 	});
 });
 
-describe("record expanded-form detection", () => {
+describe("record payload detection", () => {
 	test("a member set that is not exactly {fields} or {attributes, fields} is a field map", () => {
 		// "attributes" beside another name is a field called "attributes", not the
-		// expanded form, so this is a two-field record.
+		// canonical payload, so this is a two-field record in the legacy spelling.
 		const r = readType(newRoot(), json('{ "Record": { "a": "morphir/SDK:basics#int", "attributes": "morphir/SDK:string#string" } }'));
 		expect(r.ok && r.value.kind === "Record" && r.value.fields.length).toBe(2);
-		const expanded = '{ "Record": { "attributes": {}, "fields": { "a": "morphir/SDK:basics#int", "attributes": "morphir/SDK:string#string" } } }';
-		expect(r.ok && writeJson(writeType(r.value))).toBe(expanded);
-		roundTrip(expanded);
+		const canonical = '{ "Record": { "fields": { "a": "morphir/SDK:basics#int", "attributes": "morphir/SDK:string#string" } } }';
+		expect(r.ok && writeJson(writeType(r.value))).toBe(canonical);
+		roundTrip(canonical);
 	});
-	test("a lone fields member is the expanded form, so a non-object fails there", () => {
+	test("a lone fields member is the canonical payload, so a non-object fails there", () => {
 		const r = readType(newRoot(), json('{ "Record": { "fields": "morphir/SDK:basics#int" } }'));
 		expect(r).toMatchObject({ ok: false, error: { code: "invalid_type", cursor: "/Record/fields" } });
 	});
-	test("a record whose only field is called fields round-trips expanded", () => {
-		roundTrip('{ "Record": { "attributes": {}, "fields": { "fields": "morphir/SDK:basics#int" } } }');
+	test("a record whose only field is called fields round-trips", () => {
+		roundTrip('{ "Record": { "fields": { "fields": "morphir/SDK:basics#int" } } }');
 	});
 });
 
@@ -97,5 +100,37 @@ describe("specifications and definitions", () => {
 		const s = '{ "DerivedTypeSpecification": { "typeParams": [], "baseType": "morphir/SDK:string#string", "fromBaseType": "my-org/sdk:local-date#from-string", "toBaseType": "my-org/sdk:local-date#to-string" } }';
 		const r = readTypeSpecification(newRoot(), json(s));
 		expect(r.ok && writeJson(writeTypeSpecification(r.value))).toBe(s);
+	});
+});
+
+describe("decisions 0004, 0005, 0007", () => {
+	test("Record writes fields and reads the direct map with a warning", () => {
+		roundTrip('{ "Record": { "fields": { "name": "morphir/SDK:string#string" } } }');
+		const r = readNodeChecked("Type", '{ "Record": { "name": "morphir/SDK:string#string" } }');
+		expect(r.ok && r.value.warnings.map((w) => w.code)).toEqual(["legacy_spelling"]);
+		expect(r.ok && writeNode(r.value.value)).toBe('{ "Record": { "fields": { "name": "morphir/SDK:string#string" } } }');
+	});
+	test("a record whose only field is called fields is canonical, not legacy", () => {
+		const r = readNodeChecked("Type", '{ "Record": { "fields": { "fields": "a" } } }');
+		expect(r.ok && r.value.warnings).toEqual([]);
+		// readNodeChecked answers with the whole NodeValue union, so the node name
+		// is checked before the type's own members are.
+		const t = r.ok && r.value.value.node === "Type" ? r.value.value.value : null;
+		expect(t !== null && t.kind === "Record" && t.fields.length).toBe(1);
+	});
+	test("Function reads parameterType, argumentType, and arg/result", () => {
+		roundTrip('{ "Function": { "parameterType": "a", "returnType": "b" } }');
+		for (const legacy of ['{ "Function": { "argumentType": "a", "returnType": "b" } }', '{ "Function": { "arg": "a", "result": "b" } }']) {
+			const r = readNodeChecked("Type", legacy);
+			expect(r.ok && r.value.warnings.length).toBeGreaterThan(0);
+			expect(r.ok && writeNode(r.value.value)).toBe('{ "Function": { "parameterType": "a", "returnType": "b" } }');
+		}
+		const both = readNodeChecked("Type", '{ "Function": { "parameterType": "a", "argumentType": "a", "returnType": "b" } }');
+		expect(!both.ok && both.error.code).toBe("unknown_member");
+	});
+	test("attrs is read as attributes with a warning", () => {
+		const r = readNodeChecked("Type", '{ "Variable": { "attrs": {}, "name": "a" } }');
+		expect(r.ok && r.value.warnings.map((w) => w.code)).toEqual(["legacy_spelling"]);
+		expect(r.ok && writeNode(r.value.value)).toBe('"a"');
 	});
 });

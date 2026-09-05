@@ -23,12 +23,11 @@ import type {
 } from "../../model/values.ts";
 import { type TA, type VA, writeValueAttributes } from "./attributes.ts";
 import { nameKey, writeFQName, writeName } from "./write-names.ts";
-import { needsExpansion, writeAnnotations, writeHoleReason, writeIncompleteness, writeType } from "./write-types.ts";
+import { writeAnnotations, writeHoleReason, writeIncompleteness, writeType } from "./write-types.ts";
 
 type Entry = readonly [string, JsonValue];
 
 const wrap = (key: string, payload: JsonValue): JsonValue => jsonObject([[key, payload]]);
-const EMPTY_ATTRIBUTES: JsonValue = jsonObject([]);
 
 // ---------------------------------------------------------------- literals
 
@@ -100,12 +99,6 @@ export function writeNativeInfo(i: NativeInfo): JsonValue {
 const writeFieldValues = (fields: readonly RecordField<TA, VA>[]): JsonValue =>
 	jsonObject(fields.map((f) => [nameKey(f.name), writeValue(f.value)] as const));
 
-// A field set the reader would take for the expanded form cannot be written
-// compactly, so it is written expanded even when its attributes are empty; the
-// rule itself lives with the type writer.
-const expandsRecord = (fields: readonly RecordField<TA, VA>[]): boolean =>
-	needsExpansion(fields.map((f) => nameKey(f.name)));
-
 export function writeValue(v: Value<TA, VA>): JsonValue {
 	const a = writeValueAttributes(v.attributes);
 	const head: Entry[] = a === null ? [] : [["attributes", a]];
@@ -131,10 +124,10 @@ export function writeValue(v: Value<TA, VA>): JsonValue {
 			return wrap("List", a === null ? items : jsonObject([["attributes", a], ["items", items]]));
 		}
 		case "Record": {
+			// Decision 0004, the same rule the type writer follows: the fields
+			// always go under "fields".
 			const fields = writeFieldValues(v.fields);
-			return wrap("Record", a === null && !expandsRecord(v.fields)
-				? fields
-				: jsonObject([["attributes", a ?? EMPTY_ATTRIBUTES], ["fields", fields]]));
+			return wrap("Record", jsonObject(a === null ? [["fields", fields]] : [["attributes", a], ["fields", fields]]));
 		}
 		case "Unit":
 			return wrap("Unit", jsonObject(head));

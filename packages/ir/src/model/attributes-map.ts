@@ -27,14 +27,14 @@ export function mapType<TA, TB>(t: Type<TA>, f: (a: TA) => TB): Type<TB> {
 		case "Tuple": return { kind: "Tuple", attributes: f(t.attributes), elements: t.elements.map((e) => mapType(e, f)) };
 		case "Record": return { kind: "Record", attributes: f(t.attributes), fields: t.fields.map((x) => ({ name: x.name, type: mapType(x.type, f) })) };
 		case "ExtensibleRecord": return { kind: "ExtensibleRecord", attributes: f(t.attributes), variable: t.variable, fields: t.fields.map((x) => ({ name: x.name, type: mapType(x.type, f) })) };
-		case "Function": return { kind: "Function", attributes: f(t.attributes), argumentType: mapType(t.argumentType, f), returnType: mapType(t.returnType, f) };
+		case "Function": return { kind: "Function", attributes: f(t.attributes), parameterType: mapType(t.parameterType, f), returnType: mapType(t.returnType, f) };
 		case "Unit": return { kind: "Unit", attributes: f(t.attributes) };
 		default: { const _: never = t; return _; }
 	}
 }
 
 function mapConstructors<TA, TB>(cs: readonly Constructor<TA>[], f: (a: TA) => TB): readonly Constructor<TB>[] {
-	return cs.map((c) => ({ name: c.name, args: c.args.map((a) => ({ name: a.name, type: mapType(a.type, f) })) }));
+	return cs.map((c) => ({ name: c.name, parameters: c.parameters.map((p) => ({ name: p.name, type: mapType(p.type, f) })) }));
 }
 
 function mapIncompleteness<TA, TB>(i: Incompleteness<TA>, f: (a: TA) => TB): Incompleteness<TB> {
