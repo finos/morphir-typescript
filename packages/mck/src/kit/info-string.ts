@@ -20,7 +20,9 @@ const LANGUAGES: ReadonlySet<string> = new Set(["yaml", "json", "text"]);
 const ROLES: ReadonlySet<string> = new Set(["canonical", "accepted", "rejected", "file"]);
 const KEYS: Readonly<Record<Role, ReadonlySet<string>>> = {
 	canonical: new Set(),
-	accepted: new Set(),
+	// warning=<code>: the reader must accept the spelling and report exactly
+	// that warning (decision 0006's compatibility window).
+	accepted: new Set(["warning"]),
 	rejected: new Set(["diagnostic", "expect"]),
 	file: new Set(["path", "set"]),
 };
