@@ -92,7 +92,9 @@ export function mapValueDefinition<TA, VA, TB, VB>(d: ValueDefinition<TA, VA>, m
 	switch (d.kind) {
 		case "ExpressionBody": return { kind: d.kind, inputTypes: mapInputs(d.inputTypes, t), outputType: mapType(d.outputType, t), body: mapValue(d.body, m) };
 		case "NativeBody": return { kind: d.kind, inputTypes: mapInputs(d.inputTypes, t), outputType: mapType(d.outputType, t), nativeInfo: d.nativeInfo };
-		case "ExternalBody": return { kind: d.kind, inputTypes: mapInputs(d.inputTypes, t), outputType: mapType(d.outputType, t), externalName: d.externalName, targetPlatform: d.targetPlatform };
+		// The bindings are plain strings, so they are copied; only the fallback
+		// body carries attributes to rewrite.
+		case "ExternalBody": return { kind: d.kind, inputTypes: mapInputs(d.inputTypes, t), outputType: mapType(d.outputType, t), externals: d.externals, body: d.body === null ? null : mapValue(d.body, m) };
 		case "IncompleteBody": return { kind: d.kind, inputTypes: mapInputs(d.inputTypes, t), outputType: d.outputType === null ? null : mapType(d.outputType, t), incompleteness: mapIncompleteness(d.incompleteness, t), partialBody: d.partialBody === null ? null : mapValue(d.partialBody, m) };
 		default: { const _: never = d; return _; }
 	}

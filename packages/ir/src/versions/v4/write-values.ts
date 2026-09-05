@@ -12,6 +12,14 @@
 // list keeps its wrapper even though a bare array reads as one. A Record's
 // fields always go under "fields" (decision 0004), and none of decision
 // 0006's window spellings is ever written.
+//
+// Decision 0013: a DocumentLiteral's payload is written back exactly as it was
+// read, number lexemes and member order included, because the codec's value
+// tree is what the model carries.
+//
+// Decision 0008: an ExternalBody always writes its bindings as "externals",
+// never the window's top-level pair, and writes "body" only when there is a
+// fallback to write.
 import { type JsonValue, jsonNumber, jsonObject } from "../../codec/json/value.ts";
 import type {
 	InputType,
@@ -51,6 +59,8 @@ export function writeLiteral(l: Literal): JsonValue {
 		case "IntegerLiteral": return wrap("IntegerLiteral", jsonNumber(l.value.toString()));
 		case "FloatLiteral": return wrap("FloatLiteral", jsonNumber(floatText(l.value)));
 		case "DecimalLiteral": return wrap("DecimalLiteral", l.value);
+		// The payload is the document, so there is nothing to encode.
+		case "DocumentLiteral": return wrap("DocumentLiteral", l.value);
 	}
 }
 
@@ -203,9 +213,9 @@ export function writeValueDefinition(d: ValueDefinition<TA, VA>): JsonValue {
 		case "ExternalBody":
 			entries.push(
 				["outputType", writeType(d.outputType)],
-				["externalName", d.externalName],
-				["targetPlatform", d.targetPlatform],
+				["externals", d.externals.map((b) => jsonObject([["targetPlatform", b.targetPlatform], ["externalName", b.externalName]]))],
 			);
+			if (d.body !== null) entries.push(["body", writeValue(d.body)]);
 			break;
 		case "IncompleteBody":
 			// The only body whose output type the schema leaves optional.

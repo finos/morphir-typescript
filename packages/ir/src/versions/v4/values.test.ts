@@ -35,6 +35,16 @@ const rtPattern = (s: string, expected = s): void => {
 	expect(r.ok ? "" : r.error.message).toBe("");
 	if (r.ok) expect(writeJson(writePattern(r.value))).toBe(expected);
 };
+const rtLiteral = (s: string, expected = s): void => {
+	const r = readLiteral(newRoot(), json(s));
+	expect(r.ok ? "" : r.error.message).toBe("");
+	if (r.ok) expect(writeJson(writeLiteral(r.value))).toBe(expected);
+};
+const rtDefinition = (s: string, expected = s): void => {
+	const r = readValueDefinition(newRoot(), json(s));
+	expect(r.ok ? "" : r.error.message).toBe("");
+	if (r.ok) expect(writeJson(writeValueDefinition(r.value))).toBe(expected);
+};
 const readWrite = (text: string): string => {
 	const r = readNodeChecked("Value", text);
 	if (!r.ok) throw new Error(r.error.message);
@@ -62,6 +72,17 @@ describe("literals", () => {
 		}
 		const bad = readLiteral(newRoot(), json('{ "CharLiteral": "AB" }'));
 		expect(!bad.ok && bad.error.code).toBe("invalid_literal");
+	});
+	test("DocumentLiteral is the document verbatim (decision 0013)", () => {
+		rtLiteral('{ "DocumentLiteral": { "name": "Alice", "age": 30, "tags": ["admin", "user"], "metadata": null } }');
+		rtLiteral('{ "DocumentLiteral": { "id": 9007199254740993, "ratio": 0.10 } }');
+		rtLiteral('{ "DocumentLiteral": { "value": 1 } }');
+		rtLiteral('{ "DocumentLiteral": "just a string" }');
+		rtLiteral('{ "DocumentLiteral": null }');
+		rtLiteral('{ "DocumentLiteral": [1, 2] }');
+		const p = readNodeChecked("Pattern", '{ "LiteralPattern": { "DocumentLiteral": { "name": "Alice" } } }');
+		expect(!p.ok && p.error.code).toBe("invalid_literal");
+		expect(!p.ok && p.error.cursor).toBe("/LiteralPattern");
 	});
 	test("an unknown wrapper key is invalid_literal", () => {
 		const r = readLiteral(newRoot(), json('{ "BigIntLiteral": 42 }'));
@@ -292,17 +313,41 @@ describe("value definitions and specifications", () => {
 		const r = readValueDefinition(newRoot(), json(s));
 		expect(r.ok && writeJson(writeValueDefinition(r.value))).toBe(s);
 	});
-	test("native, external and incomplete bodies round-trip", () => {
+	test("native and incomplete bodies round-trip", () => {
 		for (const s of [
 			'{ "NativeBody": { "inputTypes": { "a": "morphir/SDK:basics#int" }, "outputType": "morphir/SDK:basics#int", "nativeInfo": { "hint": { "Arithmetic": {} } } } }',
-			'{ "ExternalBody": { "inputTypes": { "msg": "morphir/SDK:string#string" }, "outputType": "morphir/SDK:basics#unit", "externalName": "console.log", "targetPlatform": "javascript" } }',
 			'{ "IncompleteBody": { "inputTypes": {}, "outputType": "morphir/SDK:basics#int", "incompleteness": { "Draft": {} } } }',
 			'{ "IncompleteBody": { "inputTypes": {}, "incompleteness": { "Hole": { "reason": { "UnresolvedReference": { "target": "a/b:c#d" } } } }, "partialBody": { "Variable": "x" } } }',
 		]) {
-			const r = readValueDefinition(newRoot(), json(s));
-			expect(r.ok ? "" : r.error.message).toBe("");
-			if (r.ok) expect(writeJson(writeValueDefinition(r.value))).toBe(s);
+			rtDefinition(s);
 		}
+	});
+	test("ExternalBody carries bindings and an optional fallback body (decision 0008)", () => {
+		rtDefinition('{ "ExternalBody": { "inputTypes": { "msg": "morphir/SDK:string#string" }, "outputType": "morphir/SDK:basics#unit", "externals": [{ "targetPlatform": "javascript", "externalName": "console.log" }] } }');
+		rtDefinition('{ "ExternalBody": { "inputTypes": { "x": "a" }, "outputType": "a", "externals": [{ "targetPlatform": "erlang", "externalName": "math:abs" }, { "targetPlatform": "javascript", "externalName": "Math.abs" }], "body": { "Variable": "x" } } }');
+		const legacy = readNodeChecked("ValueDefinition", '{ "ExternalBody": { "inputTypes": {}, "outputType": "a", "externalName": "f", "targetPlatform": "p" } }');
+		expect(legacy.ok && legacy.value.warnings.map((w) => w.code)).toEqual(["legacy_spelling"]);
+		expect(legacy.ok && legacy.value.warnings.map((w) => w.cursor)).toEqual(["/ExternalBody"]);
+		expect(legacy.ok && writeNode(legacy.value.value)).toBe('{ "ExternalBody": { "inputTypes": {}, "outputType": "a", "externals": [{ "targetPlatform": "p", "externalName": "f" }] } }');
+		const empty = readNodeChecked("ValueDefinition", '{ "ExternalBody": { "inputTypes": {}, "outputType": "a", "externals": [] } }');
+		expect(!empty.ok && empty.error.code).toBe("invalid_type");
+		expect(!empty.ok && empty.error.cursor).toBe("/ExternalBody/externals");
+	});
+	test("the legacy pair may not be mixed with externals, and a binding names exactly two members", () => {
+		const mixed = readNodeChecked("ValueDefinition", '{ "ExternalBody": { "inputTypes": {}, "outputType": "a", "externals": [{ "targetPlatform": "p", "externalName": "f" }], "externalName": "f" } }');
+		expect(!mixed.ok && mixed.error.code).toBe("unknown_member");
+		expect(!mixed.ok && mixed.error.cursor).toBe("/ExternalBody/externalName");
+		const extra = readNodeChecked("ValueDefinition", '{ "ExternalBody": { "inputTypes": {}, "outputType": "a", "externals": [{ "targetPlatform": "p", "externalName": "f", "note": "x" }] } }');
+		expect(!extra.ok && extra.error.code).toBe("unknown_member");
+		expect(!extra.ok && extra.error.cursor).toBe("/ExternalBody/externals/0/note");
+		// Neither the list nor the pair: the canonical member is the one named.
+		const none = readNodeChecked("ValueDefinition", '{ "ExternalBody": { "inputTypes": {}, "outputType": "a" } }');
+		expect(!none.ok && none.error.code).toBe("missing_member");
+		expect(!none.ok && none.error.message).toBe('missing member "externals"');
+		// Half the pair names the half that is missing, which is what an author has to add.
+		const half = readNodeChecked("ValueDefinition", '{ "ExternalBody": { "inputTypes": {}, "outputType": "a", "externalName": "f" } }');
+		expect(!half.ok && half.error.code).toBe("missing_member");
+		expect(!half.ok && half.error.message).toBe('missing member "targetPlatform"');
 	});
 	test("inputTypes accepts the legacy pair array", () => {
 		const r = readValueDefinition(newRoot(), json('{ "ExpressionBody": { "inputTypes": [["x", "morphir/SDK:basics#int"]], "outputType": "morphir/SDK:basics#int", "body": { "Variable": "x" } } }'));

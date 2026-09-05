@@ -2,6 +2,7 @@
 //
 // Literals, patterns, value expressions, value specifications and value
 // definitions, generic over type attributes TA and value attributes VA.
+import type { Json } from "./attributes.ts";
 import type { FQName, Name } from "./names.ts";
 import type { Annotation, HoleReason, Incompleteness, Type } from "./types.ts";
 
@@ -11,7 +12,11 @@ export type Literal =
 	| { readonly kind: "StringLiteral"; readonly value: string }
 	| { readonly kind: "IntegerLiteral"; readonly value: bigint }
 	| { readonly kind: "FloatLiteral"; readonly value: number }
-	| { readonly kind: "DecimalLiteral"; readonly value: string };
+	| { readonly kind: "DecimalLiteral"; readonly value: string }
+	// Decision 0013: a schema-less JSON-like tree carried verbatim, typed
+	// morphir/SDK:document#document. Json is the codec's own value tree, so a
+	// number keeps the lexeme it was spelled with and an object keeps its order.
+	| { readonly kind: "DocumentLiteral"; readonly value: Json };
 
 export type Pattern<VA> =
 	| { readonly kind: "WildcardPattern"; readonly attributes: VA }
@@ -55,6 +60,10 @@ export type Value<TA, VA> =
 
 export interface InputType<TA> { readonly name: Name; readonly type: Type<TA> }
 
+// Decision 0008: an external definition names one binding per target platform,
+// so a value that is external on two platforms is one definition, not two.
+export interface ExternalBinding { readonly targetPlatform: string; readonly externalName: string }
+
 export interface ValueSpecification<TA, VA> {
 	readonly annotations: readonly Annotation<TA, VA>[];
 	readonly inputs: readonly InputType<TA>[];
@@ -64,5 +73,7 @@ export interface ValueSpecification<TA, VA> {
 export type ValueDefinition<TA, VA> =
 	| { readonly kind: "ExpressionBody"; readonly inputTypes: readonly InputType<TA>[]; readonly outputType: Type<TA>; readonly body: Value<TA, VA> }
 	| { readonly kind: "NativeBody"; readonly inputTypes: readonly InputType<TA>[]; readonly outputType: Type<TA>; readonly nativeInfo: NativeInfo }
-	| { readonly kind: "ExternalBody"; readonly inputTypes: readonly InputType<TA>[]; readonly outputType: Type<TA>; readonly externalName: string; readonly targetPlatform: string }
+	// Decision 0008: the bindings are a non-empty list, and "body" is the
+	// fallback a platform without a binding falls through to.
+	| { readonly kind: "ExternalBody"; readonly inputTypes: readonly InputType<TA>[]; readonly outputType: Type<TA>; readonly externals: readonly ExternalBinding[]; readonly body: Value<TA, VA> | null }
 	| { readonly kind: "IncompleteBody"; readonly inputTypes: readonly InputType<TA>[]; readonly outputType: Type<TA> | null; readonly incompleteness: Incompleteness<TA>; readonly partialBody: Value<TA, VA> | null };

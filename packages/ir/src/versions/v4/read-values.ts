@@ -20,7 +20,14 @@
 // directly under the wrapper instead of under "fields" (decision 0004).
 //
 // Decision 0008: Native and External are definition bodies, not value
-// expressions, so a reader refuses them here as unknown nodes.
+// expressions, so a reader refuses them here as unknown nodes, and an
+// ExternalBody carries a list of per-target bindings plus an optional fallback
+// body — the older top-level "externalName"/"targetPlatform" pair is the
+// window's single-binding spelling and reads as a one-entry list.
+//
+// Decision 0013: DocumentLiteral is the seventh literal and its payload is the
+// document itself, so it is the one literal whose payload is never unwrapped,
+// and the one literal a LiteralPattern refuses.
 import { type Ctx, at, describeJson, expectArray, expectObject, expectString, fail, guardDepth, members, optionalString, singleKey, warn, windowed } from "../../codec/json/cursor.ts";
 import { type JsonObject, type JsonValue, isInteger, isNumber, isObject } from "../../codec/json/value.ts";
 import type { Diagnostic } from "../../model/diagnostic.ts";
@@ -28,6 +35,7 @@ import type { Name } from "../../model/names.ts";
 import { type Result, ok } from "../../model/result.ts";
 import type { Type } from "../../model/types.ts";
 import type {
+	ExternalBinding,
 	InputType,
 	LetBinding,
 	Literal,
@@ -147,6 +155,11 @@ export function readLiteral(ctx: Ctx, v: JsonValue): Result<Literal, Diagnostic>
 	}
 	const [key, raw] = first;
 	const inner = at(ctx, key);
+	// Decision 0013: a document literal's payload is the document itself, so it
+	// is taken before literalPayload gets a chance to unwrap it — otherwise
+	// { "DocumentLiteral": { "value": 1 } } would read as the number 1 rather
+	// than as the one-member document it is.
+	if (key === "DocumentLiteral") return ok({ kind: "DocumentLiteral", value: raw });
 	const unwrapped = literalPayload(inner, raw);
 	if (!unwrapped.ok) return unwrapped;
 	const p = unwrapped.value;
@@ -260,7 +273,13 @@ export function readPattern(ctx: Ctx, v: JsonValue): Result<Pattern<VA>, Diagnos
 		}
 		case "LiteralPattern": {
 			const l = readLiteralPayload(inner, payload);
-			return l.ok ? ok({ kind: "LiteralPattern", attributes: l.value.a, literal: l.value.literal }) : l;
+			if (!l.ok) return l;
+			// Decision 0013: a document has no equality a pattern could match on, so
+			// it is a literal everywhere except here.
+			if (l.value.literal.kind === "DocumentLiteral") {
+				return fail(inner, "invalid_literal", "a document cannot be pattern matched (decision 0013)", payload);
+			}
+			return ok({ kind: "LiteralPattern", attributes: l.value.a, literal: l.value.literal });
 		}
 		default:
 			return fail(ctx, "unknown_node", `unknown pattern node "${key}"`, v);
@@ -607,9 +626,15 @@ export function readValueDefinition(ctx: Ctx, v: JsonValue): Result<ValueDefinit
 		: key === "NativeBody"
 			? ["inputTypes", "outputType", "nativeInfo"]
 			: key === "ExternalBody"
-				? ["inputTypes", "outputType", "externalName", "targetPlatform"]
+				// Decision 0008: which of "externals" and the window's top-level pair
+				// has to be there is settled by readExternals, not by this list.
+				? ["inputTypes", "outputType"]
 				: ["inputTypes", "incompleteness"];
-	const optional = key === "IncompleteBody" ? ["outputType", "partialBody"] : [];
+	const optional = key === "IncompleteBody"
+		? ["outputType", "partialBody"]
+		: key === "ExternalBody"
+			? ["externals", "externalName", "targetPlatform", "body"]
+			: [];
 	const m = members(inner, body.value, required, optional);
 	if (!m.ok) return m;
 	const inputTypes = readInputTypes(at(inner, "inputTypes"), m.value.get("inputTypes") as JsonValue);
@@ -647,17 +672,78 @@ export function readValueDefinition(ctx: Ctx, v: JsonValue): Result<ValueDefinit
 			? ok({ kind: "NativeBody", inputTypes: inputTypes.value, outputType: outputType.value, nativeInfo: nativeInfo.value })
 			: nativeInfo;
 	}
-	const externalName = expectString(at(inner, "externalName"), m.value.get("externalName") as JsonValue);
-	if (!externalName.ok) return externalName;
-	const targetPlatform = expectString(at(inner, "targetPlatform"), m.value.get("targetPlatform") as JsonValue);
-	if (!targetPlatform.ok) return targetPlatform;
+	const externals = readExternals(inner, m.value, payload);
+	if (!externals.ok) return externals;
+	// Decision 0008: the fallback body is what a platform with no binding of its
+	// own falls through to, so it is optional and written only when it is there.
+	let fallback: Value<TA, VA> | null = null;
+	const rawBody = m.value.get("body");
+	if (rawBody !== undefined) {
+		const b = readValue(at(inner, "body"), rawBody);
+		if (!b.ok) return b;
+		fallback = b.value;
+	}
 	return ok({
 		kind: "ExternalBody",
 		inputTypes: inputTypes.value,
 		outputType: outputType.value,
-		externalName: externalName.value,
-		targetPlatform: targetPlatform.value,
+		externals: externals.value,
+		body: fallback,
 	});
+}
+
+function readExternalBinding(ctx: Ctx, v: JsonValue): Result<ExternalBinding, Diagnostic> {
+	const o = expectObject(ctx, v);
+	if (!o.ok) return o;
+	const m = members(ctx, o.value, ["targetPlatform", "externalName"], []);
+	if (!m.ok) return m;
+	const targetPlatform = expectString(at(ctx, "targetPlatform"), m.value.get("targetPlatform") as JsonValue);
+	if (!targetPlatform.ok) return targetPlatform;
+	const externalName = expectString(at(ctx, "externalName"), m.value.get("externalName") as JsonValue);
+	if (!externalName.ok) return externalName;
+	return ok({ targetPlatform: targetPlatform.value, externalName: externalName.value });
+}
+
+// Decision 0008: the canonical spelling is a non-empty "externals" list, one
+// entry per target platform. Decision 0006's window keeps the older top-level
+// "externalName"/"targetPlatform" pair, which reads as a one-entry list with a
+// single warning on the body itself — one warning rather than one per member,
+// because it is the pair together that is the legacy spelling. The two
+// spellings may not be mixed: a pair beside the list is unknown_member at the
+// key the author can delete, which is the same rule windowed() follows.
+function readExternals(ctx: Ctx, m: ReadonlyMap<string, JsonValue>, near: JsonValue): Result<readonly ExternalBinding[], Diagnostic> {
+	const raw = m.get("externals");
+	if (raw !== undefined) {
+		for (const legacy of ["externalName", "targetPlatform"]) {
+			if (m.has(legacy)) {
+				return fail(at(ctx, legacy), "unknown_member", `"${legacy}" is the legacy single-binding spelling; write only "externals"`, near);
+			}
+		}
+		const list = at(ctx, "externals");
+		const a = expectArray(list, raw);
+		if (!a.ok) return a;
+		if (a.value.length === 0) return fail(list, "invalid_type", "externals needs at least one binding", raw);
+		const out: ExternalBinding[] = [];
+		for (let i = 0; i < a.value.length; i += 1) {
+			const one = readExternalBinding(at(list, i), a.value[i] as JsonValue);
+			if (!one.ok) return one;
+			out.push(one.value);
+		}
+		return ok(out);
+	}
+	const rawName = m.get("externalName");
+	const rawPlatform = m.get("targetPlatform");
+	// Half a pair is a pair with one member missing, so the diagnostic names the
+	// half the author still has to write rather than the list they did not use.
+	if (rawName === undefined && rawPlatform === undefined) return fail(ctx, "missing_member", 'missing member "externals"', near);
+	if (rawName === undefined) return fail(ctx, "missing_member", 'missing member "externalName"', near);
+	if (rawPlatform === undefined) return fail(ctx, "missing_member", 'missing member "targetPlatform"', near);
+	const externalName = expectString(at(ctx, "externalName"), rawName);
+	if (!externalName.ok) return externalName;
+	const targetPlatform = expectString(at(ctx, "targetPlatform"), rawPlatform);
+	if (!targetPlatform.ok) return targetPlatform;
+	warn(ctx, 'top-level "externalName" and "targetPlatform" are the legacy single-binding spelling; write "externals": [{ .. }]', near);
+	return ok([{ targetPlatform: targetPlatform.value, externalName: externalName.value }]);
 }
 
 // A specification's "doc" belongs to the Documented wrapper in modules, so the
