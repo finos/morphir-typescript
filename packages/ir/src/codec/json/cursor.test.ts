@@ -17,15 +17,27 @@ describe("warnings", () => {
 	test("windowed prefers canonical, warns on legacy, refuses both, and reports missing", () => {
 		const obj = (text: string): JsonObject => { const p = parseJson(text); if (!p.ok || !isObject(p.value)) throw new Error("not an object"); return p.value; };
 		const both = obj('{ "then": 1, "thenBranch": 2 }');
+		const canonical = obj('{ "then": 1 }');
 		const legacy = obj('{ "thenBranch": 2 }');
 		const none = obj('{}');
 		const m = (v: JsonObject) => v.members;
 		let ctx = newRoot();
-		expect(windowed(ctx, m(both), "then", "thenBranch", both).ok).toBe(false);
+		const dup = windowed(ctx, m(both), "then", "thenBranch", both);
+		expect(dup.ok).toBe(false);
+		// The error names the spelling the document should drop, not the one it
+		// should keep, so the cursor points at the legacy key.
+		expect(!dup.ok && dup.error.code).toBe("unknown_member");
+		expect(!dup.ok && dup.error.cursor).toBe("/thenBranch");
+		ctx = newRoot();
+		const good = windowed(ctx, m(canonical), "then", "thenBranch", canonical);
+		expect(good.ok && good.value).toBe(m(canonical).get("then") ?? null);
+		expect(ctx.warnings).toEqual([]);
 		ctx = newRoot();
 		const r = windowed(ctx, m(legacy), "then", "thenBranch", legacy);
 		expect(r.ok).toBe(true);
+		expect(r.ok && r.value).toBe(m(legacy).get("thenBranch") ?? null);
 		expect(ctx.warnings[0]?.code).toBe("legacy_spelling");
+		expect(ctx.warnings[0]?.cursor).toBe("/thenBranch");
 		expect(ctx.warnings[0]?.message).toContain('"then"');
 		ctx = newRoot();
 		const miss = windowed(ctx, m(none), "then", "thenBranch", none);

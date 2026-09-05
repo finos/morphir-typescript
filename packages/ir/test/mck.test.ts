@@ -47,11 +47,17 @@ function runCase(c: KitCase, node: NodeKind): void {
 			// whatever the fence author wrote, so the codes are compared as plain
 			// strings and a code the codec never emits simply never matches.
 			const codes: readonly string[] = r.value.warnings.map((w) => w.code);
+			const seen = r.value.warnings.map((w) => `${w.code} at ${w.cursor}`).join("; ");
 			const wanted = f.info.keys["warning"];
 			if (wanted === undefined) {
-				expect(codes.length === 0 ? "" : `${f.info.role} fence ${f.index} warned unexpectedly: ${r.value.warnings.map((w) => `${w.code} at ${w.cursor}`).join("; ")}`).toBe("");
+				expect(codes.length === 0 ? "" : `${f.info.role} fence ${f.index} warned unexpectedly: ${seen}`).toBe("");
 			} else {
-				expect(codes.includes(wanted) ? "" : `${f.info.role} fence ${f.index} did not warn ${wanted} (got ${codes.join(", ") || "nothing"})`).toBe("");
+				// Every warning must be the one the fence names, and there must be at
+				// least one — not exactly one: a single fence can spell two members
+				// the legacy way (values-0005 has both thenBranch and elseBranch) and
+				// each of them warns on its own cursor.
+				const matched = codes.length > 0 && codes.every((c) => c === wanted);
+				expect(matched ? "" : `${f.info.role} fence ${f.index} should have warned ${wanted} and nothing else (got ${seen || "nothing"})`).toBe("");
 			}
 			encodings.push(writeNode(c.compare === "attributes" ? r.value.value : stripNode(r.value.value)));
 			checked += 1;

@@ -134,7 +134,9 @@ export function readNodeChecked(node: NodeKind, text: string): Result<Checked<No
 	const v = parsed.value;
 	const ctx = newRoot();
 	const r = readNodeValue(node, ctx, v);
-	return r.ok ? ok({ value: r.value, warnings: ctx.warnings }) : r;
+	// Copied, not aliased: ctx.warnings stays mutable for the readers, and the
+	// Checked a caller holds is the list as it stood when the read finished.
+	return r.ok ? ok({ value: r.value, warnings: [...ctx.warnings] }) : r;
 }
 
 // Drops the warnings; the value and the diagnostics are unchanged.
@@ -143,6 +145,9 @@ export function readNode(node: NodeKind, text: string): Result<NodeValue, Diagno
 	return r.ok ? ok(r.value.value) : r;
 }
 
+// The dispatch itself, split out so the context is created once by the caller
+// rather than per case: every branch of an exhaustive switch returns, so there
+// is no place inside one to build the ctx and then wrap the result.
 function readNodeValue(node: NodeKind, ctx: Ctx, v: JsonValue): Result<NodeValue, Diagnostic> {
 	switch (node) {
 		case "Name": return nodeOf("Name", readName(ctx, v));
@@ -265,7 +270,7 @@ export const json = {
 		if (!parsed.ok) return parsed;
 		const ctx = newRoot();
 		const r = readIRFile(parsed.value, ctx);
-		return r.ok ? ok({ value: r.value, warnings: ctx.warnings }) : r;
+		return r.ok ? ok({ value: r.value, warnings: [...ctx.warnings] }) : r;
 	},
 	write(file: IRFile): string {
 		return writeJson(writeIRFile(file));

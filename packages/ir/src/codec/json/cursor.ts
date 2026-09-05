@@ -40,7 +40,7 @@ export function warn(ctx: Ctx, message: string, near?: JsonValue): void {
 export function windowed(ctx: Ctx, m: ReadonlyMap<string, JsonValue>, canonical: string, legacy: string, near: JsonValue): Result<JsonValue, Diagnostic> {
 	const c = m.get(canonical);
 	const l = m.get(legacy);
-	if (c !== undefined && l !== undefined) return fail(at(ctx, legacy), "unknown_member", `"${legacy}" duplicates "${canonical}"`, near);
+	if (c !== undefined && l !== undefined) return fail(at(ctx, legacy), "unknown_member", `"${legacy}" is the legacy spelling of "${canonical}"; write only one`, near);
 	if (c !== undefined) return ok(c);
 	if (l !== undefined) { warn(at(ctx, legacy), `"${legacy}" is the legacy spelling of "${canonical}"`, near); return ok(l); }
 	return fail(ctx, "missing_member", `missing member "${canonical}"`, near);
