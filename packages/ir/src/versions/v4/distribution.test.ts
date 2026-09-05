@@ -45,7 +45,7 @@ describe("json.read / json.write", () => {
 	});
 	test("a documented value specification reads flat or nested and writes flat", () => {
 		const spec = '"inputs": {}, "output": "morphir/SDK:string#string"';
-		const canonical = '{ "types": {}, "values": { "greet": { "output": "morphir/SDK:string#string", "doc": "Hi" } } }';
+		const canonical = '{ "types": {}, "values": { "greet": { "doc": "Hi", "output": "morphir/SDK:string#string" } } }';
 		const flat = `{ "types": {}, "values": { "greet": { ${spec}, "doc": "Hi" } } }`;
 		const nested = `{ "types": {}, "values": { "greet": { "doc": "Hi", "value": { ${spec} } } } }`;
 		const models = [flat, nested].map((s) => {
