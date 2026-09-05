@@ -4,7 +4,7 @@
 import { describe, expect, test } from "bun:test";
 import { newRoot } from "../../codec/json/cursor.ts";
 import { parseJson, writeJson } from "../../codec/json/value.ts";
-import { readNodeChecked, writeNode } from "./index.ts";
+import { readNodeChecked, stripNode, writeNode } from "./index.ts";
 import { readType } from "./read-types.ts";
 import {
 	readLiteral,
@@ -83,6 +83,14 @@ describe("literals", () => {
 		const p = readNodeChecked("Pattern", '{ "LiteralPattern": { "DocumentLiteral": { "name": "Alice" } } }');
 		expect(!p.ok && p.error.code).toBe("invalid_literal");
 		expect(!p.ok && p.error.cursor).toBe("/LiteralPattern");
+	});
+	test("a document's members are data, so stripping attributes cannot touch them", () => {
+		// "attributes" and "literal" inside a document are member names, not the
+		// codec's own slots, so the whole tree survives an attribute rewrite.
+		const text = '{ "Literal": { "DocumentLiteral": { "attributes": 1, "literal": 2 } } }';
+		const r = readNodeChecked("Value", text);
+		expect(r.ok ? "" : r.error.message).toBe("");
+		if (r.ok) expect(writeNode(stripNode(r.value.value))).toBe(text);
 	});
 	test("an unknown wrapper key is invalid_literal", () => {
 		const r = readLiteral(newRoot(), json('{ "BigIntLiteral": 42 }'));
@@ -348,6 +356,12 @@ describe("value definitions and specifications", () => {
 		const half = readNodeChecked("ValueDefinition", '{ "ExternalBody": { "inputTypes": {}, "outputType": "a", "externalName": "f" } }');
 		expect(!half.ok && half.error.code).toBe("missing_member");
 		expect(!half.ok && half.error.message).toBe('missing member "targetPlatform"');
+	});
+	test("a target platform may be bound only once (decision 0008)", () => {
+		const dup = readNodeChecked("ValueDefinition", '{ "ExternalBody": { "inputTypes": { "x": "morphir/SDK:basics#int" }, "outputType": "morphir/SDK:basics#int", "externals": [{ "targetPlatform": "javascript", "externalName": "a" }, { "targetPlatform": "javascript", "externalName": "b" }] } }');
+		expect(!dup.ok && dup.error.code).toBe("duplicate_member");
+		// The second occurrence, because that is the binding an author deletes.
+		expect(!dup.ok && dup.error.cursor).toBe("/ExternalBody/externals/1/targetPlatform");
 	});
 	test("inputTypes accepts the legacy pair array", () => {
 		const r = readValueDefinition(newRoot(), json('{ "ExpressionBody": { "inputTypes": [["x", "morphir/SDK:basics#int"]], "outputType": "morphir/SDK:basics#int", "body": { "Variable": "x" } } }'));

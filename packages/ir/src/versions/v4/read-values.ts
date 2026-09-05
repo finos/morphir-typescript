@@ -21,9 +21,10 @@
 //
 // Decision 0008: Native and External are definition bodies, not value
 // expressions, so a reader refuses them here as unknown nodes, and an
-// ExternalBody carries a list of per-target bindings plus an optional fallback
-// body — the older top-level "externalName"/"targetPlatform" pair is the
-// window's single-binding spelling and reads as a one-entry list.
+// ExternalBody carries a non-empty list of per-target bindings, one per target
+// platform, plus an optional fallback body — the older top-level
+// "externalName"/"targetPlatform" pair is the window's single-binding spelling
+// and reads as a one-entry list.
 //
 // Decision 0013: DocumentLiteral is the seventh literal and its payload is the
 // document itself, so it is the one literal whose payload is never unwrapped,
@@ -704,8 +705,11 @@ function readExternalBinding(ctx: Ctx, v: JsonValue): Result<ExternalBinding, Di
 	return ok({ targetPlatform: targetPlatform.value, externalName: externalName.value });
 }
 
-// Decision 0008: the canonical spelling is a non-empty "externals" list, one
-// entry per target platform. Decision 0006's window keeps the older top-level
+// Decision 0008: the canonical spelling is a non-empty "externals" list whose
+// targetPlatform values are unique — a platform has one binding or none, so a
+// second binding for a platform is a duplicate rather than an override, and it
+// is reported at the second one because that is the entry to delete.
+// Decision 0006's window keeps the older top-level
 // "externalName"/"targetPlatform" pair, which reads as a one-entry list with a
 // single warning on the body itself — one warning rather than one per member,
 // because it is the pair together that is the legacy spelling. The two
@@ -724,9 +728,15 @@ function readExternals(ctx: Ctx, m: ReadonlyMap<string, JsonValue>, near: JsonVa
 		if (!a.ok) return a;
 		if (a.value.length === 0) return fail(list, "invalid_type", "externals needs at least one binding", raw);
 		const out: ExternalBinding[] = [];
+		const seen = new Set<string>();
 		for (let i = 0; i < a.value.length; i += 1) {
 			const one = readExternalBinding(at(list, i), a.value[i] as JsonValue);
 			if (!one.ok) return one;
+			const platform = one.value.targetPlatform;
+			if (seen.has(platform)) {
+				return fail(at(at(list, i), "targetPlatform"), "duplicate_member", `duplicate binding for target "${platform}"`, a.value[i] as JsonValue);
+			}
+			seen.add(platform);
 			out.push(one.value);
 		}
 		return ok(out);
