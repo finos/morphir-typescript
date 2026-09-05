@@ -13,11 +13,11 @@ export type Type<A> =
 	| { readonly kind: "Tuple"; readonly attributes: A; readonly elements: readonly Type<A>[] }
 	| { readonly kind: "Record"; readonly attributes: A; readonly fields: readonly Field<A>[] }
 	| { readonly kind: "ExtensibleRecord"; readonly attributes: A; readonly variable: Name; readonly fields: readonly Field<A>[] }
-	| { readonly kind: "Function"; readonly attributes: A; readonly argumentType: Type<A>; readonly returnType: Type<A> }
+	| { readonly kind: "Function"; readonly attributes: A; readonly parameterType: Type<A>; readonly returnType: Type<A> }
 	| { readonly kind: "Unit"; readonly attributes: A };
 
-export interface ConstructorArg<A> { readonly name: Name; readonly type: Type<A> }
-export interface Constructor<A> { readonly name: Name; readonly args: readonly ConstructorArg<A>[] }
+export interface ConstructorParameter<A> { readonly name: Name; readonly type: Type<A> }
+export interface Constructor<A> { readonly name: Name; readonly parameters: readonly ConstructorParameter<A>[] }
 
 export type AnnotationArgument<TA, VA> =
 	| { readonly kind: "Positional"; readonly value: Value<TA, VA> }

@@ -7,14 +7,13 @@
 // spellings: the tag form { "Public": payload }, the legacy { "access",
 // "value" } pair, and the flattened form that leaves the payload's own members
 // beside "access" (kit definitions-0001, bead morphir-j442). The tag form is
-// canonical. A payload may carry its "doc" beside the variant wrapper or in a
-// nested { "doc", "value" } wrapper; either yields a Documented (kit
-// definitions-0006 is pending, so the doc placement is provisional and follows
-// document-tree-0003).
+// canonical. A payload carries its "doc" flattened beside the variant wrapper;
+// the nested { "doc", "value" } wrapper is accepted for the window of decision
+// 0006 and warns legacy_spelling (kit definitions-0006, decision 0010).
 //
 // This is also the one place access is read: read-types.ts calls in for the
 // legacy CustomTypeDefinition array rather than keeping a second copy.
-import { type Ctx, at, expectObject, expectString, fail, members, optionalString, singleKey } from "../../codec/json/cursor.ts";
+import { type Ctx, at, expectObject, expectString, fail, members, optionalString, singleKey, warn } from "../../codec/json/cursor.ts";
 import { type JsonValue, isObject, jsonObject } from "../../codec/json/value.ts";
 import type { Diagnostic } from "../../model/diagnostic.ts";
 import type { AccessControlled, Documented, ModuleDefinition, ModuleSpecification, Named } from "../../model/modules.ts";
@@ -82,7 +81,9 @@ export function readAccessControlled<T>(ctx: Ctx, v: JsonValue, read: Read<T>): 
 
 // "doc" beside the variant wrapper and the nested { "doc", "value" } wrapper
 // mean the same Documented. Neither "doc" nor "value" is a variant key, so
-// either member settles which spelling is in front of us.
+// either member settles which spelling is in front of us. The flattened form
+// is canonical (decision 0010); the nested wrapper is accepted for the window
+// of decision 0006 and warns legacy_spelling.
 export function readDocumented<T>(ctx: Ctx, v: JsonValue, read: Read<T>): Result<Documented<T>, Diagnostic> {
 	if (isObject(v) && (v.members.has("doc") || v.members.has("value"))) {
 		let doc: string | null = null;
@@ -97,6 +98,10 @@ export function readDocumented<T>(ctx: Ctx, v: JsonValue, read: Read<T>): Result
 			}
 		}
 		if (rest.length === 0) return fail(ctx, "missing_member", "a documented entry needs a value", v);
+		const only = rest[0];
+		if (rest.length === 1 && only !== undefined && only[0] === "value") {
+			warn(ctx, 'the nested { "doc", "value" } wrapper is the legacy spelling; put "doc" beside the variant', v);
+		}
 		const [inner, payload] = payloadOf(ctx, rest);
 		const value = read(inner, payload);
 		return value.ok ? ok({ doc, value: value.value }) : value;
@@ -165,17 +170,18 @@ function readDocumentedTypeSpecification(ctx: Ctx, v: JsonValue): Result<Documen
 	return readDocumented(ctx, v, readTypeSpecification);
 }
 
-// A value specification carries its own doc flat, beside its members, but the
-// document tree also nests it under a { "doc", "value" } wrapper the way every
-// other documented entry is nested. "value" is not a specification member, so a
-// member set of exactly {value} or {doc, value} is the wrapper and anything
-// else is the flat spelling. Both yield the same Documented, and the writer
-// emits the flat one.
+// Decision 0010: a value specification's doc is flattened first beside its own
+// members ("inputs", "output"), not wrapped. "value" is not a specification
+// member, so a member set of exactly {value} or {doc, value} is the legacy
+// nested wrapper from the window of decision 0006 (kit definitions-0010) and
+// warns; anything else is the flat, canonical spelling. Both read to the same
+// Documented, and the writer emits the flat one with doc first.
 function readDocumentedValueSpecification(ctx: Ctx, v: JsonValue): Result<Documented<ValueSpecification<TA, VA>>, Diagnostic> {
 	if (isObject(v)) {
 		const wrapped = v.members.get("value");
 		const nested = v.members.size === 1 || (v.members.size === 2 && v.members.has("doc"));
 		if (wrapped !== undefined && nested) {
+			warn(ctx, 'the nested { "doc", "value" } wrapper is the legacy spelling; put "doc" first beside "inputs" and "output"', v);
 			const doc = optionalString(ctx, v.members, "doc");
 			if (!doc.ok) return doc;
 			const spec = readValueSpecification(at(ctx, "value"), wrapped);

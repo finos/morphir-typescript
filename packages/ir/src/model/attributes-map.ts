@@ -27,14 +27,14 @@ export function mapType<TA, TB>(t: Type<TA>, f: (a: TA) => TB): Type<TB> {
 		case "Tuple": return { kind: "Tuple", attributes: f(t.attributes), elements: t.elements.map((e) => mapType(e, f)) };
 		case "Record": return { kind: "Record", attributes: f(t.attributes), fields: t.fields.map((x) => ({ name: x.name, type: mapType(x.type, f) })) };
 		case "ExtensibleRecord": return { kind: "ExtensibleRecord", attributes: f(t.attributes), variable: t.variable, fields: t.fields.map((x) => ({ name: x.name, type: mapType(x.type, f) })) };
-		case "Function": return { kind: "Function", attributes: f(t.attributes), argumentType: mapType(t.argumentType, f), returnType: mapType(t.returnType, f) };
+		case "Function": return { kind: "Function", attributes: f(t.attributes), parameterType: mapType(t.parameterType, f), returnType: mapType(t.returnType, f) };
 		case "Unit": return { kind: "Unit", attributes: f(t.attributes) };
 		default: { const _: never = t; return _; }
 	}
 }
 
 function mapConstructors<TA, TB>(cs: readonly Constructor<TA>[], f: (a: TA) => TB): readonly Constructor<TB>[] {
-	return cs.map((c) => ({ name: c.name, args: c.args.map((a) => ({ name: a.name, type: mapType(a.type, f) })) }));
+	return cs.map((c) => ({ name: c.name, parameters: c.parameters.map((p) => ({ name: p.name, type: mapType(p.type, f) })) }));
 }
 
 function mapIncompleteness<TA, TB>(i: Incompleteness<TA>, f: (a: TA) => TB): Incompleteness<TB> {
@@ -79,8 +79,6 @@ export function mapValue<TA, VA, TB, VB>(v: Value<TA, VA>, m: AttributeMapper<TA
 		case "UpdateRecord": return { kind: v.kind, attributes: va, target: val(v.target), fields: v.fields.map((x) => ({ name: x.name, value: val(x.value) })) };
 		case "Unit": return { kind: v.kind, attributes: va };
 		case "Hole": return { kind: v.kind, attributes: va, reason: v.reason, expectedType: v.expectedType === null ? null : mapType(v.expectedType, m.onType) };
-		case "Native": return { kind: v.kind, attributes: va, fqname: v.fqname, nativeInfo: v.nativeInfo };
-		case "External": return { kind: v.kind, attributes: va, externalName: v.externalName, targetPlatform: v.targetPlatform };
 		default: { const _: never = v; return _; }
 	}
 }
@@ -94,7 +92,9 @@ export function mapValueDefinition<TA, VA, TB, VB>(d: ValueDefinition<TA, VA>, m
 	switch (d.kind) {
 		case "ExpressionBody": return { kind: d.kind, inputTypes: mapInputs(d.inputTypes, t), outputType: mapType(d.outputType, t), body: mapValue(d.body, m) };
 		case "NativeBody": return { kind: d.kind, inputTypes: mapInputs(d.inputTypes, t), outputType: mapType(d.outputType, t), nativeInfo: d.nativeInfo };
-		case "ExternalBody": return { kind: d.kind, inputTypes: mapInputs(d.inputTypes, t), outputType: mapType(d.outputType, t), externalName: d.externalName, targetPlatform: d.targetPlatform };
+		// The bindings are plain strings, so they are copied; only the fallback
+		// body carries attributes to rewrite.
+		case "ExternalBody": return { kind: d.kind, inputTypes: mapInputs(d.inputTypes, t), outputType: mapType(d.outputType, t), externals: d.externals, body: d.body === null ? null : mapValue(d.body, m) };
 		case "IncompleteBody": return { kind: d.kind, inputTypes: mapInputs(d.inputTypes, t), outputType: d.outputType === null ? null : mapType(d.outputType, t), incompleteness: mapIncompleteness(d.incompleteness, t), partialBody: d.partialBody === null ? null : mapValue(d.partialBody, m) };
 		default: { const _: never = d; return _; }
 	}

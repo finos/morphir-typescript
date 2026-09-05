@@ -4,9 +4,9 @@
 // and specifications. There is exactly one v4 spelling for every node, so
 // reading any accepted spelling and writing it back normalizes it: the three
 // access spellings all come out as the tag form { "Public": payload } (kit
-// definitions-0001), and a doc comes out first inside that payload, beside the
-// variant wrapper (kit document-tree-0003; definitions-0006 is still pending,
-// so this placement is provisional).
+// definitions-0001), and a doc comes out first — inside the payload, beside
+// the variant wrapper, or beside a value specification's own members when
+// there is no wrapper (kit definitions-0006, definitions-0010; decision 0010).
 //
 // A module always writes both "types" and "values", empty or not, and its own
 // "doc" last; a module specification writes "annotations" first when it has
@@ -48,10 +48,11 @@ export function writeDocumentedTypeSpecification(d: Documented<TypeSpecification
 }
 
 // A value specification is not a variant wrapper: it is the specification's own
-// members, so its doc joins them at the end rather than heading a payload.
+// members ("inputs", "output"), but decision 0010 still puts "doc" first among
+// them, ahead of "inputs" and "output".
 export function writeDocumentedValueSpecification(d: Documented<ValueSpecification<TA, VA>>): JsonValue {
 	const spec = writeValueSpecification(d.value);
-	return d.doc === null || !isObject(spec) ? spec : jsonObject([...spec.members, ["doc", d.doc]]);
+	return d.doc === null || !isObject(spec) ? spec : jsonObject([["doc", d.doc], ...spec.members]);
 }
 
 export function writeAccessControlledTypeDefinition(a: AccessControlled<Documented<TypeDefinition<TA>>>): JsonValue {

@@ -1,16 +1,24 @@
 // packages/ir/src/codec/json/cursor.ts
 //
-// Reader context: a cursor path for diagnostics and the small set of
-// structural checks every v4 reader uses. Unknown members are checked before
-// missing ones so a renamed member is reported as unknown_member, which is
-// what the kit's rejected fences expect.
+// Reader context: a cursor path for diagnostics, the warning channel a read
+// collects legacy spellings on, and the small set of structural checks every
+// v4 reader uses. Unknown members are checked before missing ones so a renamed
+// member is reported as unknown_member, which is what the kit's rejected
+// fences expect.
+//
+// There is no shared `root` constant: the context now carries a mutable
+// warnings array, and one module-level context would leak warnings from one
+// document into the next. Every read starts from its own `newRoot()`.
 import { type Diagnostic, type DiagnosticCode, diagnostic } from "../../model/diagnostic.ts";
 import { type Result, err, ok } from "../../model/result.ts";
 import { MAX_DEPTH, type JsonNumber, type JsonObject, type JsonValue, isNumber, isObject, locationOf } from "./value.ts";
 
-export interface Ctx { readonly cursor: string; readonly depth: number }
-export const root: Ctx = { cursor: "", depth: 0 };
-export function at(ctx: Ctx, key: string | number): Ctx { return { cursor: `${ctx.cursor}/${key}`, depth: ctx.depth + 1 }; }
+export interface Ctx { readonly cursor: string; readonly depth: number; readonly warnings: Diagnostic[] }
+// Each read starts from its own root so warnings never leak between documents.
+export function newRoot(): Ctx { return { cursor: "", depth: 0, warnings: [] }; }
+export function at(ctx: Ctx, key: string | number): Ctx {
+	return { cursor: `${ctx.cursor}/${key}`, depth: ctx.depth + 1, warnings: ctx.warnings };
+}
 
 // `near` is the JSON value the failure is about; when the parser recorded a
 // location for it the diagnostic carries the line and column, so a reader
@@ -18,6 +26,30 @@ export function at(ctx: Ctx, key: string | number): Ctx { return { cursor: `${ct
 export function fail(ctx: Ctx, code: DiagnosticCode, message: string, near?: JsonValue): Result<never, Diagnostic> {
 	const location = near === undefined ? null : locationOf(near);
 	return err(diagnostic(code, "normalization", ctx.cursor || "/", message, location ?? undefined));
+}
+
+// A legacy spelling in the compatibility window (decision 0006): accepted,
+// reported, never written.
+export function warn(ctx: Ctx, message: string, near?: JsonValue): void {
+	const location = near === undefined ? null : locationOf(near);
+	ctx.warnings.push(diagnostic("legacy_spelling", "normalization", ctx.cursor || "/", message, location ?? undefined));
+}
+
+// A member with a canonical and a legacy spelling. Both present is an error at
+// the legacy key; only the legacy one warns; neither is missing_member.
+//
+// The answer carries the key that won as well as its payload, because a caller
+// that reads the payload has to name that key on the cursor it reads under and
+// would otherwise have to work out which spelling was there a second time.
+export interface Windowed { readonly key: string; readonly value: JsonValue }
+
+export function windowed(ctx: Ctx, m: ReadonlyMap<string, JsonValue>, canonical: string, legacy: string, near: JsonValue): Result<Windowed, Diagnostic> {
+	const c = m.get(canonical);
+	const l = m.get(legacy);
+	if (c !== undefined && l !== undefined) return fail(at(ctx, legacy), "unknown_member", `"${legacy}" is the legacy spelling of "${canonical}"; write only one`, near);
+	if (c !== undefined) return ok({ key: canonical, value: c });
+	if (l !== undefined) { warn(at(ctx, legacy), `"${legacy}" is the legacy spelling of "${canonical}"`, near); return ok({ key: legacy, value: l }); }
+	return fail(ctx, "missing_member", `missing member "${canonical}"`, near);
 }
 
 // parseJson already bounds the depth of anything read from text, so this only

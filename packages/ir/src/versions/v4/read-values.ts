@@ -3,24 +3,40 @@
 // The v4 reader for literals, patterns, value expressions, value definitions
 // and value specifications.
 //
-// Three rulings shape this module. At value position a bare string is a
-// shorthand — an FQName spells a Reference, a Name spells a Variable (kit
-// values-0002, values-0003) — but a bare boolean, a bare number and a bare
-// array are not: the schema lists them as shorthands and in the same breath
-// forbids them, so they are ambiguous_shorthand (kit values-0008, bead
-// morphir-ir-v4-stabilize.4). The accepted literal shorthand is the one
-// inside the wrapper, { "Literal": 42 }. And every value and pattern wrapper
-// takes two spellings: the compact one the schema documents, and an expanded
-// object carrying an "attributes" member beside the rest (provisional, bead
-// morphir-ir-v4-stabilize.1), which is also what admits Hole, Native and
-// External at value position.
-import { type Ctx, at, describeJson, expectArray, expectObject, expectString, fail, guardDepth, members, optionalString, singleKey } from "../../codec/json/cursor.ts";
+// Four decisions shape this module. Decision 0009 settled every bare JSON
+// value at value position: a bare string is still a shorthand — an FQName
+// spells a Reference, a Name spells a Variable (kit values-0002, values-0003)
+// — a bare boolean and a bare number are literals typed by their lexeme (kit
+// values-0011, values-0012), and a bare array is a List, so a Tuple always
+// carries its wrapper (kit values-0007, values-0008).
+//
+// Decision 0005: every value and pattern wrapper takes two spellings, the
+// compact one the schema documents and an expanded object carrying an
+// "attributes" member beside the rest. The Rust encoder's "attrs" is the
+// legacy spelling of that member, read here with a legacy_spelling warning
+// for the one-release window of decision 0006 and never written; the same
+// window covers "thenBranch"/"elseBranch", "subject"/"fieldName",
+// "valueName"/"valueDefinition"/"inValue", and a Record's field map written
+// directly under the wrapper instead of under "fields" (decision 0004).
+//
+// Decision 0008: Native and External are definition bodies, not value
+// expressions, so a reader refuses them here as unknown nodes, and an
+// ExternalBody carries a non-empty list of per-target bindings, one per target
+// platform, plus an optional fallback body — the older top-level
+// "externalName"/"targetPlatform" pair is the window's single-binding spelling
+// and reads as a one-entry list.
+//
+// Decision 0013: DocumentLiteral is the seventh literal and its payload is the
+// document itself, so it is the one literal whose payload is never unwrapped,
+// and the one literal a LiteralPattern refuses.
+import { type Ctx, at, describeJson, expectArray, expectObject, expectString, fail, guardDepth, members, optionalString, singleKey, warn, windowed } from "../../codec/json/cursor.ts";
 import { type JsonObject, type JsonValue, isInteger, isNumber, isObject } from "../../codec/json/value.ts";
 import type { Diagnostic } from "../../model/diagnostic.ts";
 import type { Name } from "../../model/names.ts";
 import { type Result, ok } from "../../model/result.ts";
 import type { Type } from "../../model/types.ts";
 import type {
+	ExternalBinding,
 	InputType,
 	LetBinding,
 	Literal,
@@ -34,6 +50,7 @@ import type {
 	ValueSpecification,
 } from "../../model/values.ts";
 import { type TA, type VA, emptyValueAttributes, readValueAttributes } from "./attributes.ts";
+import { type ExpandedPayload, expandedPayload } from "./expanded.ts";
 import { isFQNameString, readFQName, readName } from "./read-names.ts";
 import { readAnnotations, readHoleReason, readIncompleteness, readType } from "./read-types.ts";
 
@@ -41,22 +58,15 @@ const EMPTY_VA: VA = emptyValueAttributes<TA>();
 
 // ---------------------------------------------------------------- helpers
 
-// Every expanded payload starts the same way: check the member set, then read
-// the optional value attributes out of it. The type-side twin lives in
-// read-types.ts; the two differ only in which attribute reader they call.
-function expanded(
+// Every expanded payload starts the same way; expanded.ts holds the rule and
+// the type reader shares it. All this side has to say is which attribute
+// reader the payload's "attributes" (or its "attrs" window spelling) goes to.
+const expanded = (
 	ctx: Ctx,
 	v: JsonValue,
 	required: readonly string[],
 	optional: readonly string[],
-): Result<{ readonly m: ReadonlyMap<string, JsonValue>; readonly a: VA }, Diagnostic> {
-	const o = expectObject(ctx, v);
-	if (!o.ok) return o;
-	const m = members(ctx, o.value, required, ["attributes", ...optional]);
-	if (!m.ok) return m;
-	const a = readValueAttributes(at(ctx, "attributes"), m.value.get("attributes"));
-	return a.ok ? ok({ m: m.value, a: a.value }) : a;
-}
+): Result<ExpandedPayload<VA>, Diagnostic> => expandedPayload(ctx, v, required, optional, readValueAttributes);
 
 // A named map is a JSON object whose member names are Morphir names: record
 // fields, record updates, let-recursion bindings, input types.
@@ -146,6 +156,11 @@ export function readLiteral(ctx: Ctx, v: JsonValue): Result<Literal, Diagnostic>
 	}
 	const [key, raw] = first;
 	const inner = at(ctx, key);
+	// Decision 0013: a document literal's payload is the document itself, so it
+	// is taken before literalPayload gets a chance to unwrap it — otherwise
+	// { "DocumentLiteral": { "value": 1 } } would read as the number 1 rather
+	// than as the one-member document it is.
+	if (key === "DocumentLiteral") return ok({ kind: "DocumentLiteral", value: raw });
 	const unwrapped = literalPayload(inner, raw);
 	if (!unwrapped.ok) return unwrapped;
 	const p = unwrapped.value;
@@ -184,7 +199,10 @@ export function readLiteralShorthand(ctx: Ctx, v: JsonValue): Result<Literal, Di
 // The payload shared by { "Literal": .. } and { "LiteralPattern": .. }: a
 // shorthand scalar, a typed wrapper, or the expanded {attributes?, literal}.
 // "literal" and "attributes" are not literal wrapper keys, so either member
-// settles which spelling is in front of us.
+// settles which spelling is in front of us. "attrs" is deliberately not one of
+// the two: expanded() still accepts it once we are on the expanded branch, but
+// a payload spelling attrs and nothing else has no literal to read either way,
+// so letting it decide would only change which diagnostic that payload gets.
 function readLiteralPayload(ctx: Ctx, v: JsonValue): Result<{ readonly literal: Literal; readonly a: VA }, Diagnostic> {
 	if (isObject(v) && (v.members.has("literal") || v.members.has("attributes"))) {
 		const e = expanded(ctx, v, ["literal"], []);
@@ -256,7 +274,13 @@ export function readPattern(ctx: Ctx, v: JsonValue): Result<Pattern<VA>, Diagnos
 		}
 		case "LiteralPattern": {
 			const l = readLiteralPayload(inner, payload);
-			return l.ok ? ok({ kind: "LiteralPattern", attributes: l.value.a, literal: l.value.literal }) : l;
+			if (!l.ok) return l;
+			// Decision 0013: a document has no equality a pattern could match on, so
+			// it is a literal everywhere except here.
+			if (l.value.literal.kind === "DocumentLiteral") {
+				return fail(inner, "invalid_literal", "a document cannot be pattern matched (decision 0013)", payload);
+			}
+			return ok({ kind: "LiteralPattern", attributes: l.value.a, literal: l.value.literal });
 		}
 		default:
 			return fail(ctx, "unknown_node", `unknown pattern node "${key}"`, v);
@@ -265,15 +289,12 @@ export function readPattern(ctx: Ctx, v: JsonValue): Result<Pattern<VA>, Diagnos
 
 // ----------------------------------------------------------------- values
 
-const BARE_BOOLEAN = 'a bare boolean at value position is ambiguous; write { "Literal": { "BoolLiteral": .. } }';
-const BARE_NUMBER = 'a bare number at value position is ambiguous; write { "Literal": { "IntegerLiteral": .. } }';
-const BARE_ARRAY = 'a bare array at value position is ambiguous between Tuple and List; write { "List": [..] } or { "Tuple": [..] }';
-
 export function readValue(ctx: Ctx, v: JsonValue): Result<Value<TA, VA>, Diagnostic> {
 	const depth = guardDepth(ctx);
 	if (!depth.ok) return depth;
-	// A bare string is the one shorthand the kit settles: an FQName is a
-	// Reference, anything else is a Variable.
+	// Decision 0009. A bare string is the shorthand the kit settled first: an
+	// FQName is a Reference, anything else is a Variable — never a
+	// StringLiteral, which is why the string case is not readLiteralShorthand's.
 	if (typeof v === "string") {
 		if (isFQNameString(v)) {
 			const fq = readFQName(ctx, v);
@@ -282,9 +303,14 @@ export function readValue(ctx: Ctx, v: JsonValue): Result<Value<TA, VA>, Diagnos
 		const n = readName(ctx, v);
 		return n.ok ? ok({ kind: "Variable", attributes: EMPTY_VA, name: n.value }) : n;
 	}
-	if (typeof v === "boolean") return fail(ctx, "ambiguous_shorthand", BARE_BOOLEAN, v);
-	if (isNumber(v)) return fail(ctx, "ambiguous_shorthand", BARE_NUMBER, v);
-	if (Array.isArray(v)) return fail(ctx, "ambiguous_shorthand", BARE_ARRAY, v);
+	// A bare boolean or number is a literal typed by its lexeme, and a bare
+	// array is a List; a Tuple always carries its wrapper.
+	if (typeof v === "boolean") return ok({ kind: "Literal", attributes: EMPTY_VA, literal: { kind: "BoolLiteral", value: v } });
+	if (isNumber(v)) {
+		const l = readLiteralShorthand(ctx, v);
+		return l.ok ? ok({ kind: "Literal", attributes: EMPTY_VA, literal: l.value }) : l;
+	}
+	if (Array.isArray(v)) return readSequenceValue(ctx, "List", "items", v);
 	if (!isObject(v)) return fail(ctx, "invalid_type", `expected a value expression, found ${describeJson(v)}`, v);
 	const kv = singleKey(ctx, v);
 	if (!kv.ok) return kv;
@@ -305,11 +331,18 @@ export function readValue(ctx: Ctx, v: JsonValue): Result<Value<TA, VA>, Diagnos
 			return e.ok ? ok({ kind: "Unit", attributes: e.value.a }) : e;
 		}
 		case "Field": {
-			const e = expanded(inner, payload, ["target", "name"], []);
+			// Decision 0006: "subject" and "fieldName" are the window spellings
+			// of "target" and "name", so neither slot can be required outright.
+			const e = expanded(inner, payload, [], ["target", "subject", "name", "fieldName"]);
 			if (!e.ok) return e;
-			const target = readValue(at(inner, "target"), e.value.m.get("target") as JsonValue);
+			const m = e.value.m;
+			const t = windowed(inner, m, "target", "subject", payload);
+			if (!t.ok) return t;
+			const n = windowed(inner, m, "name", "fieldName", payload);
+			if (!n.ok) return n;
+			const target = readValue(at(inner, t.value.key), t.value.value);
 			if (!target.ok) return target;
-			const name = readName(at(inner, "name"), e.value.m.get("name") as JsonValue);
+			const name = readName(at(inner, n.value.key), n.value.value);
 			if (!name.ok) return name;
 			return ok({ kind: "Field", attributes: e.value.a, target: target.value, name: name.value });
 		}
@@ -332,13 +365,22 @@ export function readValue(ctx: Ctx, v: JsonValue): Result<Value<TA, VA>, Diagnos
 			return ok({ kind: "Lambda", attributes: e.value.a, pattern: pattern.value, body: body.value });
 		}
 		case "LetDefinition": {
-			const e = expanded(inner, payload, ["name", "definition", "in"], []);
+			// Decision 0006: the spec's older "valueName", "valueDefinition" and
+			// "inValue" are the window spellings (kit values-0017).
+			const e = expanded(inner, payload, [], ["name", "valueName", "definition", "valueDefinition", "in", "inValue"]);
 			if (!e.ok) return e;
-			const name = readName(at(inner, "name"), e.value.m.get("name") as JsonValue);
+			const m = e.value.m;
+			const rawName = windowed(inner, m, "name", "valueName", payload);
+			if (!rawName.ok) return rawName;
+			const rawDefinition = windowed(inner, m, "definition", "valueDefinition", payload);
+			if (!rawDefinition.ok) return rawDefinition;
+			const rawIn = windowed(inner, m, "in", "inValue", payload);
+			if (!rawIn.ok) return rawIn;
+			const name = readName(at(inner, rawName.value.key), rawName.value.value);
 			if (!name.ok) return name;
-			const definition = readValueDefinition(at(inner, "definition"), e.value.m.get("definition") as JsonValue);
+			const definition = readValueDefinition(at(inner, rawDefinition.value.key), rawDefinition.value.value);
 			if (!definition.ok) return definition;
-			const body = readValue(at(inner, "in"), e.value.m.get("in") as JsonValue);
+			const body = readValue(at(inner, rawIn.value.key), rawIn.value.value);
 			if (!body.ok) return body;
 			return ok({ kind: "LetDefinition", attributes: e.value.a, name: name.value, definition: definition.value, in: body.value });
 		}
@@ -364,15 +406,20 @@ export function readValue(ctx: Ctx, v: JsonValue): Result<Value<TA, VA>, Diagnos
 			return ok({ kind: "Destructure", attributes: e.value.a, pattern: pattern.value, value: value.value, in: body.value });
 		}
 		case "IfThenElse": {
-			// The Rust encoder writes thenBranch and elseBranch; those are
-			// unknown_member here (kit values-0005, bead morphir-ir-v4-stabilize.3).
-			const e = expanded(inner, payload, ["condition", "then", "else"], []);
+			// Decision 0006: the Rust encoder's "thenBranch" and "elseBranch" are
+			// the window spellings of "then" and "else" (kit values-0005).
+			const e = expanded(inner, payload, ["condition"], ["then", "thenBranch", "else", "elseBranch"]);
 			if (!e.ok) return e;
-			const condition = readValue(at(inner, "condition"), e.value.m.get("condition") as JsonValue);
+			const m = e.value.m;
+			const rawThen = windowed(inner, m, "then", "thenBranch", payload);
+			if (!rawThen.ok) return rawThen;
+			const rawElse = windowed(inner, m, "else", "elseBranch", payload);
+			if (!rawElse.ok) return rawElse;
+			const condition = readValue(at(inner, "condition"), m.get("condition") as JsonValue);
 			if (!condition.ok) return condition;
-			const thenBranch = readValue(at(inner, "then"), e.value.m.get("then") as JsonValue);
+			const thenBranch = readValue(at(inner, rawThen.value.key), rawThen.value.value);
 			if (!thenBranch.ok) return thenBranch;
-			const elseBranch = readValue(at(inner, "else"), e.value.m.get("else") as JsonValue);
+			const elseBranch = readValue(at(inner, rawElse.value.key), rawElse.value.value);
 			if (!elseBranch.ok) return elseBranch;
 			return ok({ kind: "IfThenElse", attributes: e.value.a, condition: condition.value, then: thenBranch.value, else: elseBranch.value });
 		}
@@ -406,24 +453,7 @@ export function readValue(ctx: Ctx, v: JsonValue): Result<Value<TA, VA>, Diagnos
 				? ok({ kind: "Hole", attributes: e.value.a, reason: reason.value, expectedType: expectedType.value })
 				: expectedType;
 		}
-		case "Native": {
-			const e = expanded(inner, payload, ["fqname", "nativeInfo"], []);
-			if (!e.ok) return e;
-			const fqname = readFQName(at(inner, "fqname"), e.value.m.get("fqname") as JsonValue);
-			if (!fqname.ok) return fqname;
-			const nativeInfo = readNativeInfo(at(inner, "nativeInfo"), e.value.m.get("nativeInfo") as JsonValue);
-			if (!nativeInfo.ok) return nativeInfo;
-			return ok({ kind: "Native", attributes: e.value.a, fqname: fqname.value, nativeInfo: nativeInfo.value });
-		}
-		case "External": {
-			const e = expanded(inner, payload, ["externalName", "targetPlatform"], []);
-			if (!e.ok) return e;
-			const externalName = expectString(at(inner, "externalName"), e.value.m.get("externalName") as JsonValue);
-			if (!externalName.ok) return externalName;
-			const targetPlatform = expectString(at(inner, "targetPlatform"), e.value.m.get("targetPlatform") as JsonValue);
-			if (!targetPlatform.ok) return targetPlatform;
-			return ok({ kind: "External", attributes: e.value.a, externalName: externalName.value, targetPlatform: targetPlatform.value });
-		}
+		// Decision 0008: "Native" and "External" fall through to unknown_node.
 		default:
 			return fail(ctx, "unknown_node", `unknown value node "${key}"`, v);
 	}
@@ -475,26 +505,27 @@ function readSequenceValue(
 		: { kind: "List", attributes: EMPTY_VA, items: items.value });
 }
 
-// The type-side twin of this rule lives in read-types.ts: Record's compact
+// The type-side twin of this rule lives in read-types.ts: Record's legacy
 // payload is the field map itself, so only the whole member set tells the two
-// spellings apart — exactly {fields}, or exactly {attributes, fields}, is the
-// expanded form and nothing else is. So { "Record": { "fields": <value> } }
-// reads as the expanded form and fails at /Record/fields rather than as a
-// one-field record; the writer expands such a record so it round-trips.
-function isExpandedRecord(o: JsonObject): boolean {
+// spellings apart — exactly {fields}, or exactly {attributes, fields} (or its
+// "attrs" window spelling), is the canonical payload and nothing else is. So
+// { "Record": { "fields": <value> } } reads as the canonical payload and fails
+// at /Record/fields rather than as a one-field record.
+function isRecordPayload(o: JsonObject): boolean {
 	if (!o.members.has("fields")) return false;
-	return o.members.size === 1 || (o.members.size === 2 && o.members.has("attributes"));
+	return o.members.size === 1 || (o.members.size === 2 && (o.members.has("attributes") || o.members.has("attrs")));
 }
 
 function readRecordValue(ctx: Ctx, v: JsonValue): Result<Value<TA, VA>, Diagnostic> {
 	const o = expectObject(ctx, v);
 	if (!o.ok) return o;
-	if (isExpandedRecord(o.value)) {
+	if (isRecordPayload(o.value)) {
 		const e = expanded(ctx, v, ["fields"], []);
 		if (!e.ok) return e;
 		const fields = readRecordFields(at(ctx, "fields"), e.value.m.get("fields") as JsonValue);
 		return fields.ok ? ok({ kind: "Record", attributes: e.value.a, fields: fields.value }) : fields;
 	}
+	warn(ctx, 'a field map directly under "Record" is the legacy spelling; write { "Record": { "fields": { .. } } }', v);
 	const fields = readRecordFieldMap(ctx, o.value);
 	return fields.ok ? ok({ kind: "Record", attributes: EMPTY_VA, fields: fields.value }) : fields;
 }
@@ -596,9 +627,15 @@ export function readValueDefinition(ctx: Ctx, v: JsonValue): Result<ValueDefinit
 		: key === "NativeBody"
 			? ["inputTypes", "outputType", "nativeInfo"]
 			: key === "ExternalBody"
-				? ["inputTypes", "outputType", "externalName", "targetPlatform"]
+				// Decision 0008: which of "externals" and the window's top-level pair
+				// has to be there is settled by readExternals, not by this list.
+				? ["inputTypes", "outputType"]
 				: ["inputTypes", "incompleteness"];
-	const optional = key === "IncompleteBody" ? ["outputType", "partialBody"] : [];
+	const optional = key === "IncompleteBody"
+		? ["outputType", "partialBody"]
+		: key === "ExternalBody"
+			? ["externals", "externalName", "targetPlatform", "body"]
+			: [];
 	const m = members(inner, body.value, required, optional);
 	if (!m.ok) return m;
 	const inputTypes = readInputTypes(at(inner, "inputTypes"), m.value.get("inputTypes") as JsonValue);
@@ -636,17 +673,87 @@ export function readValueDefinition(ctx: Ctx, v: JsonValue): Result<ValueDefinit
 			? ok({ kind: "NativeBody", inputTypes: inputTypes.value, outputType: outputType.value, nativeInfo: nativeInfo.value })
 			: nativeInfo;
 	}
-	const externalName = expectString(at(inner, "externalName"), m.value.get("externalName") as JsonValue);
-	if (!externalName.ok) return externalName;
-	const targetPlatform = expectString(at(inner, "targetPlatform"), m.value.get("targetPlatform") as JsonValue);
-	if (!targetPlatform.ok) return targetPlatform;
+	const externals = readExternals(inner, m.value, payload);
+	if (!externals.ok) return externals;
+	// Decision 0008: the fallback body is what a platform with no binding of its
+	// own falls through to, so it is optional and written only when it is there.
+	let fallback: Value<TA, VA> | null = null;
+	const rawBody = m.value.get("body");
+	if (rawBody !== undefined) {
+		const b = readValue(at(inner, "body"), rawBody);
+		if (!b.ok) return b;
+		fallback = b.value;
+	}
 	return ok({
 		kind: "ExternalBody",
 		inputTypes: inputTypes.value,
 		outputType: outputType.value,
-		externalName: externalName.value,
-		targetPlatform: targetPlatform.value,
+		externals: externals.value,
+		body: fallback,
 	});
+}
+
+function readExternalBinding(ctx: Ctx, v: JsonValue): Result<ExternalBinding, Diagnostic> {
+	const o = expectObject(ctx, v);
+	if (!o.ok) return o;
+	const m = members(ctx, o.value, ["targetPlatform", "externalName"], []);
+	if (!m.ok) return m;
+	const targetPlatform = expectString(at(ctx, "targetPlatform"), m.value.get("targetPlatform") as JsonValue);
+	if (!targetPlatform.ok) return targetPlatform;
+	const externalName = expectString(at(ctx, "externalName"), m.value.get("externalName") as JsonValue);
+	if (!externalName.ok) return externalName;
+	return ok({ targetPlatform: targetPlatform.value, externalName: externalName.value });
+}
+
+// Decision 0008: the canonical spelling is a non-empty "externals" list whose
+// targetPlatform values are unique — a platform has one binding or none, so a
+// second binding for a platform is a duplicate rather than an override, and it
+// is reported at the second one because that is the entry to delete.
+// Decision 0006's window keeps the older top-level
+// "externalName"/"targetPlatform" pair, which reads as a one-entry list with a
+// single warning on the body itself — one warning rather than one per member,
+// because it is the pair together that is the legacy spelling. The two
+// spellings may not be mixed: a pair beside the list is unknown_member at the
+// key the author can delete, which is the same rule windowed() follows.
+function readExternals(ctx: Ctx, m: ReadonlyMap<string, JsonValue>, near: JsonValue): Result<readonly ExternalBinding[], Diagnostic> {
+	const raw = m.get("externals");
+	if (raw !== undefined) {
+		for (const legacy of ["externalName", "targetPlatform"]) {
+			if (m.has(legacy)) {
+				return fail(at(ctx, legacy), "unknown_member", `"${legacy}" is the legacy single-binding spelling; write only "externals"`, near);
+			}
+		}
+		const list = at(ctx, "externals");
+		const a = expectArray(list, raw);
+		if (!a.ok) return a;
+		if (a.value.length === 0) return fail(list, "invalid_type", "externals needs at least one binding", raw);
+		const out: ExternalBinding[] = [];
+		const seen = new Set<string>();
+		for (let i = 0; i < a.value.length; i += 1) {
+			const one = readExternalBinding(at(list, i), a.value[i] as JsonValue);
+			if (!one.ok) return one;
+			const platform = one.value.targetPlatform;
+			if (seen.has(platform)) {
+				return fail(at(at(list, i), "targetPlatform"), "duplicate_member", `duplicate binding for target "${platform}"`, a.value[i] as JsonValue);
+			}
+			seen.add(platform);
+			out.push(one.value);
+		}
+		return ok(out);
+	}
+	const rawName = m.get("externalName");
+	const rawPlatform = m.get("targetPlatform");
+	// Half a pair is a pair with one member missing, so the diagnostic names the
+	// half the author still has to write rather than the list they did not use.
+	if (rawName === undefined && rawPlatform === undefined) return fail(ctx, "missing_member", 'missing member "externals"', near);
+	if (rawName === undefined) return fail(ctx, "missing_member", 'missing member "externalName"', near);
+	if (rawPlatform === undefined) return fail(ctx, "missing_member", 'missing member "targetPlatform"', near);
+	const externalName = expectString(at(ctx, "externalName"), rawName);
+	if (!externalName.ok) return externalName;
+	const targetPlatform = expectString(at(ctx, "targetPlatform"), rawPlatform);
+	if (!targetPlatform.ok) return targetPlatform;
+	warn(ctx, 'top-level "externalName" and "targetPlatform" are the legacy single-binding spelling; write "externals": [{ .. }]', near);
+	return ok([{ targetPlatform: targetPlatform.value, externalName: externalName.value }]);
 }
 
 // A specification's "doc" belongs to the Documented wrapper in modules, so the

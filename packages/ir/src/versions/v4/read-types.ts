@@ -6,13 +6,20 @@
 // Tuple and never a parameterized Reference (kit types-0003, bead
 // morphir-j442), so a Reference with arguments must carry its wrapper. And
 // every wrapper payload has two spellings: the compact one the schema
-// documents, and an expanded object carrying an "attributes" member beside
-// the rest (provisional, bead morphir-ir-v4-stabilize.1).
+// documents, and an expanded object whose optional first member is
+// "attributes" (decision 0005).
+//
+// Decisions 0004 and 0007 settled the member names: a Record keeps its
+// fields under "fields", and a Function declares a "parameterType". The
+// spellings they replaced — a field map directly under "Record",
+// "argumentType", "arg"/"result", and the Rust encoder's "attrs" — are
+// still read here for the one-release window of decision 0006, each with a
+// legacy_spelling warning, and none of them is ever written.
 //
 // Legacy tagged arrays for type *expressions* belong to the v3 reader and are
 // not accepted here; legacy tagged arrays for specifications and definitions
 // are, because the v4 schema still lists them.
-import { type Ctx, at, expectArray, expectObject, expectString, fail, guardDepth, members, singleKey } from "../../codec/json/cursor.ts";
+import { type Ctx, at, expectArray, expectObject, expectString, fail, guardDepth, members, singleKey, warn, windowed } from "../../codec/json/cursor.ts";
 import { type JsonObject, type JsonValue, isObject } from "../../codec/json/value.ts";
 import type { Diagnostic } from "../../model/diagnostic.ts";
 import type { FQName, Name } from "../../model/names.ts";
@@ -22,7 +29,7 @@ import type {
 	Annotation,
 	AnnotationArgument,
 	Constructor,
-	ConstructorArg,
+	ConstructorParameter,
 	Field,
 	HoleReason,
 	Incompleteness,
@@ -31,6 +38,7 @@ import type {
 	TypeSpecification,
 } from "../../model/types.ts";
 import { EMPTY_TYPE_ATTRIBUTES, type TA, type VA, readTypeAttributes } from "./attributes.ts";
+import { type ExpandedPayload, expandedPayload } from "./expanded.ts";
 import { readAccess, readAccessControlled } from "./read-definitions.ts";
 import { isFQNameString, readFQName, readName } from "./read-names.ts";
 import { readValue } from "./read-values.ts";
@@ -83,21 +91,15 @@ function readFields(ctx: Ctx, v: JsonValue): Result<readonly Field<TA>[], Diagno
 	return o.ok ? readFieldMap(ctx, o.value) : o;
 }
 
-// Every expanded payload starts the same way: check the member set, then read
-// the optional attributes out of it.
-function expanded(
+// Every expanded payload starts the same way; expanded.ts holds the rule and
+// the value reader shares it. All this side has to say is which attribute
+// reader the payload's "attributes" (or its "attrs" window spelling) goes to.
+const expanded = (
 	ctx: Ctx,
 	v: JsonValue,
 	required: readonly string[],
 	optional: readonly string[],
-): Result<{ readonly m: ReadonlyMap<string, JsonValue>; readonly a: TA }, Diagnostic> {
-	const o = expectObject(ctx, v);
-	if (!o.ok) return o;
-	const m = members(ctx, o.value, required, ["attributes", ...optional]);
-	if (!m.ok) return m;
-	const a = readTypeAttributes(at(ctx, "attributes"), m.value.get("attributes"));
-	return a.ok ? ok({ m: m.value, a: a.value }) : a;
-}
+): Result<ExpandedPayload<TA>, Diagnostic> => expandedPayload(ctx, v, required, optional, readTypeAttributes);
 
 // ------------------------------------------------------------ expressions
 
@@ -179,30 +181,35 @@ function readTupleType(ctx: Ctx, v: JsonValue): Result<Type<TA>, Diagnostic> {
 	return elements.ok ? ok({ kind: "Tuple", attributes: EMPTY_TYPE_ATTRIBUTES, elements: elements.value }) : elements;
 }
 
-// Record's compact payload is the field map itself, so only the whole member
-// set can tell the two spellings apart: exactly {fields}, or exactly
-// {attributes, fields}, is the expanded form and nothing else is. A payload
-// with an "attributes" member beside other names is a field map with a field
-// called "attributes".
+// Decision 0004: a Record payload keeps its fields under "fields", with the
+// optional attributes member in front of them, and that is the only spelling
+// written. The field map directly under "Record" is what the schema
+// documented until 2026-09-04; it is read for the window of decision 0006 and
+// warned about.
 //
-// The consequence: { "Record": { "fields": <type> } } is read as the expanded
-// form and fails with invalid_type at /Record/fields, never as a one-field
-// record whose field is called "fields". A record that really does have a
-// single field called "fields" is written expanded, so it still round-trips.
-function isExpandedRecord(o: JsonObject): boolean {
+// The whole member set still decides which of the two a payload is, because a
+// field can be called "fields": exactly {fields}, or {fields} beside
+// "attributes" or its legacy "attrs", is the canonical payload and anything
+// else is a field map. So { "Record": { "fields": <type> } } is the canonical
+// payload and fails with invalid_type at /Record/fields, never a one-field
+// record whose field is called "fields"; that record is spelled
+// { "Record": { "fields": { "fields": <type> } } }, which is what it writes
+// back to.
+function isRecordPayload(o: JsonObject): boolean {
 	if (!o.members.has("fields")) return false;
-	return o.members.size === 1 || (o.members.size === 2 && o.members.has("attributes"));
+	return o.members.size === 1 || (o.members.size === 2 && (o.members.has("attributes") || o.members.has("attrs")));
 }
 
 function readRecordType(ctx: Ctx, v: JsonValue): Result<Type<TA>, Diagnostic> {
 	const o = expectObject(ctx, v);
 	if (!o.ok) return o;
-	if (isExpandedRecord(o.value)) {
+	if (isRecordPayload(o.value)) {
 		const e = expanded(ctx, v, ["fields"], []);
 		if (!e.ok) return e;
 		const fields = readFields(at(ctx, "fields"), e.value.m.get("fields") as JsonValue);
 		return fields.ok ? ok({ kind: "Record", attributes: e.value.a, fields: fields.value }) : fields;
 	}
+	warn(ctx, 'a field map directly under "Record" is the legacy spelling; write { "Record": { "fields": { .. } } }', v);
 	const fields = readFieldMap(ctx, o.value);
 	return fields.ok ? ok({ kind: "Record", attributes: EMPTY_TYPE_ATTRIBUTES, fields: fields.value }) : fields;
 }
@@ -217,14 +224,37 @@ function readExtensibleRecordType(ctx: Ctx, v: JsonValue): Result<Type<TA>, Diag
 	return ok({ kind: "ExtensibleRecord", attributes: e.value.a, variable: variable.value, fields: fields.value });
 }
 
+// Decision 0007: parameterType. argumentType (the pre-decision schema) and
+// arg/result (the Rust encoder) are window spellings; each warns, and a
+// payload that spells the same slot twice is unknown_member at the extra key.
 function readFunctionType(ctx: Ctx, v: JsonValue): Result<Type<TA>, Diagnostic> {
-	const e = expanded(ctx, v, ["argumentType", "returnType"], []);
+	const e = expanded(ctx, v, [], ["parameterType", "argumentType", "arg", "returnType", "result"]);
 	if (!e.ok) return e;
-	const argumentType = readType(at(ctx, "argumentType"), e.value.m.get("argumentType") as JsonValue);
-	if (!argumentType.ok) return argumentType;
-	const returnType = readType(at(ctx, "returnType"), e.value.m.get("returnType") as JsonValue);
+	const m = e.value.m;
+	let parameterKey: string;
+	let parameter: JsonValue;
+	if (m.has("arg")) {
+		// windowed() pairs one legacy key with one canonical key, and the
+		// parameter slot has three spellings, so "arg" is checked here — in the
+		// same wording, and naming whichever other spelling is actually there.
+		const other = m.has("parameterType") ? "parameterType" : m.has("argumentType") ? "argumentType" : null;
+		if (other !== null) return fail(at(ctx, "arg"), "unknown_member", `"arg" is the legacy spelling of "${other}"; write only one`, v);
+		warn(at(ctx, "arg"), '"arg" is the legacy spelling of "parameterType"', v);
+		parameterKey = "arg";
+		parameter = m.get("arg") as JsonValue;
+	} else {
+		const p = windowed(ctx, m, "parameterType", "argumentType", v);
+		if (!p.ok) return p;
+		parameterKey = p.value.key;
+		parameter = p.value.value;
+	}
+	const r = windowed(ctx, m, "returnType", "result", v);
+	if (!r.ok) return r;
+	const parameterType = readType(at(ctx, parameterKey), parameter);
+	if (!parameterType.ok) return parameterType;
+	const returnType = readType(at(ctx, r.value.key), r.value.value);
 	if (!returnType.ok) return returnType;
-	return ok({ kind: "Function", attributes: e.value.a, argumentType: argumentType.value, returnType: returnType.value });
+	return ok({ kind: "Function", attributes: e.value.a, parameterType: parameterType.value, returnType: returnType.value });
 }
 
 function readUnitType(ctx: Ctx, v: JsonValue): Result<Type<TA>, Diagnostic> {
@@ -234,10 +264,12 @@ function readUnitType(ctx: Ctx, v: JsonValue): Result<Type<TA>, Diagnostic> {
 
 // ----------------------------------------------------------- constructors
 
-function readConstructorArgs(ctx: Ctx, v: JsonValue): Result<readonly ConstructorArg<TA>[], Diagnostic> {
+// Decision 0007: a constructor carries parameters, spelled on the wire as
+// [name, type] pairs.
+function readConstructorParameters(ctx: Ctx, v: JsonValue): Result<readonly ConstructorParameter<TA>[], Diagnostic> {
 	const a = expectArray(ctx, v);
 	if (!a.ok) return a;
-	const out: ConstructorArg<TA>[] = [];
+	const out: ConstructorParameter<TA>[] = [];
 	for (let i = 0; i < a.value.length; i += 1) {
 		const pair = expectArray(at(ctx, i), a.value[i] as JsonValue);
 		if (!pair.ok) return pair;
@@ -261,13 +293,13 @@ export function readConstructors(ctx: Ctx, v: JsonValue): Result<readonly Constr
 			const pair = expectArray(at(ctx, i), v[i] as JsonValue);
 			if (!pair.ok) return pair;
 			if (pair.value.length !== 2) {
-				return fail(at(ctx, i), "invalid_type", `expected a [constructor, arguments] pair, found ${pair.value.length} elements`);
+				return fail(at(ctx, i), "invalid_type", `expected a [constructor, parameters] pair, found ${pair.value.length} elements`);
 			}
 			const name = readName(at(at(ctx, i), 0), pair.value[0] as JsonValue);
 			if (!name.ok) return name;
-			const args = readConstructorArgs(at(at(ctx, i), 1), pair.value[1] as JsonValue);
-			if (!args.ok) return args;
-			out.push({ name: name.value, args: args.value });
+			const parameters = readConstructorParameters(at(at(ctx, i), 1), pair.value[1] as JsonValue);
+			if (!parameters.ok) return parameters;
+			out.push({ name: name.value, parameters: parameters.value });
 		}
 		return ok(out);
 	}
@@ -277,9 +309,9 @@ export function readConstructors(ctx: Ctx, v: JsonValue): Result<readonly Constr
 	for (const [key, member] of o.value.members) {
 		const name = readName(at(ctx, key), key);
 		if (!name.ok) return name;
-		const args = readConstructorArgs(at(ctx, key), member);
-		if (!args.ok) return args;
-		out.push({ name: name.value, args: args.value });
+		const parameters = readConstructorParameters(at(ctx, key), member);
+		if (!parameters.ok) return parameters;
+		out.push({ name: name.value, parameters: parameters.value });
 	}
 	return ok(out);
 }

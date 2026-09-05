@@ -9,7 +9,7 @@
 // exactly formatVersion and distribution, in either order; the version is read
 // and checked for support before the document under it is read at all (kit
 // distributions-0001, distributions-0002).
-import { type Ctx, at, describeJson, expectObject, expectString, fail, members, optionalString, root } from "../../codec/json/cursor.ts";
+import { type Ctx, at, describeJson, expectObject, expectString, fail, members, newRoot, optionalString } from "../../codec/json/cursor.ts";
 import { type JsonValue, isObject } from "../../codec/json/value.ts";
 import type { Diagnostic } from "../../model/diagnostic.ts";
 import type {
@@ -200,23 +200,25 @@ function readOptionalPackageDefinition(
 
 // ------------------------------------------------------------- the root
 
-export function readIRFile(v: JsonValue): Result<IRFile<TA, VA>, Diagnostic> {
-	const o = expectObject(root, v);
+// The caller passes the context it wants the warnings collected on; a caller
+// that only wants the value can leave it off and get a fresh root.
+export function readIRFile(v: JsonValue, ctx: Ctx = newRoot()): Result<IRFile<TA, VA>, Diagnostic> {
+	const o = expectObject(ctx, v);
 	if (!o.ok) return o;
 	for (const key of o.value.members.keys()) {
 		if (key !== "formatVersion" && key !== "distribution") {
-			return fail(at(root, key), "unknown_member", `unknown member "${key}"`, o.value);
+			return fail(at(ctx, key), "unknown_member", `unknown member "${key}"`, o.value);
 		}
 	}
-	const recognized = readFormatVersionMember(root, o.value);
+	const recognized = readFormatVersionMember(ctx, o.value);
 	if (!recognized.ok) return recognized;
 	const compat = compatibility(recognized.value.normalized, SUPPORTED_VERSIONS);
 	if (compat !== "supported") {
 		const fv = recognized.value.normalized;
-		return fail(at(root, "formatVersion"), compat, `format version ${fv.major}.${fv.minor}.${fv.patch} is not supported`, o.value.members.get("formatVersion"));
+		return fail(at(ctx, "formatVersion"), compat, `format version ${fv.major}.${fv.minor}.${fv.patch} is not supported`, o.value.members.get("formatVersion"));
 	}
 	const raw = o.value.members.get("distribution");
-	if (raw === undefined) return fail(root, "missing_member", 'missing member "distribution"', o.value);
-	const distribution = readDistribution(at(root, "distribution"), raw);
+	if (raw === undefined) return fail(ctx, "missing_member", 'missing member "distribution"', o.value);
+	const distribution = readDistribution(at(ctx, "distribution"), raw);
 	return distribution.ok ? ok({ formatVersion: recognized.value.normalized, distribution: distribution.value }) : distribution;
 }

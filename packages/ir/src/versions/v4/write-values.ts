@@ -8,7 +8,18 @@
 //
 // A literal is always written in its typed form, never as the bare shorthand
 // the reader accepts (kit values-0001), because the shorthand only works where
-// the type is already known.
+// the type is already known. The same goes for the rest of decision 0009: a
+// list keeps its wrapper even though a bare array reads as one. A Record's
+// fields always go under "fields" (decision 0004), and none of decision
+// 0006's window spellings is ever written.
+//
+// Decision 0013: a DocumentLiteral's payload is written back exactly as it was
+// read, number lexemes and member order included, because the codec's value
+// tree is what the model carries.
+//
+// Decision 0008: an ExternalBody always writes its bindings as "externals",
+// never the window's top-level pair, and writes "body" only when there is a
+// fallback to write.
 import { type JsonValue, jsonNumber, jsonObject } from "../../codec/json/value.ts";
 import type {
 	InputType,
@@ -23,12 +34,11 @@ import type {
 } from "../../model/values.ts";
 import { type TA, type VA, writeValueAttributes } from "./attributes.ts";
 import { nameKey, writeFQName, writeName } from "./write-names.ts";
-import { needsExpansion, writeAnnotations, writeHoleReason, writeIncompleteness, writeType } from "./write-types.ts";
+import { writeAnnotations, writeHoleReason, writeIncompleteness, writeType } from "./write-types.ts";
 
 type Entry = readonly [string, JsonValue];
 
 const wrap = (key: string, payload: JsonValue): JsonValue => jsonObject([[key, payload]]);
-const EMPTY_ATTRIBUTES: JsonValue = jsonObject([]);
 
 // ---------------------------------------------------------------- literals
 
@@ -36,7 +46,9 @@ const EMPTY_ATTRIBUTES: JsonValue = jsonObject([]);
 // float keeps its point. Exponent spellings already carry a marker and are
 // left alone: "1e+21.0" is not JSON.
 function floatText(n: number): string {
-	const s = String(n);
+	// String(-0) is "0", which would silently discard the sign; -0.0 and 0.0
+	// are distinct IEEE-754 values that backends observe.
+	const s = Object.is(n, -0) ? "-0" : String(n);
 	return /[.eE]/.test(s) ? s : `${s}.0`;
 }
 
@@ -49,6 +61,8 @@ export function writeLiteral(l: Literal): JsonValue {
 		case "IntegerLiteral": return wrap("IntegerLiteral", jsonNumber(l.value.toString()));
 		case "FloatLiteral": return wrap("FloatLiteral", jsonNumber(floatText(l.value)));
 		case "DecimalLiteral": return wrap("DecimalLiteral", l.value);
+		// The payload is the document, so there is nothing to encode.
+		case "DocumentLiteral": return wrap("DocumentLiteral", l.value);
 	}
 }
 
@@ -100,12 +114,6 @@ export function writeNativeInfo(i: NativeInfo): JsonValue {
 const writeFieldValues = (fields: readonly RecordField<TA, VA>[]): JsonValue =>
 	jsonObject(fields.map((f) => [nameKey(f.name), writeValue(f.value)] as const));
 
-// A field set the reader would take for the expanded form cannot be written
-// compactly, so it is written expanded even when its attributes are empty; the
-// rule itself lives with the type writer.
-const expandsRecord = (fields: readonly RecordField<TA, VA>[]): boolean =>
-	needsExpansion(fields.map((f) => nameKey(f.name)));
-
 export function writeValue(v: Value<TA, VA>): JsonValue {
 	const a = writeValueAttributes(v.attributes);
 	const head: Entry[] = a === null ? [] : [["attributes", a]];
@@ -131,10 +139,10 @@ export function writeValue(v: Value<TA, VA>): JsonValue {
 			return wrap("List", a === null ? items : jsonObject([["attributes", a], ["items", items]]));
 		}
 		case "Record": {
+			// Decision 0004, the same rule the type writer follows: the fields
+			// always go under "fields".
 			const fields = writeFieldValues(v.fields);
-			return wrap("Record", a === null && !expandsRecord(v.fields)
-				? fields
-				: jsonObject([["attributes", a ?? EMPTY_ATTRIBUTES], ["fields", fields]]));
+			return wrap("Record", jsonObject(a === null ? [["fields", fields]] : [["attributes", a], ["fields", fields]]));
 		}
 		case "Unit":
 			return wrap("Unit", jsonObject(head));
@@ -184,10 +192,6 @@ export function writeValue(v: Value<TA, VA>): JsonValue {
 			if (v.expectedType !== null) entries.push(["expectedType", writeType(v.expectedType)]);
 			return wrap("Hole", jsonObject(entries));
 		}
-		case "Native":
-			return wrap("Native", jsonObject([...head, ["fqname", writeFQName(v.fqname)], ["nativeInfo", writeNativeInfo(v.nativeInfo)]]));
-		case "External":
-			return wrap("External", jsonObject([...head, ["externalName", v.externalName], ["targetPlatform", v.targetPlatform]]));
 	}
 }
 
@@ -211,9 +215,9 @@ export function writeValueDefinition(d: ValueDefinition<TA, VA>): JsonValue {
 		case "ExternalBody":
 			entries.push(
 				["outputType", writeType(d.outputType)],
-				["externalName", d.externalName],
-				["targetPlatform", d.targetPlatform],
+				["externals", d.externals.map((b) => jsonObject([["targetPlatform", b.targetPlatform], ["externalName", b.externalName]]))],
 			);
+			if (d.body !== null) entries.push(["body", writeValue(d.body)]);
 			break;
 		case "IncompleteBody":
 			// The only body whose output type the schema leaves optional.

@@ -3,7 +3,7 @@
 // and the module nesting the kit fixes; the kit runner covers the rest.
 // Run with: bun test packages/ir/src/versions/v4/distribution.test.ts
 import { describe, expect, test } from "bun:test";
-import { root } from "../../codec/json/cursor.ts";
+import { newRoot } from "../../codec/json/cursor.ts";
 import { type JsonValue, parseJson, writeJson } from "../../codec/json/value.ts";
 import { json, readNode } from "./index.ts";
 import { readModuleSpecification } from "./read-definitions.ts";
@@ -45,11 +45,11 @@ describe("json.read / json.write", () => {
 	});
 	test("a documented value specification reads flat or nested and writes flat", () => {
 		const spec = '"inputs": {}, "output": "morphir/SDK:string#string"';
-		const canonical = '{ "types": {}, "values": { "greet": { "output": "morphir/SDK:string#string", "doc": "Hi" } } }';
+		const canonical = '{ "types": {}, "values": { "greet": { "doc": "Hi", "output": "morphir/SDK:string#string" } } }';
 		const flat = `{ "types": {}, "values": { "greet": { ${spec}, "doc": "Hi" } } }`;
 		const nested = `{ "types": {}, "values": { "greet": { "doc": "Hi", "value": { ${spec} } } } }`;
 		const models = [flat, nested].map((s) => {
-			const r = readModuleSpecification(root, parse(s));
+			const r = readModuleSpecification(newRoot(), parse(s));
 			expect(r.ok ? "" : r.error.message).toBe("");
 			return r.ok ? r.value : null;
 		});
