@@ -41,6 +41,7 @@ import type {
 	ValueSpecification,
 } from "../../model/values.ts";
 import { type TA, type VA, emptyValueAttributes, readValueAttributes } from "./attributes.ts";
+import { type ExpandedPayload, expandedPayload } from "./expanded.ts";
 import { isFQNameString, readFQName, readName } from "./read-names.ts";
 import { readAnnotations, readHoleReason, readIncompleteness, readType } from "./read-types.ts";
 
@@ -48,29 +49,15 @@ const EMPTY_VA: VA = emptyValueAttributes<TA>();
 
 // ---------------------------------------------------------------- helpers
 
-// Every expanded payload starts the same way: check the member set, then read
-// the optional value attributes out of it. "attrs" is the Rust encoder's
-// spelling of that member (decision 0005), accepted with a warning for the
-// window of decision 0006; a payload carrying both spells one slot twice.
-// The type-side twin lives in read-types.ts; the two differ only in which
-// attribute reader they call.
-function expanded(
+// Every expanded payload starts the same way; expanded.ts holds the rule and
+// the type reader shares it. All this side has to say is which attribute
+// reader the payload's "attributes" (or its "attrs" window spelling) goes to.
+const expanded = (
 	ctx: Ctx,
 	v: JsonValue,
 	required: readonly string[],
 	optional: readonly string[],
-): Result<{ readonly m: ReadonlyMap<string, JsonValue>; readonly a: VA }, Diagnostic> {
-	const o = expectObject(ctx, v);
-	if (!o.ok) return o;
-	const m = members(ctx, o.value, required, ["attributes", "attrs", ...optional]);
-	if (!m.ok) return m;
-	const raw = m.value.get("attributes");
-	const legacy = m.value.get("attrs");
-	if (raw !== undefined && legacy !== undefined) return fail(at(ctx, "attrs"), "unknown_member", '"attrs" duplicates "attributes"', o.value);
-	if (legacy !== undefined) warn(at(ctx, "attrs"), '"attrs" is the legacy spelling of "attributes"', o.value);
-	const a = readValueAttributes(at(ctx, raw !== undefined ? "attributes" : "attrs"), raw ?? legacy);
-	return a.ok ? ok({ m: m.value, a: a.value }) : a;
-}
+): Result<ExpandedPayload<VA>, Diagnostic> => expandedPayload(ctx, v, required, optional, readValueAttributes);
 
 // A named map is a JSON object whose member names are Morphir names: record
 // fields, record updates, let-recursion bindings, input types.
@@ -198,7 +185,10 @@ export function readLiteralShorthand(ctx: Ctx, v: JsonValue): Result<Literal, Di
 // The payload shared by { "Literal": .. } and { "LiteralPattern": .. }: a
 // shorthand scalar, a typed wrapper, or the expanded {attributes?, literal}.
 // "literal" and "attributes" are not literal wrapper keys, so either member
-// settles which spelling is in front of us.
+// settles which spelling is in front of us. "attrs" is deliberately not one of
+// the two: expanded() still accepts it once we are on the expanded branch, but
+// a payload spelling attrs and nothing else has no literal to read either way,
+// so letting it decide would only change which diagnostic that payload gets.
 function readLiteralPayload(ctx: Ctx, v: JsonValue): Result<{ readonly literal: Literal; readonly a: VA }, Diagnostic> {
 	if (isObject(v) && (v.members.has("literal") || v.members.has("attributes"))) {
 		const e = expanded(ctx, v, ["literal"], []);
@@ -330,10 +320,9 @@ export function readValue(ctx: Ctx, v: JsonValue): Result<Value<TA, VA>, Diagnos
 			if (!t.ok) return t;
 			const n = windowed(inner, m, "name", "fieldName", payload);
 			if (!n.ok) return n;
-			// windowed() answered with the payload; only the cursor needs the key.
-			const target = readValue(at(inner, m.has("target") ? "target" : "subject"), t.value);
+			const target = readValue(at(inner, t.value.key), t.value.value);
 			if (!target.ok) return target;
-			const name = readName(at(inner, m.has("name") ? "name" : "fieldName"), n.value);
+			const name = readName(at(inner, n.value.key), n.value.value);
 			if (!name.ok) return name;
 			return ok({ kind: "Field", attributes: e.value.a, target: target.value, name: name.value });
 		}
@@ -367,11 +356,11 @@ export function readValue(ctx: Ctx, v: JsonValue): Result<Value<TA, VA>, Diagnos
 			if (!rawDefinition.ok) return rawDefinition;
 			const rawIn = windowed(inner, m, "in", "inValue", payload);
 			if (!rawIn.ok) return rawIn;
-			const name = readName(at(inner, m.has("name") ? "name" : "valueName"), rawName.value);
+			const name = readName(at(inner, rawName.value.key), rawName.value.value);
 			if (!name.ok) return name;
-			const definition = readValueDefinition(at(inner, m.has("definition") ? "definition" : "valueDefinition"), rawDefinition.value);
+			const definition = readValueDefinition(at(inner, rawDefinition.value.key), rawDefinition.value.value);
 			if (!definition.ok) return definition;
-			const body = readValue(at(inner, m.has("in") ? "in" : "inValue"), rawIn.value);
+			const body = readValue(at(inner, rawIn.value.key), rawIn.value.value);
 			if (!body.ok) return body;
 			return ok({ kind: "LetDefinition", attributes: e.value.a, name: name.value, definition: definition.value, in: body.value });
 		}
@@ -408,9 +397,9 @@ export function readValue(ctx: Ctx, v: JsonValue): Result<Value<TA, VA>, Diagnos
 			if (!rawElse.ok) return rawElse;
 			const condition = readValue(at(inner, "condition"), m.get("condition") as JsonValue);
 			if (!condition.ok) return condition;
-			const thenBranch = readValue(at(inner, m.has("then") ? "then" : "thenBranch"), rawThen.value);
+			const thenBranch = readValue(at(inner, rawThen.value.key), rawThen.value.value);
 			if (!thenBranch.ok) return thenBranch;
-			const elseBranch = readValue(at(inner, m.has("else") ? "else" : "elseBranch"), rawElse.value);
+			const elseBranch = readValue(at(inner, rawElse.value.key), rawElse.value.value);
 			if (!elseBranch.ok) return elseBranch;
 			return ok({ kind: "IfThenElse", attributes: e.value.a, condition: condition.value, then: thenBranch.value, else: elseBranch.value });
 		}

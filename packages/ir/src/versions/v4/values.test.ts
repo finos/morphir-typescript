@@ -103,6 +103,18 @@ describe("values", () => {
 		expect(readWrite('4.0')).toBe('{ "Literal": { "FloatLiteral": 4.0 } }');
 		expect(readWrite('[1, "x"]')).toBe('{ "List": [{ "Literal": { "IntegerLiteral": 1 } }, { "Variable": "x" }] }');
 	});
+	test("the lexeme decides, not the value (decision 0009)", () => {
+		// An exponent marks a float even with nothing after the point, and the
+		// writer keeps JavaScript's own spelling of the exponent rather than the
+		// document's: 1e21 comes back as 1e+21.
+		expect(readWrite('1e21')).toBe('{ "Literal": { "FloatLiteral": 1e+21 } }');
+		// No point and no exponent is an integer, so -0 is the integer zero; a
+		// BigInt has no negative zero to keep.
+		expect(readWrite('-0')).toBe('{ "Literal": { "IntegerLiteral": 0 } }');
+		// The same digits with a point are a float, and the writer's floatText
+		// puts the point back.
+		expect(readWrite('-0.0')).toBe('{ "Literal": { "FloatLiteral": 0.0 } }');
+	});
 	test("Native and External are not value expressions (decision 0008)", () => {
 		for (const text of ['{ "Native": { "fqname": "morphir/SDK:basics#add", "nativeInfo": { "hint": { "Arithmetic": {} } } } }', '{ "External": { "externalName": "console.log", "targetPlatform": "javascript" } }']) {
 			const r = readNodeChecked("Value", text);

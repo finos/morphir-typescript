@@ -30,12 +30,16 @@ describe("warnings", () => {
 		expect(!dup.ok && dup.error.cursor).toBe("/thenBranch");
 		ctx = newRoot();
 		const good = windowed(ctx, m(canonical), "then", "thenBranch", canonical);
-		expect(good.ok && good.value).toBe(m(canonical).get("then") ?? null);
+		// The answer names the key that won, so a caller reads the payload under
+		// the cursor the document actually spelled.
+		expect(good.ok && good.value.key).toBe("then");
+		expect(good.ok && good.value.value).toBe(m(canonical).get("then") ?? null);
 		expect(ctx.warnings).toEqual([]);
 		ctx = newRoot();
 		const r = windowed(ctx, m(legacy), "then", "thenBranch", legacy);
 		expect(r.ok).toBe(true);
-		expect(r.ok && r.value).toBe(m(legacy).get("thenBranch") ?? null);
+		expect(r.ok && r.value.key).toBe("thenBranch");
+		expect(r.ok && r.value.value).toBe(m(legacy).get("thenBranch") ?? null);
 		expect(ctx.warnings[0]?.code).toBe("legacy_spelling");
 		expect(ctx.warnings[0]?.cursor).toBe("/thenBranch");
 		expect(ctx.warnings[0]?.message).toContain('"then"');

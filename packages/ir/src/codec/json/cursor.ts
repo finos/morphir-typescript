@@ -37,12 +37,18 @@ export function warn(ctx: Ctx, message: string, near?: JsonValue): void {
 
 // A member with a canonical and a legacy spelling. Both present is an error at
 // the legacy key; only the legacy one warns; neither is missing_member.
-export function windowed(ctx: Ctx, m: ReadonlyMap<string, JsonValue>, canonical: string, legacy: string, near: JsonValue): Result<JsonValue, Diagnostic> {
+//
+// The answer carries the key that won as well as its payload, because a caller
+// that reads the payload has to name that key on the cursor it reads under and
+// would otherwise have to work out which spelling was there a second time.
+export interface Windowed { readonly key: string; readonly value: JsonValue }
+
+export function windowed(ctx: Ctx, m: ReadonlyMap<string, JsonValue>, canonical: string, legacy: string, near: JsonValue): Result<Windowed, Diagnostic> {
 	const c = m.get(canonical);
 	const l = m.get(legacy);
 	if (c !== undefined && l !== undefined) return fail(at(ctx, legacy), "unknown_member", `"${legacy}" is the legacy spelling of "${canonical}"; write only one`, near);
-	if (c !== undefined) return ok(c);
-	if (l !== undefined) { warn(at(ctx, legacy), `"${legacy}" is the legacy spelling of "${canonical}"`, near); return ok(l); }
+	if (c !== undefined) return ok({ key: canonical, value: c });
+	if (l !== undefined) { warn(at(ctx, legacy), `"${legacy}" is the legacy spelling of "${canonical}"`, near); return ok({ key: legacy, value: l }); }
 	return fail(ctx, "missing_member", `missing member "${canonical}"`, near);
 }
 

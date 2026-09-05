@@ -38,6 +38,7 @@ import type {
 	TypeSpecification,
 } from "../../model/types.ts";
 import { EMPTY_TYPE_ATTRIBUTES, type TA, type VA, readTypeAttributes } from "./attributes.ts";
+import { type ExpandedPayload, expandedPayload } from "./expanded.ts";
 import { readAccess, readAccessControlled } from "./read-definitions.ts";
 import { isFQNameString, readFQName, readName } from "./read-names.ts";
 import { readValue } from "./read-values.ts";
@@ -90,27 +91,15 @@ function readFields(ctx: Ctx, v: JsonValue): Result<readonly Field<TA>[], Diagno
 	return o.ok ? readFieldMap(ctx, o.value) : o;
 }
 
-// Every expanded payload starts the same way: check the member set, then read
-// the optional attributes out of it. "attrs" is the Rust encoder's spelling
-// of that member (decision 0005), accepted with a warning for the window of
-// decision 0006; a payload carrying both spells one slot twice.
-function expanded(
+// Every expanded payload starts the same way; expanded.ts holds the rule and
+// the value reader shares it. All this side has to say is which attribute
+// reader the payload's "attributes" (or its "attrs" window spelling) goes to.
+const expanded = (
 	ctx: Ctx,
 	v: JsonValue,
 	required: readonly string[],
 	optional: readonly string[],
-): Result<{ readonly m: ReadonlyMap<string, JsonValue>; readonly a: TA }, Diagnostic> {
-	const o = expectObject(ctx, v);
-	if (!o.ok) return o;
-	const m = members(ctx, o.value, required, ["attributes", "attrs", ...optional]);
-	if (!m.ok) return m;
-	const raw = m.value.get("attributes");
-	const legacy = m.value.get("attrs");
-	if (raw !== undefined && legacy !== undefined) return fail(at(ctx, "attrs"), "unknown_member", '"attrs" duplicates "attributes"', o.value);
-	if (legacy !== undefined) warn(at(ctx, "attrs"), '"attrs" is the legacy spelling of "attributes"', o.value);
-	const a = readTypeAttributes(at(ctx, raw !== undefined ? "attributes" : "attrs"), raw ?? legacy);
-	return a.ok ? ok({ m: m.value, a: a.value }) : a;
-}
+): Result<ExpandedPayload<TA>, Diagnostic> => expandedPayload(ctx, v, required, optional, readTypeAttributes);
 
 // ------------------------------------------------------------ expressions
 
@@ -256,16 +245,14 @@ function readFunctionType(ctx: Ctx, v: JsonValue): Result<Type<TA>, Diagnostic> 
 	} else {
 		const p = windowed(ctx, m, "parameterType", "argumentType", v);
 		if (!p.ok) return p;
-		parameterKey = m.has("parameterType") ? "parameterType" : "argumentType";
-		parameter = p.value;
+		parameterKey = p.value.key;
+		parameter = p.value.value;
 	}
 	const r = windowed(ctx, m, "returnType", "result", v);
 	if (!r.ok) return r;
-	// windowed() answered with the payload; only the cursor needs the key.
-	const returnKey = m.has("returnType") ? "returnType" : "result";
 	const parameterType = readType(at(ctx, parameterKey), parameter);
 	if (!parameterType.ok) return parameterType;
-	const returnType = readType(at(ctx, returnKey), r.value);
+	const returnType = readType(at(ctx, r.value.key), r.value.value);
 	if (!returnType.ok) return returnType;
 	return ok({ kind: "Function", attributes: e.value.a, parameterType: parameterType.value, returnType: returnType.value });
 }
