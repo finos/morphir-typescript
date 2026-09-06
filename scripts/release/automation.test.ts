@@ -15,6 +15,29 @@ interface MiseTask {
 	readonly file: string | null;
 }
 
+interface WorkflowStep {
+	readonly name?: string;
+	readonly uses?: string;
+	readonly run?: string;
+	readonly with?: Record<string, unknown>;
+	readonly env?: Record<string, string>;
+}
+
+interface WorkflowJob {
+	readonly needs?: string | readonly string[];
+	readonly permissions?: Record<string, string>;
+	readonly steps: readonly WorkflowStep[];
+}
+
+interface ReleaseWorkflow {
+	readonly on: { readonly push: { readonly tags: readonly string[] } };
+	readonly permissions: Record<string, string>;
+	readonly concurrency: { readonly group: string; readonly "cancel-in-progress": boolean };
+	readonly jobs: Record<string, WorkflowJob>;
+}
+
+const DOLLAR = String.fromCharCode(36);
+
 async function commandOutput(command: readonly string[]): Promise<string> {
 	const child = Bun.spawn(command, { cwd: root, stdout: "pipe", stderr: "pipe" });
 	const [stdout, stderr, exitCode] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
@@ -42,6 +65,25 @@ function taskInvocation(source: string): string {
 	const matches = source.match(/^await exec\(.+\);$/gm) ?? [];
 	if (matches.length !== 1) throw new Error(`expected one top-level exec invocation, received ${matches.length}`);
 	return matches[0] as string;
+}
+
+async function releaseWorkflow(): Promise<{ source: string; workflow: ReleaseWorkflow }> {
+	const source = await readFile(path.join(root, ".github/workflows/release.yml"), "utf8");
+	return { source, workflow: Bun.YAML.parse(source) as ReleaseWorkflow };
+}
+
+function stepNamed(job: WorkflowJob, name: string): WorkflowStep {
+	const step = job.steps.find((candidate) => candidate.name === name);
+	if (step === undefined) throw new Error(`missing workflow step: ${name}`);
+	return step;
+}
+
+function githubExpression(value: string): string {
+	return `${DOLLAR}{{ ${value} }}`;
+}
+
+function shellExpansion(value: string): string {
+	return `${DOLLAR}{${value}}`;
 }
 
 describe("release automation contract", () => {
@@ -128,5 +170,119 @@ describe("release automation contract", () => {
 			expect(publishing).toContain(expected);
 		expect(publishing).toMatch(/does not (?:commit|create commits), tag, or push/i);
 		expect(publishing).toContain("publishes only @finos/morphir-ir");
+	});
+
+	test("starts releases for version tags with least-privilege job boundaries", async () => {
+		const { workflow } = await releaseWorkflow();
+		expect(workflow.on.push.tags).toEqual(["v*"]);
+		expect(workflow.permissions).toEqual({});
+		expect(workflow.concurrency.group).toContain(githubExpression("github.ref"));
+		expect(workflow.concurrency["cancel-in-progress"]).toBeFalse();
+
+		const { artifact, publish, "github-release": githubRelease } = workflow.jobs;
+		expect(Object.keys(workflow.jobs).sort()).toEqual(["artifact", "github-release", "publish"]);
+		expect(artifact?.permissions).toEqual({ contents: "read" });
+		expect(publish?.needs).toBe("artifact");
+		expect(publish?.permissions).toEqual({ "id-token": "write" });
+		expect(githubRelease?.needs).toBe("publish");
+		expect(githubRelease?.permissions).toEqual({ contents: "write" });
+	});
+
+	test("pins every action to its approved immutable revision", async () => {
+		const { workflow } = await releaseWorkflow();
+		const uses = Object.values(workflow.jobs).flatMap((job) => job.steps.flatMap((step) => (step.uses === undefined ? [] : [step.uses])));
+		expect(uses).toContain("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1");
+		expect(uses).toContain("jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c");
+		expect(uses).toContain("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
+		expect(uses.filter((value) => value.startsWith("actions/download-artifact@"))).toEqual([
+			"actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+			"actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+		]);
+		expect(uses).toContain("actions/setup-node@820762786026740c76f36085b0efc47a31fe5020");
+		for (const action of uses) expect(action).toMatch(/^[^@\s]+@[0-9a-f]{40}$/);
+	});
+
+	test("validates the tag and main ancestry before executing repository code", async () => {
+		const { workflow } = await releaseWorkflow();
+		const artifact = workflow.jobs.artifact as WorkflowJob;
+		const checkoutIndex = artifact.steps.findIndex((step) => step.uses?.startsWith("actions/checkout@"));
+		const guardIndex = artifact.steps.findIndex((step) => step.name === "Validate release ref");
+		const miseIndex = artifact.steps.findIndex((step) => step.uses?.startsWith("jdx/mise-action@"));
+		expect(checkoutIndex).toBeGreaterThanOrEqual(0);
+		expect(guardIndex).toBeGreaterThan(checkoutIndex);
+		expect(miseIndex).toBeGreaterThan(guardIndex);
+		expect(artifact.steps[checkoutIndex]?.with).toMatchObject({ "fetch-depth": 0, "persist-credentials": false });
+
+		const guard = artifact.steps[guardIndex]?.run ?? "";
+		expect(guard).toContain("set -euo pipefail");
+		expect(guard).toContain('[[ "$GITHUB_REF_NAME" =~ ^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$ ]]');
+		expect(guard).toContain("refs/remotes/origin/main");
+		expect(guard).toContain('git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main');
+	});
+
+	test("builds and uploads one exact, checksummed artifact", async () => {
+		const { workflow } = await releaseWorkflow();
+		const artifact = workflow.jobs.artifact as WorkflowJob;
+		const commands = artifact.steps.flatMap((step) => (step.run === undefined ? [] : [step.run])).join("\n");
+		for (const command of [
+			'mise run release:validate -- "$GITHUB_REF_NAME"',
+			"mise run ci",
+			"mise run release:artifact -- .dev/out/release",
+			`mise run release:notes -- "${shellExpansion("GITHUB_REF_NAME#v")}" .dev/out/release/release-notes.md`,
+		])
+			expect(commands).toContain(command);
+		expect(commands).toContain(`tarball=".dev/out/release/finos-morphir-ir-${shellExpansion("version")}.tgz"`);
+		expect(commands).toContain("sha256sum");
+
+		const upload = stepNamed(artifact, "Upload release artifact");
+		expect(upload.with).toMatchObject({
+			name: "morphir-ir-release",
+			"if-no-files-found": "error",
+		});
+		expect(String(upload.with?.path).trim().split("\n")).toEqual([
+			`.dev/out/release/finos-morphir-ir-${githubExpression("env.RELEASE_VERSION")}.tgz`,
+			".dev/out/release/release-notes.md",
+			".dev/out/release/SHA256SUMS",
+		]);
+	});
+
+	test("publishes the downloaded tarball without repository access or rebuilds", async () => {
+		const { source, workflow } = await releaseWorkflow();
+		const publish = workflow.jobs.publish as WorkflowJob;
+		expect(publish.steps.some((step) => step.uses?.startsWith("actions/checkout@"))).toBeFalse();
+		expect(publish.steps.some((step) => step.uses?.startsWith("jdx/mise-action@"))).toBeFalse();
+		expect(publish.steps.some((step) => /\b(?:bun|mise|npm pack)\b/.test(step.run ?? ""))).toBeFalse();
+		expect(stepNamed(publish, "Download release artifact").with).toMatchObject({ name: "morphir-ir-release", path: ".dev/out/release" });
+		expect(stepNamed(publish, "Set up Node.js").with).toMatchObject({
+			"node-version": "24",
+			"registry-url": "https://registry.npmjs.org",
+			scope: "@finos",
+		});
+		const verification = stepNamed(publish, "Verify release artifact").run ?? "";
+		expect(verification).toContain("set -euo pipefail");
+		expect(verification).toContain("sha256sum --check --strict SHA256SUMS");
+		expect(verification).toContain(`finos-morphir-ir-${shellExpansion("version")}.tgz`);
+
+		const publishStep = stepNamed(publish, "Publish @finos/morphir-ir");
+		expect(publishStep.run).toContain('npm publish "$tarball" --access public --provenance');
+		expect(publishStep.env).toEqual({ NODE_AUTH_TOKEN: githubExpression("secrets.ORG_MORPHIR_NPM_TOKEN") });
+		expect(source.match(/ORG_MORPHIR_NPM_TOKEN/g)).toHaveLength(1);
+	});
+
+	test("creates the GitHub Release from the same verified artifact", async () => {
+		const { workflow } = await releaseWorkflow();
+		const githubRelease = workflow.jobs["github-release"] as WorkflowJob;
+		expect(githubRelease.steps.some((step) => step.uses?.startsWith("actions/checkout@"))).toBeFalse();
+		expect(githubRelease.steps.some((step) => /\b(?:bun|mise|npm)\b/.test(step.run ?? ""))).toBeFalse();
+		expect(stepNamed(githubRelease, "Download release artifact").with).toMatchObject({ name: "morphir-ir-release", path: ".dev/out/release" });
+		const verification = stepNamed(githubRelease, "Verify release artifact").run ?? "";
+		expect(verification).toContain("sha256sum --check --strict SHA256SUMS");
+		const create = stepNamed(githubRelease, "Create GitHub Release");
+		expect(create.run).toContain("gh release create");
+		expect(create.run).toContain('"$GITHUB_REF_NAME"');
+		expect(create.run).toContain("--verify-tag");
+		expect(create.run).toContain("--notes-file .dev/out/release/release-notes.md");
+		expect(create.run).toContain('"$tarball"');
+		expect(create.env).toEqual({ GH_TOKEN: githubExpression("github.token") });
 	});
 });
