@@ -1,7 +1,8 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 
-import { readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { copyFile, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { applyEdits, modify, type ParseError, parse } from "jsonc-parser";
 import { extractReleaseNotes, prepareChangelog } from "./changelog.ts";
@@ -43,6 +44,7 @@ interface SuiteFiles {
 
 export interface ReleaseFileSystem {
 	readonly writeFile: (file: string, contents: string, options: { readonly flag: "wx" }) => Promise<unknown>;
+	readonly copyFile: (from: string, to: string, mode: number) => Promise<unknown>;
 	readonly rename: (from: string, to: string) => Promise<unknown>;
 	readonly unlink: (file: string) => Promise<unknown>;
 }
@@ -51,7 +53,7 @@ export interface PrepareSuiteReleaseOptions {
 	readonly fileSystem?: ReleaseFileSystem;
 }
 
-const NODE_FILE_SYSTEM: ReleaseFileSystem = { writeFile, rename, unlink };
+const NODE_FILE_SYSTEM: ReleaseFileSystem = { writeFile, copyFile, rename, unlink };
 
 function parseObject(source: string, description: string): Record<string, unknown> {
 	const value: unknown = JSON.parse(source);
@@ -145,8 +147,8 @@ async function cleanupFiles(fileSystem: ReleaseFileSystem, files: readonly strin
 }
 
 /**
- * Restores every replaced destination when an in-process operation fails. This
- * is rollback across atomic per-file renames, not crash-level multi-file atomicity.
+ * Keeps every destination present during replacement and restores replaced files
+ * after in-process errors. This is not crash-level multi-file atomicity.
  */
 async function atomicReplace(root: string, outputs: ReadonlyMap<string, string>, fileSystem: ReleaseFileSystem): Promise<void> {
 	const staged: StagedReplacement[] = [...outputs].map(([relativePath, contents]) => {
@@ -175,33 +177,40 @@ async function atomicReplace(root: string, outputs: ReadonlyMap<string, string>,
 
 	try {
 		for (const file of staged) {
-			await fileSystem.rename(file.destination, file.backup);
+			await fileSystem.copyFile(file.destination, file.backup, constants.COPYFILE_EXCL);
 			file.backedUp = true;
+		}
+	} catch (error) {
+		const cleanupFailures = [
+			...(await cleanupFiles(
+				fileSystem,
+				staged.map((file) => file.temporary),
+			)),
+			...(await cleanupFiles(
+				fileSystem,
+				staged.map((file) => file.backup),
+			)),
+		];
+		if (cleanupFailures.length > 0) throw new AggregateError([error, ...cleanupFailures], "release backup staging failed and cleanup also failed");
+		throw error;
+	}
+
+	try {
+		for (const file of staged) {
 			await fileSystem.rename(file.temporary, file.destination);
 			file.replaced = true;
 		}
 	} catch (error) {
 		const rollbackFailures: unknown[] = [];
 		for (const file of staged.toReversed()) {
-			let destinationCleanupFailure: unknown;
-			if (file.replaced) {
-				try {
-					await fileSystem.unlink(file.destination);
-				} catch (rollbackError) {
-					if ((rollbackError as NodeJS.ErrnoException).code !== "ENOENT") destinationCleanupFailure = rollbackError;
-				}
-			}
-			if (file.backedUp) {
+			if (file.replaced && file.backedUp) {
 				try {
 					await fileSystem.rename(file.backup, file.destination);
 					file.backedUp = false;
 					file.replaced = false;
 				} catch (rollbackError) {
-					if (destinationCleanupFailure !== undefined) rollbackFailures.push(destinationCleanupFailure);
 					rollbackFailures.push(rollbackError);
 				}
-			} else if (destinationCleanupFailure !== undefined) {
-				rollbackFailures.push(destinationCleanupFailure);
 			}
 		}
 		rollbackFailures.push(
@@ -209,9 +218,13 @@ async function atomicReplace(root: string, outputs: ReadonlyMap<string, string>,
 				fileSystem,
 				staged.map((file) => file.temporary),
 			)),
+			...(await cleanupFiles(
+				fileSystem,
+				staged.filter((file) => !file.replaced).map((file) => file.backup),
+			)),
 		);
 		if (rollbackFailures.length > 0) {
-			const retainedBackups = staged.filter((file) => file.backedUp).map((file) => file.backup);
+			const retainedBackups = staged.filter((file) => file.replaced && file.backedUp).map((file) => file.backup);
 			throw new AggregateError(
 				[error, ...rollbackFailures],
 				`release update failed and rollback also failed; original files may remain in: ${retainedBackups.join(", ")}`,

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readdir, readFile, rename, rm, unlink, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, readdir, readFile, rename, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runReleaseCli } from "./cli.ts";
@@ -290,6 +290,7 @@ describe("prepareSuiteRelease", () => {
 				await writeFile(file, contents, options);
 				if (writes === 2) throw new Error("injected temporary write failure");
 			},
+			copyFile,
 			rename,
 			unlink,
 		};
@@ -303,12 +304,16 @@ describe("prepareSuiteRelease", () => {
 	test("rolls back replaced destinations when a later replacement fails", async () => {
 		const root = await fixture();
 		const before = await snapshot(root);
-		let renames = 0;
+		const irManifestPath = path.join(root, "packages/ir/package.json");
+		let destinationAtFailure: string | undefined;
 		const fileSystem = {
 			writeFile: async (file: string, contents: string, options: { flag: "wx" }) => writeFile(file, contents, options),
+			copyFile,
 			rename: async (from: string, to: string) => {
-				renames += 1;
-				if (renames === 4) throw new Error("injected destination replacement failure");
+				if (from.endsWith(".tmp") && to === irManifestPath) {
+					destinationAtFailure = await readFile(to, "utf8").catch(() => undefined);
+					throw new Error("injected destination replacement failure");
+				}
 				await rename(from, to);
 			},
 			unlink,
@@ -316,20 +321,22 @@ describe("prepareSuiteRelease", () => {
 
 		await expect(prepareSuiteRelease(root, "0.0.1", "2026-09-05", { fileSystem })).rejects.toThrow("injected destination replacement failure");
 
+		expect(destinationAtFailure).toBe(before.get("packages/ir/package.json"));
 		expect(await snapshot(root)).toEqual(before);
 		expect(await transientReleaseFiles(root)).toEqual([]);
 	});
 
 	test("reports a rollback failure and retains the affected backup", async () => {
 		const root = await fixture();
-		const originalIrManifest = await readFile(path.join(root, "packages/ir/package.json"), "utf8");
-		let renames = 0;
+		const rootManifestPath = path.join(root, "package.json");
+		const irManifestPath = path.join(root, "packages/ir/package.json");
+		const originalRootManifest = await readFile(rootManifestPath, "utf8");
 		const fileSystem = {
 			writeFile: async (file: string, contents: string, options: { flag: "wx" }) => writeFile(file, contents, options),
+			copyFile,
 			rename: async (from: string, to: string) => {
-				renames += 1;
-				if (renames === 4) throw new Error("injected replacement failure");
-				if (renames === 5) throw new Error("injected rollback failure");
+				if (from.endsWith(".tmp") && to === irManifestPath) throw new Error("injected replacement failure");
+				if (from.endsWith(".backup") && to === rootManifestPath) throw new Error("injected rollback failure");
 				await rename(from, to);
 			},
 			unlink,
@@ -346,7 +353,7 @@ describe("prepareSuiteRelease", () => {
 		expect((caught as AggregateError).message).toContain("rollback also failed");
 		const retained = (await transientReleaseFiles(root)).filter((file) => file.endsWith(".backup"));
 		expect(retained).toHaveLength(1);
-		expect(await readFile(path.join(root, retained[0] as string), "utf8")).toBe(originalIrManifest);
+		expect(await readFile(path.join(root, retained[0] as string), "utf8")).toBe(originalRootManifest);
 	});
 });
 
