@@ -1,11 +1,27 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 
-import { describe, expect, test } from "bun:test";
-import { extractReleaseNotes, prepareChangelog } from "./changelog.ts";
+import { describe, expect, mock, test } from "bun:test";
+import { fromMarkdown } from "mdast-util-from-markdown";
 import { parseStableVersion } from "./version.ts";
 
+const originalFromMarkdown = fromMarkdown;
+let markdownParseCount = 0;
+mock.module("mdast-util-from-markdown", () => ({
+	fromMarkdown(markdown: string) {
+		markdownParseCount += 1;
+		return originalFromMarkdown(markdown);
+	},
+}));
+const { extractReleaseNotes, prepareChangelog } = await import("./changelog.ts");
+
 describe("prepareChangelog", () => {
+	test("parses the changelog only once", () => {
+		markdownParseCount = 0;
+		prepareChangelog("## [Unreleased]\n\n- Ready.\n", parseStableVersion("1.0.0"), "2026-09-05");
+		expect(markdownParseCount).toBe(1);
+	});
+
 	test("prepares the first release and comparison links while preserving the release body", () => {
 		const markdown = `# Changelog
 
@@ -260,6 +276,12 @@ ${issueDefinition}
 });
 
 describe("extractReleaseNotes", () => {
+	test("parses the changelog only once", () => {
+		markdownParseCount = 0;
+		extractReleaseNotes("## [1.0.0] - 2026-09-05\n\n- Notes.\n", parseStableVersion("1.0.0"));
+		expect(markdownParseCount).toBe(1);
+	});
+
 	test("returns only the requested dated release body with one trailing newline", () => {
 		const markdown = `# Changelog
 

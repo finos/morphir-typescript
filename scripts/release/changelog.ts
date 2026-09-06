@@ -31,6 +31,7 @@ interface RootDefinition extends SourceRange {
 interface ChangelogBlocks {
 	readonly headings: RootHeading[];
 	readonly definitions: RootDefinition[];
+	readonly unorderedLists: SourceRange[];
 }
 
 interface PositionedNode {
@@ -56,6 +57,7 @@ function changelogBlocks(markdown: string): ChangelogBlocks {
 	const root = fromMarkdown(markdown);
 	const headings: RootHeading[] = [];
 	const definitions: RootDefinition[] = [];
+	const unorderedLists: SourceRange[] = [];
 	let trailingDefinitionStart = root.children.length;
 	while (root.children[trailingDefinitionStart - 1]?.type === "definition") trailingDefinitionStart -= 1;
 	for (const [index, child] of root.children.entries()) {
@@ -63,12 +65,14 @@ function changelogBlocks(markdown: string): ChangelogBlocks {
 			const range = sourceRange(child);
 			const match = KAC_HEADING.exec(markdown.slice(range.start, range.end));
 			headings.push({ ...range, kacText: match?.[1] });
+		} else if (child.type === "list" && child.ordered !== true && child.children.length > 0) {
+			unorderedLists.push(sourceRange(child));
 		} else if (index >= trailingDefinitionStart && child.type === "definition") {
 			const range = sourceRangeWithIndentation(markdown, child);
 			definitions.push({ ...range, label: child.label ?? child.identifier, url: child.url });
 		}
 	}
-	return { headings, definitions };
+	return { headings, definitions, unorderedLists };
 }
 
 function comparisonDefinition(definition: RootDefinition): boolean {
@@ -79,8 +83,8 @@ function comparisonDefinition(definition: RootDefinition): boolean {
 	return COMPARE_URL.exec(definition.url)?.[1] === definition.label;
 }
 
-function hasTopLevelUnorderedListItem(markdown: string): boolean {
-	return fromMarkdown(markdown).children.some((child) => child.type === "list" && child.ordered !== true && child.children.length > 0);
+function hasTopLevelUnorderedListItem(blocks: ChangelogBlocks, start: number, end: number): boolean {
+	return blocks.unorderedLists.some((list) => list.start >= start && list.end <= end);
 }
 
 function isIsoDate(date: string): boolean {
@@ -144,8 +148,7 @@ export function prepareChangelog(markdown: string, version: StableVersion, date:
 	const unreleased = headings[unreleasedIndex] as RootHeading;
 	const bodyStart = unreleased.end;
 	const bodyEnd = headings[unreleasedIndex + 1]?.start ?? markdown.length;
-	const body = markdown.slice(bodyStart, bodyEnd);
-	if (!hasTopLevelUnorderedListItem(body)) throw new Error("Unreleased section has no top-level unordered list items");
+	if (!hasTopLevelUnorderedListItem(blocks, bodyStart, bodyEnd)) throw new Error("Unreleased section has no top-level unordered list items");
 
 	const comparisonLinks = blocks.definitions.filter(comparisonDefinition);
 	const removalRanges = comparisonLinks.map((link) => includeFollowingBlankLine(markdown, link));
