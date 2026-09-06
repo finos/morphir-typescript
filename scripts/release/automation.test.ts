@@ -24,8 +24,10 @@ interface WorkflowStep {
 }
 
 interface WorkflowJob {
+	readonly if?: string;
 	readonly needs?: string | readonly string[];
 	readonly permissions?: Record<string, string>;
+	readonly concurrency?: { readonly group: string; readonly "cancel-in-progress": boolean };
 	readonly steps: readonly WorkflowStep[];
 }
 
@@ -43,6 +45,12 @@ async function commandOutput(command: readonly string[]): Promise<string> {
 	const [stdout, stderr, exitCode] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
 	if (exitCode !== 0) throw new Error(`${command.join(" ")} failed:\n${stderr}`);
 	return stdout;
+}
+
+async function nodeSourceOutput(source: string, args: readonly string[]): Promise<{ stdout: string; exitCode: number }> {
+	const child = Bun.spawn(["node", "-", ...args], { cwd: root, stdin: new Blob([source]), stdout: "pipe", stderr: "pipe" });
+	const [stdout, exitCode] = await Promise.all([new Response(child.stdout).text(), child.exited]);
+	return { stdout, exitCode };
 }
 
 function markdownSection(source: string, heading: string): string {
@@ -181,9 +189,11 @@ describe("release automation contract", () => {
 
 		const { artifact, publish, "github-release": githubRelease } = workflow.jobs;
 		expect(Object.keys(workflow.jobs).sort()).toEqual(["artifact", "github-release", "publish"]);
+		expect(artifact?.if).toBe(githubExpression("github.event.deleted == false"));
 		expect(artifact?.permissions).toEqual({ contents: "read" });
 		expect(publish?.needs).toBe("artifact");
 		expect(publish?.permissions).toEqual({ "id-token": "write" });
+		expect(publish?.concurrency).toEqual({ group: "morphir-ir-npm-publish", "cancel-in-progress": false });
 		expect(githubRelease?.needs).toBe("publish");
 		expect(githubRelease?.permissions).toEqual({ contents: "write" });
 	});
@@ -264,9 +274,42 @@ describe("release automation contract", () => {
 		expect(verification).toContain(`finos-morphir-ir-${shellExpansion("version")}.tgz`);
 
 		const publishStep = stepNamed(publish, "Publish @finos/morphir-ir");
-		expect(publishStep.run).toContain('npm publish "$tarball" --access public --provenance');
+		const publishScript = publishStep.run ?? "";
+		const latestIndex = publishScript.indexOf('npm view "$package_name" dist-tags.latest --json');
+		const publishIndex = publishScript.indexOf('npm publish "$tarball" --access public --provenance');
+		expect(latestIndex).toBeGreaterThanOrEqual(0);
+		expect(publishIndex).toBeGreaterThan(latestIndex);
+		expect(publishScript).toContain("BigInt");
+		expect(publishScript).toContain("E404");
+		expect(publishScript).toContain("createHash");
+		expect(publishScript).toContain("sha512-");
+		expect(publishScript).toContain('"$comparison" == "older"');
+		expect(publishScript).toContain('"$comparison" == "equal"');
+		expect(publishScript).toContain('"$remote_integrity" == "$local_integrity"');
+		expect(publishScript).toContain("publish_status");
+		expect(publishScript).toContain("for attempt in 1 2 3 4 5");
 		expect(publishStep.env).toEqual({ NODE_AUTH_TOKEN: githubExpression("secrets.ORG_MORPHIR_NPM_TOKEN") });
 		expect(source.match(/ORG_MORPHIR_NPM_TOKEN/g)).toHaveLength(1);
+	});
+
+	test("compares npm's latest stable version exactly with BigInt components", async () => {
+		const { workflow } = await releaseWorkflow();
+		const script = stepNamed(workflow.jobs.publish as WorkflowJob, "Publish @finos/morphir-ir").run ?? "";
+		const comparator = script.match(/node - "\$version" "\$latest_json" <<'NODE'\n([\s\S]*?)\nNODE/)?.[1];
+		expect(comparator).toBeString();
+
+		for (const [target, latest, expected] of [
+			["1.9.9", "2.0.0", "older"],
+			["2.0.0", "2.0.0", "equal"],
+			["2.0.1", "2.0.0", "newer"],
+			["9007199254740993.0.0", "9007199254740992.999.999", "newer"],
+		] as const) {
+			const result = await nodeSourceOutput(comparator as string, [target, JSON.stringify(latest)]);
+			expect(result).toEqual({ stdout: expected, exitCode: 0 });
+		}
+
+		const prerelease = await nodeSourceOutput(comparator as string, ["2.0.1", JSON.stringify("2.0.0-beta.1")]);
+		expect(prerelease.exitCode).not.toBe(0);
 	});
 
 	test("creates the GitHub Release from the same verified artifact", async () => {
@@ -277,12 +320,15 @@ describe("release automation contract", () => {
 		expect(stepNamed(githubRelease, "Download release artifact").with).toMatchObject({ name: "morphir-ir-release", path: ".dev/out/release" });
 		const verification = stepNamed(githubRelease, "Verify release artifact").run ?? "";
 		expect(verification).toContain("sha256sum --check --strict SHA256SUMS");
-		const create = stepNamed(githubRelease, "Create GitHub Release");
-		expect(create.run).toContain("gh release create");
-		expect(create.run).toContain('"$GITHUB_REF_NAME"');
-		expect(create.run).toContain("--verify-tag");
-		expect(create.run).toContain("--notes-file .dev/out/release/release-notes.md");
-		expect(create.run).toContain('"$tarball"');
+		const create = stepNamed(githubRelease, "Create or update GitHub Release");
+		const releaseScript = create.run ?? "";
+		expect(releaseScript).toContain('gh release view "$tag"');
+		expect(releaseScript).toContain('gh release edit "$tag"');
+		expect(releaseScript).toContain('gh release create "$tag"');
+		expect(releaseScript).toContain("--verify-tag");
+		expect(releaseScript.match(/--notes-file \.dev\/out\/release\/release-notes\.md/g)).toHaveLength(2);
+		expect(releaseScript).toContain('gh release upload "$tag" "$tarball"');
+		expect(releaseScript).toContain("--clobber");
 		expect(create.env).toEqual({ GH_TOKEN: githubExpression("github.token") });
 	});
 });

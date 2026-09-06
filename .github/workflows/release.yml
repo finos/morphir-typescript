@@ -17,6 +17,7 @@ concurrency:
 jobs:
   artifact:
     name: Create release artifact
+    if: ${{ github.event.deleted == false }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -105,6 +106,9 @@ jobs:
     needs: artifact
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    concurrency:
+      group: morphir-ir-npm-publish
+      cancel-in-progress: false
     permissions:
       id-token: write
     steps:
@@ -157,7 +161,124 @@ jobs:
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
           tarball=".dev/out/release/finos-morphir-ir-${version}.tgz"
+          package_name="@finos/morphir-ir"
+
+          local_integrity="$(
+            node - "$tarball" <<'NODE'
+          const { createHash } = require("node:crypto");
+          const { readFileSync } = require("node:fs");
+          const tarball = process.argv[2];
+          const digest = createHash("sha512").update(readFileSync(tarball)).digest("base64");
+          process.stdout.write(`sha512-${digest}`);
+          NODE
+          )"
+
+          published_integrity() {
+            local package_version="$1"
+            local integrity_json
+            integrity_json="$(npm view "${package_name}@${package_version}" dist.integrity --json --registry=https://registry.npmjs.org 2>/dev/null)" || return 1
+            node - "$integrity_json" <<'NODE'
+          const input = process.argv[2];
+          let integrity;
+          try {
+            integrity = JSON.parse(input);
+          } catch {
+            process.exit(1);
+          }
+          if (typeof integrity !== "string" || !integrity.startsWith("sha512-")) process.exit(1);
+          process.stdout.write(integrity);
+          NODE
+          }
+
+          latest_error="$(mktemp)"
+          if latest_json="$(npm view "$package_name" dist-tags.latest --json --registry=https://registry.npmjs.org 2>"$latest_error")"; then
+            latest_present=true
+          else
+            latest_status=$?
+            if grep -Eq '(^|[[:space:]])E404([[:space:]]|$)' "$latest_error"; then
+              latest_present=false
+            else
+              rm -f "$latest_error"
+              echo "Could not confirm the latest published package version." >&2
+              exit "$latest_status"
+            fi
+          fi
+          rm -f "$latest_error"
+
+          if [[ "$latest_present" == true ]]; then
+            comparison="$(
+              node - "$version" "$latest_json" <<'NODE'
+          const [targetInput, latestJson] = process.argv.slice(2);
+          const stableVersion = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
+          function parseVersion(input, description) {
+            if (typeof input !== "string" || !stableVersion.test(input)) {
+              console.error(`${description} must be an exact stable SemVer version.`);
+              process.exit(1);
+            }
+            return input.split(".").map((part) => BigInt(part));
+          }
+          let latestInput;
+          try {
+            latestInput = JSON.parse(latestJson);
+          } catch {
+            console.error("npm returned invalid JSON for dist-tags.latest.");
+            process.exit(1);
+          }
+          const target = parseVersion(targetInput, "Target version");
+          const latest = parseVersion(latestInput, "Latest published version");
+          for (let index = 0; index < target.length; index += 1) {
+            if (target[index] < latest[index]) {
+              process.stdout.write("older");
+              process.exit(0);
+            }
+            if (target[index] > latest[index]) {
+              process.stdout.write("newer");
+              process.exit(0);
+            }
+          }
+          process.stdout.write("equal");
+          NODE
+            )"
+
+            if [[ "$comparison" == "older" ]]; then
+              echo "Target version is older than npm's latest version." >&2
+              exit 1
+            fi
+            if [[ "$comparison" == "equal" ]]; then
+              remote_integrity="$(published_integrity "$version")" || {
+                echo "Could not verify the existing npm package integrity." >&2
+                exit 1
+              }
+              if [[ "$remote_integrity" == "$local_integrity" ]]; then
+                echo "The identical package version is already published."
+                exit 0
+              fi
+              echo "The published package integrity does not match this artifact." >&2
+              exit 1
+            fi
+          fi
+
+          set +e
           npm publish "$tarball" --access public --provenance
+          publish_status=$?
+          set -e
+          if [[ "$publish_status" -eq 0 ]]; then
+            exit 0
+          fi
+
+          echo "npm publish returned an error; checking whether the registry accepted the package." >&2
+          for attempt in 1 2 3 4 5; do
+            remote_integrity="$(published_integrity "$version")" || remote_integrity=""
+            if [[ "$remote_integrity" == "$local_integrity" ]]; then
+              echo "npm contains the package with the expected integrity."
+              exit 0
+            fi
+            if [[ "$attempt" -lt 5 ]]; then
+              sleep "$((attempt * 2))"
+            fi
+          done
+          echo "npm did not confirm the package with the expected integrity." >&2
+          exit "$publish_status"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.ORG_MORPHIR_NPM_TOKEN }}
 
@@ -205,17 +326,27 @@ jobs:
           )
           test -f "$tarball"
 
-      - name: Create GitHub Release
+      - name: Create or update GitHub Release
         shell: bash
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
           tarball=".dev/out/release/finos-morphir-ir-${version}.tgz"
-          gh release create "$GITHUB_REF_NAME" \
-            "$tarball" \
+          tag="$GITHUB_REF_NAME"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$tag" \
+              --repo "$GITHUB_REPOSITORY" \
+              --notes-file .dev/out/release/release-notes.md \
+              --title "$tag"
+          else
+            gh release create "$tag" \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --notes-file .dev/out/release/release-notes.md \
+              --title "$tag"
+          fi
+          gh release upload "$tag" "$tarball" \
             --repo "$GITHUB_REPOSITORY" \
-            --verify-tag \
-            --notes-file .dev/out/release/release-notes.md \
-            --title "$GITHUB_REF_NAME"
+            --clobber
         env:
           GH_TOKEN: ${{ github.token }}
