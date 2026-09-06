@@ -1,7 +1,9 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 
-import { copyFile, lstat, mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { constants } from "node:fs";
+import { copyFile, lstat, mkdir, mkdtemp, readdir, readFile, rename, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
@@ -107,14 +109,53 @@ export function validatePackageFiles(
 	for (const file of expectedFiles) if (!unique.has(file)) throw new Error(`package is missing ${file}`);
 }
 
-async function run(command: readonly string[], cwd: string): Promise<string> {
+const COMMAND_LOG_LIMIT = 4_096;
+
+function boundedLog(value: string): string {
+	if (value.length <= COMMAND_LOG_LIMIT) return value;
+	return `${value.slice(0, COMMAND_LOG_LIMIT)}\n...[truncated ${value.length - COMMAND_LOG_LIMIT} characters]`;
+}
+
+export async function runCommand(command: readonly string[], cwd: string): Promise<string> {
 	const child = Bun.spawn(command, { cwd, stdout: "pipe", stderr: "pipe" });
 	const [stdout, stderr, exitCode] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
 	if (exitCode !== 0) {
-		const detail = stderr.trim();
-		throw new Error(`${command[0]} failed with exit code ${exitCode}${detail === "" ? "" : `: ${detail}`}`);
+		const details = [stdout === "" ? undefined : `stdout:\n${boundedLog(stdout)}`, stderr === "" ? undefined : `stderr:\n${boundedLog(stderr)}`].filter(
+			(detail) => detail !== undefined,
+		);
+		throw new Error(`${command[0]} failed with exit code ${exitCode}${details.length === 0 ? "" : `\n${details.join("\n")}`}`);
 	}
 	return stdout.trim();
+}
+
+export function canonicalSourceMap(contents: string, mapFile: string, packageSourceRoot: string, sourceBase = path.dirname(mapFile)): string {
+	const parsed: unknown = JSON.parse(contents);
+	if (!isRecord(parsed) || !Array.isArray(parsed.sources)) throw new Error(`${mapFile} must contain a source map with a sources array`);
+	if (parsed.sourceRoot !== undefined && parsed.sourceRoot !== "") throw new Error(`${mapFile} contains an unexpected sourceRoot`);
+	const sourceRoot = path.resolve(packageSourceRoot);
+	const sources = parsed.sources.map((source) => {
+		if (typeof source !== "string") throw new Error(`${mapFile} contains a non-string source`);
+		const resolved = path.resolve(sourceBase, source);
+		const relative = path.relative(sourceRoot, resolved);
+		if (relative === "" || relative.startsWith(`..${path.sep}`) || relative === ".." || path.isAbsolute(relative)) {
+			throw new Error(`${mapFile} source resolves outside packages/ir/src: ${source}`);
+		}
+		return `morphir-ir:///src/${relative.split(path.sep).join("/")}`;
+	});
+	return `${JSON.stringify({ ...parsed, sources })}\n`;
+}
+
+export async function promoteVerifiedArtifact<T>(stagedTarball: string, finalTarball: string, verify: (tarball: string) => Promise<T>): Promise<T> {
+	const result = await verify(stagedTarball);
+	await mkdir(path.dirname(finalTarball), { recursive: true });
+	const temporary = path.join(path.dirname(finalTarball), `.${path.basename(finalTarball)}.${randomUUID()}.tmp`);
+	try {
+		await copyFile(stagedTarball, temporary, constants.COPYFILE_EXCL);
+		await rename(temporary, finalTarball);
+		return result;
+	} finally {
+		await rm(temporary, { force: true });
+	}
 }
 
 function parseManifest(source: string): JsonRecord {
@@ -166,10 +207,24 @@ async function rewriteDeclarationImports(dist: string): Promise<void> {
 	}
 }
 
+async function canonicalizeSourceMaps(dist: string, packageSourceRoot: string): Promise<void> {
+	async function visit(directory: string): Promise<void> {
+		for (const entry of await readdir(directory, { withFileTypes: true })) {
+			const absolute = path.join(directory, entry.name);
+			if (entry.isDirectory()) await visit(absolute);
+			else if (entry.isFile() && entry.name.endsWith(".map")) {
+				const sourceBase = entry.name.endsWith(".js.map") ? dist : path.dirname(absolute);
+				await Bun.write(absolute, canonicalSourceMap(await readFile(absolute, "utf8"), absolute, packageSourceRoot, sourceBase));
+			}
+		}
+	}
+	await visit(dist);
+}
+
 async function archiveFiles(tarball: string, cwd: string, expectedFiles: ReadonlySet<string>): Promise<readonly string[]> {
-	const listing = await run(["tar", "-tzf", tarball], cwd);
+	const listing = await runCommand(["tar", "-tzf", tarball], cwd);
 	const files = listing.split(/\r?\n/).filter((file) => file !== "");
-	const verbose = (await run(["tar", "-tvzf", tarball], cwd)).split(/\r?\n/).filter((line) => line !== "");
+	const verbose = (await runCommand(["tar", "-tvzf", tarball], cwd)).split(/\r?\n/).filter((line) => line !== "");
 	if (verbose.length !== files.length) throw new Error("could not verify every package archive entry");
 	const links = new Set<string>();
 	for (const [index, line] of verbose.entries()) {
@@ -183,7 +238,7 @@ async function archiveFiles(tarball: string, cwd: string, expectedFiles: Readonl
 async function verifyExtractedFiles(tarball: string, files: readonly string[], work: string): Promise<void> {
 	const extracted = path.join(work, "inspect");
 	await mkdir(extracted);
-	await run(["tar", "-xzf", tarball, "-C", extracted], work);
+	await runCommand(["tar", "-xzf", tarball, "-C", extracted], work);
 	const found: string[] = [];
 	async function walk(directory: string): Promise<void> {
 		for (const name of await readdir(directory)) {
@@ -203,10 +258,12 @@ async function smokeTest(tarball: string, compiler: string): Promise<void> {
 	const consumer = await mkdtemp(path.join(tmpdir(), "morphir-ir-consumer-"));
 	try {
 		await Bun.write(path.join(consumer, "package.json"), '{"name":"morphir-ir-artifact-consumer","private":true,"type":"module"}\n');
-		await run([process.execPath, "add", "--offline", "--no-save", "--ignore-scripts", "--backend=copyfile", tarball], consumer);
+		await runCommand([process.execPath, "add", "--offline", "--no-save", "--ignore-scripts", "--backend=copyfile", tarball], consumer);
 		const specifiers = ["@finos/morphir-ir", "@finos/morphir-ir/model", "@finos/morphir-ir/v4", "@finos/morphir-ir/codec/json"];
 		const program = `const specifiers = ${JSON.stringify(specifiers)}; for (const specifier of specifiers) { const resolved = import.meta.resolve(specifier); if (!resolved.includes('/node_modules/@finos/morphir-ir/')) throw new Error('resolved outside installed package: ' + resolved); await import(specifier); }`;
-		await run([process.execPath, "--eval", program], consumer);
+		await runCommand([process.execPath, "--eval", program], consumer);
+		const nodeProgram = `if (process.versions.node.split('.')[0] !== '20') throw new Error('expected Node 20, received ' + process.versions.node); ${program}`;
+		await runCommand(["node", "--input-type=module", "--eval", nodeProgram], consumer);
 		await Bun.write(
 			path.join(consumer, "index.ts"),
 			[
@@ -218,7 +275,7 @@ async function smokeTest(tarball: string, compiler: string): Promise<void> {
 				"",
 			].join("\n"),
 		);
-		await run([compiler, "--noEmit", "--strict", "--target", "ES2022", "--module", "NodeNext", "--moduleResolution", "NodeNext", "index.ts"], consumer);
+		await runCommand([compiler, "--noEmit", "--strict", "--target", "ES2022", "--module", "NodeNext", "--moduleResolution", "NodeNext", "index.ts"], consumer);
 	} finally {
 		await rm(consumer, { recursive: true, force: true });
 	}
@@ -248,11 +305,12 @@ export async function buildIrArtifact(root: string, outputDirectory: string): Pr
 		});
 		if (!build.success) throw new AggregateError(build.logs, "Bun failed to build @finos/morphir-ir");
 
-		await run(
+		await runCommand(
 			[path.join(absoluteRoot, "node_modules/.bin/tsc"), "-p", path.join(packageRoot, "tsconfig.build.json"), "--emitDeclarationOnly", "--outDir", dist],
 			absoluteRoot,
 		);
 		await rewriteDeclarationImports(dist);
+		await canonicalizeSourceMaps(dist, path.join(packageRoot, "src"));
 		await Promise.all([
 			Bun.write(path.join(stage, "package.json"), `${JSON.stringify(manifest, null, "\t")}\n`),
 			copyFile(path.join(packageRoot, "README.md"), path.join(stage, "README.md")),
@@ -260,19 +318,24 @@ export async function buildIrArtifact(root: string, outputDirectory: string): Pr
 			copyFile(path.join(absoluteRoot, "NOTICE"), path.join(stage, "NOTICE")),
 		]);
 
-		await mkdir(output, { recursive: true });
+		const packedOutput = path.join(work, "packed");
+		await mkdir(packedOutput);
 		const expectedFilename = `finos-morphir-ir-${version}.tgz`;
-		const report = await run([process.execPath, "pm", "pack", "--destination", output, "--ignore-scripts", "--quiet"], stage);
+		const report = await runCommand([process.execPath, "pm", "pack", "--destination", packedOutput, "--ignore-scripts", "--quiet"], stage);
 		const reportedFilename = report.split(/\r?\n/).filter(Boolean).at(-1);
 		if (reportedFilename === undefined) throw new Error("bun pm pack did not report an artifact");
 		if (path.basename(reportedFilename) !== expectedFilename) throw new Error(`bun pm pack reported an unexpected artifact: ${reportedFilename}`);
-		const tarball = path.join(output, path.basename(reportedFilename));
-		const packed = await lstat(tarball).catch(() => undefined);
-		if (packed === undefined || !packed.isFile()) throw new Error(`bun pm pack did not create ${tarball}`);
+		const stagedTarball = path.join(packedOutput, path.basename(reportedFilename));
+		const packed = await lstat(stagedTarball).catch(() => undefined);
+		if (packed === undefined || !packed.isFile()) throw new Error(`bun pm pack did not create ${stagedTarball}`);
 
-		const files = await archiveFiles(tarball, absoluteRoot, await expectedArchiveFiles(packageRoot));
-		await verifyExtractedFiles(tarball, files, work);
-		await smokeTest(tarball, path.join(absoluteRoot, "node_modules/.bin/tsc"));
+		const tarball = path.join(output, expectedFilename);
+		const files = await promoteVerifiedArtifact(stagedTarball, tarball, async (candidate) => {
+			const candidateFiles = await archiveFiles(candidate, absoluteRoot, await expectedArchiveFiles(packageRoot));
+			await verifyExtractedFiles(candidate, candidateFiles, work);
+			await smokeTest(candidate, path.join(absoluteRoot, "node_modules/.bin/tsc"));
+			return candidateFiles;
+		});
 		return { tarball, files };
 	} finally {
 		await rm(work, { recursive: true, force: true });

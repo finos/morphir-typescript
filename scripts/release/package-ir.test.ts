@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runReleaseCli } from "./cli.ts";
-import { buildIrArtifact, publishManifest, validatePackageFiles } from "./package-ir.ts";
+import { buildIrArtifact, canonicalSourceMap, promoteVerifiedArtifact, publishManifest, runCommand, validatePackageFiles } from "./package-ir.ts";
 
 const root = path.resolve(import.meta.dir, "../..");
 
@@ -103,6 +103,97 @@ describe("validatePackageFiles", () => {
 	});
 });
 
+describe("canonicalSourceMap", () => {
+	test("replaces checkout-dependent sources with stable virtual package paths", () => {
+		const sourceRoot = path.join(root, "packages/ir/src");
+		const mapFile = path.join(tmpdir(), "stage/dist/index.js.map");
+		const originalSource = path.join(sourceRoot, "index.ts");
+		const input = JSON.stringify({
+			version: 3,
+			file: "index.js",
+			sources: [path.relative(path.dirname(mapFile), originalSource)],
+			sourcesContent: ["export {};"],
+			mappings: "AAAA",
+		});
+
+		expect(JSON.parse(canonicalSourceMap(input, mapFile, sourceRoot))).toEqual({
+			version: 3,
+			file: "index.js",
+			sources: ["morphir-ir:///src/index.ts"],
+			sourcesContent: ["export {};"],
+			mappings: "AAAA",
+		});
+	});
+
+	test("rejects a source that resolves outside packages/ir/src", () => {
+		const sourceRoot = path.join(root, "packages/ir/src");
+		const mapFile = path.join(root, "dist/index.js.map");
+		expect(() => canonicalSourceMap('{"version":3,"sources":["../secrets.ts"],"mappings":""}', mapFile, sourceRoot)).toThrow("outside packages/ir/src");
+	});
+});
+
+describe("runCommand", () => {
+	test("reports bounded stdout and stderr when a command fails", async () => {
+		const program = 'process.stdout.write("OUT" + "x".repeat(20_000)); process.stderr.write("ERR" + "y".repeat(20_000)); process.exit(7)';
+		let failure: Error | undefined;
+		try {
+			await runCommand([process.execPath, "--eval", program], root);
+		} catch (error) {
+			failure = error as Error;
+		}
+
+		expect(failure?.message).toContain("exit code 7");
+		expect(failure?.message).toContain("stdout:\nOUT");
+		expect(failure?.message).toContain("stderr:\nERR");
+		expect(failure?.message).toContain("truncated");
+		expect(failure?.message.length).toBeLessThan(10_000);
+	});
+});
+
+describe("promoteVerifiedArtifact", () => {
+	test("preserves an existing artifact when verification fails", async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "morphir-ir-promote-test-"));
+		try {
+			const staged = path.join(directory, "staged.tgz");
+			const final = path.join(directory, "out/artifact.tgz");
+			await Bun.write(staged, "unverified");
+			await Bun.write(final, "verified");
+
+			await expect(
+				promoteVerifiedArtifact(staged, final, async () => {
+					throw new Error("verification failed");
+				}),
+			).rejects.toThrow("verification failed");
+
+			expect(await readFile(final, "utf8")).toBe("verified");
+			expect(await readdir(path.dirname(final))).toEqual(["artifact.tgz"]);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
+
+	test("atomically replaces the destination only after verification", async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "morphir-ir-promote-test-"));
+		try {
+			const staged = path.join(directory, "staged.tgz");
+			const final = path.join(directory, "out/artifact.tgz");
+			await writeFile(staged, "new");
+			await Bun.write(final, "old");
+			let sawOldDestination = false;
+
+			await promoteVerifiedArtifact(staged, final, async () => {
+				sawOldDestination = (await readFile(final, "utf8")) === "old";
+			});
+
+			expect(sawOldDestination).toBe(true);
+			expect(await readFile(final, "utf8")).toBe("new");
+			expect(await readdir(path.dirname(final))).toEqual(["artifact.tgz"]);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
+});
+
 describe("@finos/morphir-ir artifact", () => {
 	let output: string;
 	let artifact: Awaited<ReturnType<typeof buildIrArtifact>>;
@@ -139,6 +230,19 @@ describe("@finos/morphir-ir artifact", () => {
 		for (const declaration of artifact.files.filter((file) => file.endsWith(".d.ts"))) {
 			const contents = await Bun.$`tar -xOf ${artifact.tarball} ${declaration}`.text();
 			expect(contents).not.toMatch(/(?:from\s+|import\s*\()["'][^"']*\.ts["']/);
+		}
+		const sourceMaps = new Map<string, string>();
+		for (const sourceMap of artifact.files.filter((file) => file.endsWith(".map"))) {
+			const contents = await Bun.$`tar -xOf ${artifact.tarball} ${sourceMap}`.text();
+			sourceMaps.set(sourceMap, contents);
+			expect(contents).not.toContain(root);
+			const parsed = JSON.parse(contents) as { sources: string[] };
+			expect(parsed.sources.every((source) => source.startsWith("morphir-ir:///src/") && !source.includes(".."))).toBe(true);
+		}
+
+		const rebuilt = await buildIrArtifact(root, output);
+		for (const [sourceMap, contents] of sourceMaps) {
+			expect(await Bun.$`tar -xOf ${rebuilt.tarball} ${sourceMap}`.text()).toBe(contents);
 		}
 	}, 60_000);
 
