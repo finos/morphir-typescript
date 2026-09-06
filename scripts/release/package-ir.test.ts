@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runReleaseCli } from "./cli.ts";
@@ -130,6 +130,23 @@ describe("canonicalSourceMap", () => {
 		const mapFile = path.join(root, "dist/index.js.map");
 		expect(() => canonicalSourceMap('{"version":3,"sources":["../secrets.ts"],"mappings":""}', mapFile, sourceRoot)).toThrow("outside packages/ir/src");
 	});
+
+	test("rejects a source symlink that escapes packages/ir/src", async () => {
+		const directory = await mkdtemp(path.join(tmpdir(), "morphir-ir-map-test-"));
+		try {
+			const sourceRoot = path.join(directory, "packages/ir/src");
+			const mapFile = path.join(directory, "dist/index.js.map");
+			const outside = path.join(directory, "outside.ts");
+			await mkdir(sourceRoot, { recursive: true });
+			await writeFile(outside, "export {};\n");
+			await symlink(outside, path.join(sourceRoot, "escaped.ts"));
+			const source = path.relative(path.dirname(mapFile), path.join(sourceRoot, "escaped.ts"));
+
+			expect(() => canonicalSourceMap(JSON.stringify({ version: 3, sources: [source], mappings: "" }), mapFile, sourceRoot)).toThrow("outside packages/ir/src");
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
+	});
 });
 
 describe("runCommand", () => {
@@ -250,6 +267,18 @@ describe("@finos/morphir-ir artifact", () => {
 		if (output !== undefined) await rm(output, { recursive: true, force: true });
 	});
 });
+
+test("builds the artifact through a symlinked repository root", async () => {
+	const directory = await mkdtemp(path.join(tmpdir(), "morphir-ir-symlink-build-test-"));
+	try {
+		const linkedRoot = path.join(directory, "repository");
+		await symlink(root, linkedRoot, "dir");
+		const artifact = await buildIrArtifact(linkedRoot, path.join(directory, "out"));
+		expect(path.basename(artifact.tarball)).toBe("finos-morphir-ir-0.0.0.tgz");
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+}, 60_000);
 
 describe("artifact CLI", () => {
 	test("resolves one output directory, builds it, and prints the exact tarball", async () => {

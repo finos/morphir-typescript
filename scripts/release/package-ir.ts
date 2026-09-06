@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { randomUUID } from "node:crypto";
-import { constants } from "node:fs";
+import { constants, realpathSync } from "node:fs";
 import { copyFile, lstat, mkdir, mkdtemp, readdir, readFile, rename, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -132,11 +132,17 @@ export function canonicalSourceMap(contents: string, mapFile: string, packageSou
 	const parsed: unknown = JSON.parse(contents);
 	if (!isRecord(parsed) || !Array.isArray(parsed.sources)) throw new Error(`${mapFile} must contain a source map with a sources array`);
 	if (parsed.sourceRoot !== undefined && parsed.sourceRoot !== "") throw new Error(`${mapFile} contains an unexpected sourceRoot`);
-	const sourceRoot = path.resolve(packageSourceRoot);
+	const sourceRoot = realpathSync(packageSourceRoot);
 	const sources = parsed.sources.map((source) => {
 		if (typeof source !== "string") throw new Error(`${mapFile} contains a non-string source`);
 		const resolved = path.resolve(sourceBase, source);
-		const relative = path.relative(sourceRoot, resolved);
+		let resolvedSource: string;
+		try {
+			resolvedSource = realpathSync(resolved);
+		} catch (error) {
+			throw new Error(`${mapFile} source resolves outside packages/ir/src or does not exist: ${source}`, { cause: error });
+		}
+		const relative = path.relative(sourceRoot, resolvedSource);
 		if (relative === "" || relative.startsWith(`..${path.sep}`) || relative === ".." || path.isAbsolute(relative)) {
 			throw new Error(`${mapFile} source resolves outside packages/ir/src: ${source}`);
 		}
