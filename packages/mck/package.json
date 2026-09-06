@@ -1,6 +1,6 @@
 {
 	"name": "@finos/morphir-mck",
-	"version": "0.0.0",
+	"version": "0.0.1",
 	"private": true,
 	"type": "module",
 	"description": "The Morphir Compatibility Kit (MCK) driver: parses the kit's case files, drives bindings, writes reports.",

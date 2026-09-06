@@ -220,7 +220,7 @@ describe("@finos/morphir-ir artifact", () => {
 		artifact = await buildIrArtifact(root, output);
 
 		expect(path.isAbsolute(artifact.tarball)).toBe(true);
-		expect(path.basename(artifact.tarball)).toBe("finos-morphir-ir-0.0.0.tgz");
+		expect(path.basename(artifact.tarball)).toBe("finos-morphir-ir-0.0.1.tgz");
 		expect(artifact.files).toEqual([...artifact.files].sort());
 		for (const required of [
 			"package/package.json",
@@ -274,7 +274,7 @@ test("builds the artifact through a symlinked repository root", async () => {
 		const linkedRoot = path.join(directory, "repository");
 		await symlink(root, linkedRoot, "dir");
 		const artifact = await buildIrArtifact(linkedRoot, path.join(directory, "out"));
-		expect(path.basename(artifact.tarball)).toBe("finos-morphir-ir-0.0.0.tgz");
+		expect(path.basename(artifact.tarball)).toBe("finos-morphir-ir-0.0.1.tgz");
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}
@@ -284,7 +284,7 @@ describe("artifact CLI", () => {
 	test("resolves one output directory, builds it, and prints the exact tarball", async () => {
 		const calls: [string, string][] = [];
 		const output: string[] = [];
-		const tarball = path.join(root, ".dev/out/cli/finos-morphir-ir-0.0.0.tgz");
+		const tarball = path.join(root, ".dev/out/cli/finos-morphir-ir-0.0.1.tgz");
 
 		await runReleaseCli(["artifact", ".dev/out/cli"], {
 			root,
