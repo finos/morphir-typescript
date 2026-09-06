@@ -29,7 +29,7 @@ Standalone CI temporarily sets `MORPHIR_FIXTURES_OPTIONAL=1` in the test task be
 
 ## Publishing
 
-Releases use one suite version and one signed `vVERSION` tag for every workspace. The initial `0.0.1` release publishes only `@finos/morphir-ir`; `@finos/morphir-mck` stays private. The release validator is the authority for accepted tags, manifest versions, package visibility, and changelog state. A release tag must point to a commit on `main`.
+Releases use one suite version and one signed `vVERSION` tag for every workspace. The initial `0.0.1` release publishes only `@finos/morphir-ir`; `@finos/morphir-mck` stays private. The release validator is the authority for accepted tags, manifest versions, package visibility, and changelog state. Signed tags are an operator requirement. The workflow validates exact tag syntax and `main` ancestry but does not cryptographically verify tag signatures.
 
 The publishing workflow contract separates artifact creation from publication:
 
@@ -39,14 +39,15 @@ The publishing workflow contract separates artifact creation from publication:
 
 The publish job receives the FINOS organization secret `ORG_MORPHIR_NPM_TOKEN`. The npm token must be authorized to publish public packages in the `@finos` scope. No other job receives it.
 
-Prepare and review the first release with:
+The initial `0.0.1` release is already prepared in this change. Do not run release preparation for `0.0.1` again. For a future release, set the next suite version and run:
 
 ```sh
-mise run release:prepare -- 0.0.1
+VERSION=0.0.2
+mise run release:prepare -- "$VERSION"
 mise run ci
 ```
 
-Release preparation updates files in the working tree. It does not commit, tag, or push. Review those changes, commit them through the normal contribution process, and merge the reviewed commit to `main`. From that commit, create and push the signed tag:
+Release preparation updates files in the working tree. It does not commit, tag, or push. Review those changes, commit them through the normal contribution process, and merge the reviewed commit to `main`. For the initial release, create and push the signed tag from the prepared commit on `main`:
 
 ```sh
 git tag -s v0.0.1 -m "Release 0.0.1"

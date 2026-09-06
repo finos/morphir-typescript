@@ -166,16 +166,21 @@ describe("release automation contract", () => {
 		const publishing = markdownSection(guide, "Publishing");
 		for (const expected of [
 			"ORG_MORPHIR_NPM_TOKEN",
-			"mise run release:prepare -- 0.0.1",
+			"initial 0.0.1 release is already prepared",
+			"VERSION=0.0.2",
+			'mise run release:prepare -- "$VERSION"',
 			"mise run ci",
 			'git tag -s v0.0.1 -m "Release 0.0.1"',
 			"git push origin v0.0.1",
+			"Signed tags are an operator requirement",
+			"does not cryptographically verify tag signatures",
 			"provenance",
 			"GitHub Release",
 			"immutable",
 			"main",
 		])
 			expect(publishing).toContain(expected);
+		expect(publishing).not.toContain("mise run release:prepare -- 0.0.1");
 		expect(publishing).toMatch(/does not (?:commit|create commits), tag, or push/i);
 		expect(publishing).toContain("publishes only @finos/morphir-ir");
 	});
