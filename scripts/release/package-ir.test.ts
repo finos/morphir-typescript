@@ -7,8 +7,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { runReleaseCli } from "./cli.ts";
 import { buildIrArtifact, canonicalSourceMap, promoteVerifiedArtifact, publishManifest, runCommand, validatePackageFiles } from "./package-ir.ts";
+import { parseStableVersion } from "./version.ts";
 
 const root = path.resolve(import.meta.dir, "../..");
+const repositoryVersion = parseStableVersion(JSON.parse(await readFile(path.join(root, "packages/ir/package.json"), "utf8")).version).text;
+const repositoryArtifactFilename = `finos-morphir-ir-${repositoryVersion}.tgz`;
 
 const exportsMap = {
 	".": { types: "./dist/index.d.ts", import: "./dist/index.js" },
@@ -220,7 +223,7 @@ describe("@finos/morphir-ir artifact", () => {
 		artifact = await buildIrArtifact(root, output);
 
 		expect(path.isAbsolute(artifact.tarball)).toBe(true);
-		expect(path.basename(artifact.tarball)).toBe("finos-morphir-ir-0.0.1.tgz");
+		expect(path.basename(artifact.tarball)).toBe(repositoryArtifactFilename);
 		expect(artifact.files).toEqual([...artifact.files].sort());
 		for (const required of [
 			"package/package.json",
@@ -274,7 +277,7 @@ test("builds the artifact through a symlinked repository root", async () => {
 		const linkedRoot = path.join(directory, "repository");
 		await symlink(root, linkedRoot, "dir");
 		const artifact = await buildIrArtifact(linkedRoot, path.join(directory, "out"));
-		expect(path.basename(artifact.tarball)).toBe("finos-morphir-ir-0.0.1.tgz");
+		expect(path.basename(artifact.tarball)).toBe(repositoryArtifactFilename);
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}
@@ -284,7 +287,7 @@ describe("artifact CLI", () => {
 	test("resolves one output directory, builds it, and prints the exact tarball", async () => {
 		const calls: [string, string][] = [];
 		const output: string[] = [];
-		const tarball = path.join(root, ".dev/out/cli/finos-morphir-ir-0.0.1.tgz");
+		const tarball = path.join(root, ".dev/out/cli", repositoryArtifactFilename);
 
 		await runReleaseCli(["artifact", ".dev/out/cli"], {
 			root,
