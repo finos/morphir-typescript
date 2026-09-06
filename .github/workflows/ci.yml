@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   ci:
-    name: Lint, typecheck, and test
+    name: Lint, typecheck, test, package, and workflows
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
