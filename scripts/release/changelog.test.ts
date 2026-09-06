@@ -105,6 +105,11 @@ All notable changes to this project will be documented in this file.
 		expect(() => prepareChangelog(markdown, parseStableVersion("1.0.0"), "2026-09-05")).toThrow("Unreleased section has no top-level unordered list items");
 	});
 
+	test("treats an ordinary root h2 as the end of Unreleased", () => {
+		const markdown = "## [Unreleased]\n\n## Other\n\n- Not a release item.\n";
+		expect(() => prepareChangelog(markdown, parseStableVersion("1.0.0"), "2026-09-05")).toThrow("Unreleased section has no top-level unordered list items");
+	});
+
 	test("rejects a changelog without the exact Unreleased heading", () => {
 		const markdown = "# Changelog\n\n### [Unreleased]\n\n- Ready.\n";
 		expect(() => prepareChangelog(markdown, parseStableVersion("1.0.0"), "2026-09-05")).toThrow("changelog is missing ## [Unreleased]");
@@ -214,6 +219,44 @@ ${literal}
 		const prepared = prepareChangelog(markdown, parseStableVersion("1.0.0"), "2026-09-05");
 		expect(prepared).toContain(`- Example syntax:\n${literal}\n- Real release item.`);
 	});
+
+	test("removes complete multiline comparison definitions", () => {
+		const markdown = `## [Unreleased]
+
+- Ready.
+
+## [0.9.0] - 2026-08-01
+
+- Previous.
+
+[Unreleased]:
+  <https://github.com/finos/morphir-typescript/compare/v0.9.0...HEAD>
+  "Stale Unreleased comparison"
+[0.9.0]:
+  <https://github.com/finos/morphir-typescript/releases/tag/v0.9.0>
+  "First release"
+`;
+		const prepared = prepareChangelog(markdown, parseStableVersion("1.0.0"), "2026-09-05");
+		expect(prepared).not.toContain("Stale Unreleased comparison");
+		expect(prepared.match(/First release/g)).toHaveLength(1);
+		expect(prepared).toContain("[Unreleased]: https://github.com/finos/morphir-typescript/compare/v1.0.0...HEAD");
+	});
+
+	test("preserves a version-labeled repository issue definition", () => {
+		const issueDefinition = "[0.9.0]: https://github.com/finos/morphir-typescript/issues/123";
+		const markdown = `## [Unreleased]
+
+- Ready.
+
+## [0.9.0] - 2026-08-01
+
+- Previous.
+
+${issueDefinition}
+`;
+		const prepared = prepareChangelog(markdown, parseStableVersion("1.0.0"), "2026-09-05");
+		expect(prepared).toContain(issueDefinition);
+	});
 });
 
 describe("extractReleaseNotes", () => {
@@ -291,6 +334,18 @@ describe("extractReleaseNotes", () => {
 `);
 	});
 
+	test("stops at an ordinary root h2", () => {
+		const markdown = `## [1.0.0] - 2026-09-05
+
+- Release notes.
+
+## Other
+
+- Not release notes.
+`;
+		expect(extractReleaseNotes(markdown, parseStableVersion("1.0.0"))).toBe("- Release notes.\n");
+	});
+
 	test("preserves ordinary definitions and fenced literals while excluding comparison definitions", () => {
 		const markdown = `## [1.0.0] - 2026-09-05
 
@@ -315,6 +370,32 @@ describe("extractReleaseNotes", () => {
 [1.0.0]: literal version definition
 \`\`\`
 `);
+	});
+
+	test("excludes complete multiline comparison definitions with angle-bracket destinations", () => {
+		const markdown = `## [1.0.0] - 2026-09-05
+
+- Release notes.
+
+[Unreleased]:
+  <https://github.com/finos/morphir-typescript/compare/v1.0.0...HEAD>
+  "Unreleased comparison"
+[1.0.0]:
+  <https://github.com/finos/morphir-typescript/releases/tag/v1.0.0>
+  "Release comparison"
+`;
+		expect(extractReleaseNotes(markdown, parseStableVersion("1.0.0"))).toBe("- Release notes.\n");
+	});
+
+	test("preserves a version-labeled repository issue definition", () => {
+		const issueDefinition = "[1.0.0]: https://github.com/finos/morphir-typescript/issues/123";
+		const markdown = `## [1.0.0] - 2026-09-05
+
+- Release notes.
+
+${issueDefinition}
+`;
+		expect(extractReleaseNotes(markdown, parseStableVersion("1.0.0"))).toBe(`- Release notes.\n\n${issueDefinition}\n`);
 	});
 
 	test("does not select a target heading from an HTML comment", () => {
@@ -391,7 +472,7 @@ ${literal}
 		expect(extractReleaseNotes(markdown, parseStableVersion("1.0.0"))).toContain(literal);
 	});
 
-	test("uses Bun semantics for lowercase declaration-like text", () => {
+	test("uses CommonMark semantics for lowercase declaration-like text", () => {
 		const markdown = `## [1.0.0] - 2026-09-05
 
 <!doctype
@@ -400,10 +481,15 @@ ${literal}
 
 - Real notes.
 `;
-		expect(extractReleaseNotes(markdown, parseStableVersion("1.0.0"))).toBe("<!doctype\n");
+		expect(extractReleaseNotes(markdown, parseStableVersion("1.0.0"))).toBe(`<!doctype
+## [9.9.9] - 2026-09-05
+>
+
+- Real notes.
+`);
 	});
 
-	test("uses Bun paragraph context for type-7 HTML blocks", () => {
+	test("uses CommonMark paragraph context for type-7 HTML blocks", () => {
 		const markdown = `## [1.0.0] - 2026-09-05
 
 Paragraph text.
@@ -415,7 +501,7 @@ Paragraph text.
 		expect(extractReleaseNotes(markdown, parseStableVersion("1.0.0"))).toBe("Paragraph text.\n<custom-element>\n");
 	});
 
-	test("uses Bun tag parsing when an attribute contains a greater-than sign", () => {
+	test("uses CommonMark tag parsing when an attribute contains a greater-than sign", () => {
 		const markdown = `## [1.0.0] - 2026-09-05
 
 <custom-element data-value="a > b">

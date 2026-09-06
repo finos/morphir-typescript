@@ -1,150 +1,86 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 
+import { fromMarkdown } from "mdast-util-from-markdown";
 import { compareVersions, parseStableVersion, type StableVersion } from "./version.ts";
 
 const REPOSITORY_URL = "https://github.com/finos/morphir-typescript";
+const REPOSITORY_URL_PATTERN = "https://github\\.com/finos/morphir-typescript";
 const VERSION_TEXT = "(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)";
+const KAC_HEADING = new RegExp(`^## (\\[Unreleased\\]|\\[${VERSION_TEXT}\\]|\\[${VERSION_TEXT}\\] - \\d{4}-\\d{2}-\\d{2})$`);
 const DATED_RELEASE_TEXT = new RegExp(`^\\[(${VERSION_TEXT})\\] - \\d{4}-\\d{2}-\\d{2}$`);
 const RELEASE_LINK_LABEL = new RegExp(`^${VERSION_TEXT}$`);
+const UNRELEASED_URL = new RegExp(`^${REPOSITORY_URL_PATTERN}/compare/v${VERSION_TEXT}\\.\\.\\.HEAD$`);
+const RELEASE_URL = new RegExp(`^${REPOSITORY_URL_PATTERN}/releases/tag/v(${VERSION_TEXT})$`);
+const COMPARE_URL = new RegExp(`^${REPOSITORY_URL_PATTERN}/compare/v${VERSION_TEXT}\\.\\.\\.v(${VERSION_TEXT})$`);
 
 interface SourceRange {
 	readonly start: number;
 	readonly end: number;
 }
 
-interface HeadingCandidate extends SourceRange {
-	readonly bodyStart: number;
-	readonly text: string;
+interface RootHeading extends SourceRange {
+	readonly kacText?: string;
 }
 
-interface DefinitionCandidate extends SourceRange {
+interface RootDefinition extends SourceRange {
 	readonly label: string;
-	readonly labelStart: number;
-	readonly labelEnd: number;
-	readonly value: string;
+	readonly url: string;
 }
 
-interface Candidates {
-	readonly headings: HeadingCandidate[];
-	readonly definitions: DefinitionCandidate[];
+interface ChangelogBlocks {
+	readonly headings: RootHeading[];
+	readonly definitions: RootDefinition[];
 }
 
-interface Replacement extends SourceRange {
-	readonly value: string;
+interface PositionedNode {
+	readonly position?: {
+		readonly start: { readonly offset?: number };
+		readonly end: { readonly offset?: number };
+	};
 }
 
-function scanCandidates(markdown: string): Candidates {
-	const headings: HeadingCandidate[] = [];
-	const definitions: DefinitionCandidate[] = [];
-	let start = 0;
-	while (start < markdown.length) {
-		const newline = markdown.indexOf("\n", start);
-		const sourceEnd = newline === -1 ? markdown.length : newline + 1;
-		let contentEnd = newline === -1 ? markdown.length : newline;
-		if (contentEnd > start && markdown.charCodeAt(contentEnd - 1) === 13) contentEnd -= 1;
-		const line = markdown.slice(start, contentEnd);
-		const heading = /^## (\[[^\]]+\](?: - \d{4}-\d{2}-\d{2})?)$/.exec(line);
-		if (heading !== null) headings.push({ start, end: contentEnd, bodyStart: start + 3, text: heading[1] as string });
-		const definition = /^ {0,3}\[([^\]]+)\]:[\t ]*(\S.*)$/.exec(line);
-		if (definition !== null) {
-			const label = definition[1] as string;
-			const labelStart = start + line.indexOf("[") + 1;
-			definitions.push({ start, end: sourceEnd, label, labelStart, labelEnd: labelStart + label.length, value: definition[2] as string });
+function sourceRange(node: PositionedNode): SourceRange {
+	const start = node.position?.start.offset;
+	const end = node.position?.end.offset;
+	if (start === undefined || end === undefined) throw new Error("Markdown parser did not provide source offsets");
+	return { start, end };
+}
+
+function sourceRangeWithIndentation(markdown: string, node: PositionedNode): SourceRange {
+	const range = sourceRange(node);
+	return { ...range, start: markdown.lastIndexOf("\n", range.start - 1) + 1 };
+}
+
+function changelogBlocks(markdown: string): ChangelogBlocks {
+	const root = fromMarkdown(markdown);
+	const headings: RootHeading[] = [];
+	const definitions: RootDefinition[] = [];
+	let trailingDefinitionStart = root.children.length;
+	while (root.children[trailingDefinitionStart - 1]?.type === "definition") trailingDefinitionStart -= 1;
+	for (const [index, child] of root.children.entries()) {
+		if (child.type === "heading" && child.depth === 2) {
+			const range = sourceRange(child);
+			const match = KAC_HEADING.exec(markdown.slice(range.start, range.end));
+			headings.push({ ...range, kacText: match?.[1] });
+		} else if (index >= trailingDefinitionStart && child.type === "definition") {
+			const range = sourceRangeWithIndentation(markdown, child);
+			definitions.push({ ...range, label: child.label ?? child.identifier, url: child.url });
 		}
-		start = sourceEnd;
 	}
 	return { headings, definitions };
 }
 
-function uniqueMarkerPrefix(markdown: string, stem: string): string {
-	let prefix = stem;
-	while (markdown.includes(prefix)) prefix += "X";
-	return prefix;
-}
-
-function replaceRanges(markdown: string, replacements: readonly Replacement[]): string {
-	let result = "";
-	let cursor = 0;
-	for (const replacement of replacements) {
-		result += markdown.slice(cursor, replacement.start);
-		result += replacement.value;
-		cursor = replacement.end;
-	}
-	return result + markdown.slice(cursor);
-}
-
-function actualHeadings(markdown: string, candidates: readonly HeadingCandidate[]): HeadingCandidate[] {
-	if (candidates.length === 0) return [];
-	const prefix = uniqueMarkerPrefix(markdown, "MORPHIRRELEASEHEADINGMARKER");
-	const markers = candidates.map((_, index) => `${prefix}${index}END`);
-	const byMarker = new Map(markers.map((marker, index) => [marker, index]));
-	const annotated = replaceRanges(
-		markdown,
-		candidates.map((candidate, index) => ({ start: candidate.bodyStart, end: candidate.end, value: markers[index] as string })),
-	);
-	const actual = new Set<number>();
-	Bun.markdown.render(annotated, {
-		heading(children, meta) {
-			const index = meta.level === 2 ? byMarker.get(children) : undefined;
-			if (index !== undefined) actual.add(index);
-			return children;
-		},
-	});
-	return candidates.filter((_, index) => actual.has(index));
-}
-
-function actualDefinitions(markdown: string, candidates: readonly DefinitionCandidate[]): DefinitionCandidate[] {
-	if (candidates.length === 0) return [];
-	const prefix = uniqueMarkerPrefix(markdown, "MORPHIRRELEASEDEFINITIONMARKER");
-	const markers = candidates.map((_, index) => `${prefix}${index}END`);
-	const probes = candidates.map((_, index) => `${prefix}PROBE${index}END`);
-	const byProbe = new Map(probes.map((probe, index) => [probe, index]));
-	const annotated = replaceRanges(
-		markdown,
-		candidates.map((candidate, index) => ({ start: candidate.labelStart, end: candidate.labelEnd, value: markers[index] as string })),
-	);
-	const resolved = new Set<number>();
-	Bun.markdown.render(`${annotated}\n\n${probes.map((probe, index) => `[${probe}][${markers[index]}]`).join("\n")}`, {
-		link(children, meta) {
-			const index = byProbe.get(children);
-			if (index !== undefined && meta.href.length > 0) resolved.add(index);
-			return children;
-		},
-	});
-	return candidates.filter((_, index) => resolved.has(index));
-}
-
-function tailDefinitions(markdown: string, definitions: readonly DefinitionCandidate[]): DefinitionCandidate[] {
-	const tail: DefinitionCandidate[] = [];
-	let cursor = markdown.length;
-	for (let index = definitions.length - 1; index >= 0; index -= 1) {
-		const definition = definitions[index] as DefinitionCandidate;
-		if (markdown.slice(definition.end, cursor).trim().length !== 0) break;
-		tail.unshift(definition);
-		cursor = definition.start;
-	}
-	return tail;
-}
-
-function comparisonDefinitions(markdown: string, candidates: Candidates): DefinitionCandidate[] {
-	const definitions = tailDefinitions(markdown, actualDefinitions(markdown, candidates.definitions));
-	return definitions.filter((definition) => {
-		if (definition.label !== "Unreleased" && !RELEASE_LINK_LABEL.test(definition.label)) return false;
-		const destination = definition.value.trim().split(/[\t ]+/, 1)[0];
-		return destination?.startsWith(`${REPOSITORY_URL}/`) === true;
-	});
+function comparisonDefinition(definition: RootDefinition): boolean {
+	if (definition.label === "Unreleased") return UNRELEASED_URL.test(definition.url);
+	if (!RELEASE_LINK_LABEL.test(definition.label)) return false;
+	const release = RELEASE_URL.exec(definition.url);
+	if (release?.[1] === definition.label) return true;
+	return COMPARE_URL.exec(definition.url)?.[1] === definition.label;
 }
 
 function hasTopLevelUnorderedListItem(markdown: string): boolean {
-	let found = false;
-	Bun.markdown.render(markdown, {
-		listItem(children, meta) {
-			if (meta.depth === 0 && !meta.ordered) found = true;
-			return children;
-		},
-	});
-	return found;
+	return fromMarkdown(markdown).children.some((child) => child.type === "list" && child.ordered !== true && child.children.length > 0);
 }
 
 function isIsoDate(date: string): boolean {
@@ -181,15 +117,15 @@ function sliceWithoutRanges(markdown: string, start: number, end: number, ranges
 	return result + markdown.slice(cursor, end);
 }
 
-function releaseVersion(heading: HeadingCandidate): StableVersion | undefined {
-	const match = DATED_RELEASE_TEXT.exec(heading.text);
+function releaseVersion(heading: RootHeading): StableVersion | undefined {
+	const match = heading.kacText === undefined ? null : DATED_RELEASE_TEXT.exec(heading.kacText);
 	return match === null ? undefined : parseStableVersion(match[1] as string);
 }
 
 export function prepareChangelog(markdown: string, version: StableVersion, date: string): string {
 	if (!isIsoDate(date)) throw new Error(`invalid release date: ${date}`);
-	const candidates = scanCandidates(markdown);
-	const headings = actualHeadings(markdown, candidates.headings);
+	const blocks = changelogBlocks(markdown);
+	const headings = blocks.headings;
 	const releases = headings.flatMap((heading) => {
 		const release = releaseVersion(heading);
 		return release === undefined ? [] : [release];
@@ -198,20 +134,20 @@ export function prepareChangelog(markdown: string, version: StableVersion, date:
 	if (
 		headings.some((heading) => {
 			const release = releaseVersion(heading);
-			return heading.text === undatedTarget || (release !== undefined && compareVersions(release, version) === 0);
+			return heading.kacText === undatedTarget || (release !== undefined && compareVersions(release, version) === 0);
 		})
 	)
 		throw new Error(`changelog already contains release ${version.text}`);
 
-	const unreleasedIndex = headings.findIndex((heading) => heading.text === "[Unreleased]");
+	const unreleasedIndex = headings.findIndex((heading) => heading.kacText === "[Unreleased]");
 	if (unreleasedIndex === -1) throw new Error("changelog is missing ## [Unreleased]");
-	const unreleased = headings[unreleasedIndex] as HeadingCandidate;
+	const unreleased = headings[unreleasedIndex] as RootHeading;
 	const bodyStart = unreleased.end;
 	const bodyEnd = headings[unreleasedIndex + 1]?.start ?? markdown.length;
 	const body = markdown.slice(bodyStart, bodyEnd);
 	if (!hasTopLevelUnorderedListItem(body)) throw new Error("Unreleased section has no top-level unordered list items");
 
-	const comparisonLinks = comparisonDefinitions(markdown, candidates);
+	const comparisonLinks = blocks.definitions.filter(comparisonDefinition);
 	const removalRanges = comparisonLinks.map((link) => includeFollowingBlankLine(markdown, link));
 	const olderLinks = new Map<string, string>();
 	for (const link of comparisonLinks) {
@@ -230,17 +166,18 @@ export function prepareChangelog(markdown: string, version: StableVersion, date:
 }
 
 export function extractReleaseNotes(markdown: string, version: StableVersion): string {
-	const candidates = scanCandidates(markdown);
-	const headings = actualHeadings(markdown, candidates.headings);
+	const blocks = changelogBlocks(markdown);
+	const headings = blocks.headings;
 	const targetIndex = headings.findIndex((heading) => releaseVersion(heading)?.text === version.text);
 	if (targetIndex === -1) {
-		if (headings.some((heading) => heading.text === `[${version.text}]`)) throw new Error(`release ${version.text} is not dated`);
+		if (headings.some((heading) => heading.kacText === `[${version.text}]`)) throw new Error(`release ${version.text} is not dated`);
 		throw new Error(`release ${version.text} not found in changelog`);
 	}
-	const target = headings[targetIndex] as HeadingCandidate;
+	const target = headings[targetIndex] as RootHeading;
 	const bodyStart = target.end;
 	const bodyEnd = headings[targetIndex + 1]?.start ?? markdown.length;
-	const removalRanges = comparisonDefinitions(markdown, candidates)
+	const removalRanges = blocks.definitions
+		.filter(comparisonDefinition)
 		.filter((definition) => definition.start >= bodyStart && definition.end <= bodyEnd)
 		.map((definition) => includeFollowingBlankLine(markdown, definition));
 	const body = removeSurroundingBlankLines(sliceWithoutRanges(markdown, bodyStart, bodyEnd, removalRanges));
