@@ -1,18 +1,26 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { extractReleaseNotes } from "./changelog.ts";
+import { buildIrArtifact } from "./package-ir.ts";
 import { prepareSuiteRelease, validateSuiteRelease } from "./suite.ts";
 import { parseStableVersion } from "./version.ts";
 
-const USAGE = ["Usage:", "  release prepare VERSION [--date=YYYY-MM-DD]", "  release validate TAG", "  release notes VERSION OUTPUT"].join("\n");
+const USAGE = [
+	"Usage:",
+	"  release prepare VERSION [--date=YYYY-MM-DD]",
+	"  release validate TAG",
+	"  release notes VERSION OUTPUT",
+	"  release artifact OUTPUT_DIRECTORY",
+].join("\n");
 
 export interface ReleaseCliContext {
 	readonly root?: string;
 	readonly now?: Date;
 	readonly stdout?: (line: string) => void;
+	readonly buildArtifact?: typeof buildIrArtifact;
 }
 
 function usageError(message?: string): Error {
@@ -57,8 +65,17 @@ export async function runReleaseCli(args: readonly string[], context: ReleaseCli
 		const [versionInput, outputPath] = commandArgs as [string, string];
 		const version = parseStableVersion(versionInput);
 		const changelog = await readFile(path.join(root, "CHANGELOG.md"), "utf8");
-		await writeFile(path.resolve(root, outputPath), extractReleaseNotes(changelog, version));
+		const absoluteOutput = path.resolve(root, outputPath);
+		await mkdir(path.dirname(absoluteOutput), { recursive: true });
+		await writeFile(absoluteOutput, extractReleaseNotes(changelog, version));
 		stdout(`Wrote release notes for ${version.text} to ${outputPath}.`);
+		return;
+	}
+	if (command === "artifact") {
+		if (commandArgs.length !== 1) throw usageError();
+		const outputDirectory = path.resolve(root, commandArgs[0] as string);
+		const artifact = await (context.buildArtifact ?? buildIrArtifact)(root, outputDirectory);
+		stdout(artifact.tarball);
 		return;
 	}
 	throw usageError(`unknown release command: ${command}`);

@@ -455,9 +455,9 @@ describe("release CLI", () => {
 		const output: string[] = [];
 
 		await runReleaseCli(["validate", "v0.0.1"], { root, stdout: (line) => output.push(line) });
-		await runReleaseCli(["notes", "0.0.1", "release-notes.md"], { root, stdout: (line) => output.push(line) });
+		await runReleaseCli(["notes", "0.0.1", "notes/release-notes.md"], { root, stdout: (line) => output.push(line) });
 
-		expect(output).toEqual(["Validated suite release v0.0.1.", "Wrote release notes for 0.0.1 to release-notes.md."]);
-		expect(await readFile(path.join(root, "release-notes.md"), "utf8")).toBe("### Added\n\n- First release.\n");
+		expect(output).toEqual(["Validated suite release v0.0.1.", "Wrote release notes for 0.0.1 to notes/release-notes.md."]);
+		expect(await readFile(path.join(root, "notes/release-notes.md"), "utf8")).toBe("### Added\n\n- First release.\n");
 	});
 });
