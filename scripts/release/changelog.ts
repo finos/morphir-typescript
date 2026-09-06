@@ -4,9 +4,60 @@
 import { compareVersions, parseStableVersion, type StableVersion } from "./version.ts";
 
 const REPOSITORY_URL = "https://github.com/finos/morphir-typescript";
-const VERSION_TEXT = "(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)";
-const DATED_RELEASE_HEADING = new RegExp(`^## \\[(${VERSION_TEXT})\\] - \\d{4}-\\d{2}-\\d{2}$`, "gm");
-const RELEASE_LINK = new RegExp(`^\\[(Unreleased|${VERSION_TEXT})\\]:[^\\r\\n]*(?:\\r?\\n|$)`, "gm");
+const VERSION_TEXT = "(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)";
+const DATED_RELEASE_TEXT = new RegExp(`^\\[(${VERSION_TEXT})\\] - \\d{4}-\\d{2}-\\d{2}$`);
+const RELEASE_LINK_LABEL = new RegExp(`^${VERSION_TEXT}$`);
+
+interface SourceRange {
+	readonly start: number;
+	readonly end: number;
+}
+
+interface RootHeading extends SourceRange {
+	readonly text: string;
+}
+
+interface RootLinkDefinition extends SourceRange {
+	readonly label: string;
+}
+
+interface RootBlocks {
+	readonly headings: RootHeading[];
+	readonly links: RootLinkDefinition[];
+}
+
+function scanRootBlocks(markdown: string): RootBlocks {
+	const headings: RootHeading[] = [];
+	const links: RootLinkDefinition[] = [];
+	let fence: { marker: "`" | "~"; length: number } | undefined;
+	let start = 0;
+	while (start < markdown.length) {
+		const newline = markdown.indexOf("\n", start);
+		const sourceEnd = newline === -1 ? markdown.length : newline + 1;
+		let contentEnd = newline === -1 ? markdown.length : newline;
+		if (contentEnd > start && markdown.charCodeAt(contentEnd - 1) === 13) contentEnd -= 1;
+		const line = markdown.slice(start, contentEnd);
+
+		if (fence !== undefined) {
+			const closing = /^ {0,3}(`{3,}|~{3,})[\t ]*$/.exec(line);
+			if (closing !== null && closing[1]?.[0] === fence.marker && closing[1].length >= fence.length) fence = undefined;
+		} else {
+			const opening = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+			if (opening !== null && !(opening[1]?.startsWith("`") && opening[2]?.includes("`"))) {
+				const marker = opening[1]?.[0];
+				if (marker === "`" || marker === "~") fence = { marker, length: opening[1]?.length ?? 3 };
+			} else {
+				const heading = /^##(?:[\t ]+(.*))?$/.exec(line);
+				if (heading !== null) headings.push({ start, end: contentEnd, text: heading[1] ?? "" });
+				const link = /^\[([^\]]+)\]:[\t ]*\S.*$/.exec(line);
+				if (link !== null) links.push({ start, end: sourceEnd, label: link[1] as string });
+			}
+		}
+
+		start = sourceEnd;
+	}
+	return { headings, links };
+}
 
 function hasTopLevelUnorderedListItem(markdown: string): boolean {
 	let found = false;
@@ -33,45 +84,85 @@ function removeSurroundingBlankLines(markdown: string): string {
 	return removeTrailingBlankLines(markdown.replace(/^(?:[\t ]*\r?\n)+/, ""));
 }
 
+function includeFollowingBlankLine(markdown: string, range: SourceRange): SourceRange {
+	if (range.end >= markdown.length) return range;
+	const newline = markdown.indexOf("\n", range.end);
+	const nextLineEnd = newline === -1 ? markdown.length : newline + 1;
+	if (markdown.slice(range.end, nextLineEnd).trim().length !== 0) return range;
+	return { start: range.start, end: nextLineEnd };
+}
+
+function sliceWithoutRanges(markdown: string, start: number, end: number, ranges: readonly SourceRange[]): string {
+	let result = "";
+	let cursor = start;
+	for (const range of ranges) {
+		if (range.end <= start) continue;
+		if (range.start >= end) break;
+		result += markdown.slice(cursor, range.start);
+		cursor = range.end;
+	}
+	return result + markdown.slice(cursor, end);
+}
+
+function releaseVersion(heading: RootHeading): StableVersion | undefined {
+	const match = DATED_RELEASE_TEXT.exec(heading.text);
+	return match === null ? undefined : parseStableVersion(match[1] as string);
+}
+
 export function prepareChangelog(markdown: string, version: StableVersion, date: string): string {
 	if (!isIsoDate(date)) throw new Error(`invalid release date: ${date}`);
-	const releases = Array.from(markdown.matchAll(DATED_RELEASE_HEADING), (match) => parseStableVersion(match[1] as string));
-	if (releases.some((release) => compareVersions(release, version) === 0)) throw new Error(`changelog already contains release ${version.text}`);
-	const heading = /^## \[Unreleased\]$/m.exec(markdown);
-	if (heading === null) throw new Error("changelog is missing ## [Unreleased]");
-	const bodyStart = heading.index + heading[0].length;
-	const rest = markdown.slice(bodyStart);
-	const nextHeading = /^## /m.exec(rest);
-	const bodyEnd = nextHeading === null ? markdown.length : bodyStart + nextHeading.index;
+	const blocks = scanRootBlocks(markdown);
+	const releases = blocks.headings.flatMap((heading) => {
+		const release = releaseVersion(heading);
+		return release === undefined ? [] : [release];
+	});
+	const undatedTarget = `[${version.text}]`;
+	if (
+		blocks.headings.some((heading) => {
+			const release = releaseVersion(heading);
+			return heading.text === undatedTarget || (release !== undefined && compareVersions(release, version) === 0);
+		})
+	)
+		throw new Error(`changelog already contains release ${version.text}`);
+
+	const unreleasedIndex = blocks.headings.findIndex((heading) => heading.text === "[Unreleased]");
+	if (unreleasedIndex === -1) throw new Error("changelog is missing ## [Unreleased]");
+	const unreleased = blocks.headings[unreleasedIndex] as RootHeading;
+	const bodyStart = unreleased.end;
+	const bodyEnd = blocks.headings[unreleasedIndex + 1]?.start ?? markdown.length;
 	const body = markdown.slice(bodyStart, bodyEnd);
 	if (!hasTopLevelUnorderedListItem(body)) throw new Error("Unreleased section has no top-level unordered list items");
 
+	const comparisonLinks = blocks.links.filter((link) => link.label === "Unreleased" || RELEASE_LINK_LABEL.test(link.label));
+	const removalRanges = comparisonLinks.map((link) => includeFollowingBlankLine(markdown, link));
 	const olderLinks = new Map<string, string>();
-	const withoutReleaseLinks = `${markdown.slice(0, bodyStart)}\n\n## [${version.text}] - ${date}${body}${markdown.slice(bodyEnd)}`.replace(
-		RELEASE_LINK,
-		(line, label: string) => {
-			if (label !== "Unreleased" && label !== version.text && !olderLinks.has(label)) olderLinks.set(label, line.replace(/\r?\n$/, ""));
-			return "";
-		},
-	);
+	for (const link of comparisonLinks) {
+		if (link.label !== "Unreleased" && link.label !== version.text && !olderLinks.has(link.label)) {
+			olderLinks.set(link.label, markdown.slice(link.start, link.end).replace(/\r?\n$/, ""));
+		}
+	}
+	const prefix = sliceWithoutRanges(markdown, 0, bodyStart, removalRanges);
+	const releaseBody = sliceWithoutRanges(markdown, bodyStart, bodyEnd, removalRanges);
+	const suffix = sliceWithoutRanges(markdown, bodyEnd, markdown.length, removalRanges);
+	const withoutComparisonLinks = `${prefix}\n\n## [${version.text}] - ${date}${releaseBody}${suffix}`;
 	const previous = releases.sort(compareVersions).at(-1);
 	const targetUrl = previous ? `${REPOSITORY_URL}/compare/v${previous.text}...v${version.text}` : `${REPOSITORY_URL}/releases/tag/v${version.text}`;
 	const links = [`[Unreleased]: ${REPOSITORY_URL}/compare/v${version.text}...HEAD`, `[${version.text}]: ${targetUrl}`, ...olderLinks.values()];
-	return `${removeTrailingBlankLines(withoutReleaseLinks)}\n\n${links.join("\n")}\n`;
+	return `${removeTrailingBlankLines(withoutComparisonLinks)}\n\n${links.join("\n")}\n`;
 }
 
 export function extractReleaseNotes(markdown: string, version: StableVersion): string {
-	const escapedVersion = version.text.replaceAll(".", "\\.");
-	const heading = new RegExp(`^## \\[${escapedVersion}\\] - \\d{4}-\\d{2}-\\d{2}$`, "m").exec(markdown);
-	if (heading === null) {
-		if (new RegExp(`^## \\[${escapedVersion}\\]$`, "m").test(markdown)) throw new Error(`release ${version.text} is not dated`);
+	const blocks = scanRootBlocks(markdown);
+	const targetIndex = blocks.headings.findIndex((heading) => releaseVersion(heading)?.text === version.text);
+	if (targetIndex === -1) {
+		if (blocks.headings.some((heading) => heading.text === `[${version.text}]`)) throw new Error(`release ${version.text} is not dated`);
 		throw new Error(`release ${version.text} not found in changelog`);
 	}
-	const bodyStart = heading.index + heading[0].length;
-	const rest = markdown.slice(bodyStart);
-	const nextHeading = /^## /m.exec(rest);
-	const bodyEnd = nextHeading === null ? markdown.length : bodyStart + nextHeading.index;
-	const body = removeSurroundingBlankLines(markdown.slice(bodyStart, bodyEnd).replace(RELEASE_LINK, ""));
+	const target = blocks.headings[targetIndex] as RootHeading;
+	const bodyStart = target.end;
+	const bodyEnd = blocks.headings[targetIndex + 1]?.start ?? markdown.length;
+	const removalRanges = blocks.links.filter((link) => link.start >= bodyStart && link.end <= bodyEnd).map((link) => includeFollowingBlankLine(markdown, link));
+	const body = removeSurroundingBlankLines(sliceWithoutRanges(markdown, bodyStart, bodyEnd, removalRanges));
 	if (body.trim().length === 0) throw new Error(`release ${version.text} is empty`);
 	return `${body}\n`;
 }
