@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rename, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runReleaseCli } from "./cli.ts";
@@ -11,26 +11,55 @@ import { prepareSuiteRelease, validateSuiteRelease } from "./suite.ts";
 const temporaryDirectories: string[] = [];
 
 const manifestPaths = ["package.json", "packages/ir/package.json", "packages/mck/package.json"] as const;
+const malformedVisibilityCases = [
+	["package.json", "true", "root package must be private"],
+	["package.json", 1, "root package must be private"],
+	["package.json", null, "root package must be private"],
+	["package.json", {}, "root package must be private"],
+	["package.json", [], "root package must be private"],
+	["packages/ir/package.json", "false", "@finos/morphir-ir must be public"],
+	["packages/ir/package.json", 0, "@finos/morphir-ir must be public"],
+	["packages/ir/package.json", null, "@finos/morphir-ir must be public"],
+	["packages/ir/package.json", {}, "@finos/morphir-ir must be public"],
+	["packages/ir/package.json", [], "@finos/morphir-ir must be public"],
+	["packages/mck/package.json", "true", "@finos/morphir-mck must be private"],
+	["packages/mck/package.json", 1, "@finos/morphir-mck must be private"],
+	["packages/mck/package.json", null, "@finos/morphir-mck must be private"],
+	["packages/mck/package.json", {}, "@finos/morphir-mck must be private"],
+	["packages/mck/package.json", [], "@finos/morphir-mck must be private"],
+] as const;
 
 function manifest(name: string, privatePackage: boolean, version = "0.0.0"): string {
-	return `${JSON.stringify({ name, version, private: privatePackage, type: "module" }, null, "\t")}\n`;
+	const manifest: Record<string, unknown> = { name, version, private: privatePackage, type: "module" };
+	if (name === "morphir-typescript") manifest.workspaces = ["packages/*"];
+	return `${JSON.stringify(manifest, null, "\t")}\n`;
 }
 
 function lockfile(version = "0.0.0"): string {
-	return `${JSON.stringify(
-		{
-			lockfileVersion: 2,
-			configVersion: 1,
-			workspaces: {
-				"": { name: "morphir-typescript", version },
-				"packages/ir": { name: "@finos/morphir-ir", version },
-				"packages/mck": { name: "@finos/morphir-mck", version },
-			},
-			packages: {},
-		},
-		null,
-		2,
-	)}\n`;
+	return `{
+  "lockfileVersion": 2,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "morphir-typescript",
+      "version": "${version}",
+    },
+    "packages/ir": {
+      "name": "@finos/morphir-ir",
+      "version": "${version}",
+    },
+    "packages/mck": {
+      "name": "@finos/morphir-mck",
+      "version": "${version}",
+    },
+  },
+  "packages": {
+    "@finos/morphir-ir": ["@finos/morphir-ir@workspace:packages/ir"],
+
+    "@finos/morphir-mck": ["@finos/morphir-mck@workspace:packages/mck"],
+  },
+}
+`;
 }
 
 function changelog(eol = "\n"): string {
@@ -79,9 +108,20 @@ async function expectRejectedWithoutWrites(root: string, operation: () => Promis
 
 async function changeJson(root: string, relativePath: string, change: (value: Record<string, unknown>) => void): Promise<void> {
 	const absolutePath = path.join(root, relativePath);
-	const value = JSON.parse(await readFile(absolutePath, "utf8")) as Record<string, unknown>;
+	const value = Bun.JSONC.parse(await readFile(absolutePath, "utf8")) as Record<string, unknown>;
 	change(value);
 	await writeFile(absolutePath, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+async function transientReleaseFiles(root: string): Promise<string[]> {
+	const directories = ["", "packages/ir", "packages/mck"];
+	return (
+		await Promise.all(
+			directories.map(async (directory) =>
+				(await readdir(path.join(root, directory))).filter((name) => name.includes(".release-")).map((name) => path.join(directory, name)),
+			),
+		)
+	).flat();
 }
 
 afterEach(async () => {
@@ -104,6 +144,17 @@ describe("prepareSuiteRelease", () => {
 		expect(await readFile(path.join(root, "CHANGELOG.md"), "utf8")).toContain("## [0.0.1] - 2026-09-05");
 	});
 
+	test("changes only the three workspace version values in a Bun JSONC lockfile", async () => {
+		const originalLock = lockfile();
+		const root = await fixture({ lock: originalLock });
+
+		await prepareSuiteRelease(root, "0.0.1", "2026-09-05");
+
+		expect(await readFile(path.join(root, "bun.lock"), "utf8")).toBe(originalLock.replaceAll('"version": "0.0.0"', '"version": "0.0.1"'));
+		const install = Bun.spawn([process.execPath, "install", "--frozen-lockfile"], { cwd: root, stdout: "pipe", stderr: "pipe" });
+		expect(await install.exited).toBe(0);
+	});
+
 	test("rejects package version drift without changing files", async () => {
 		const root = await fixture({ versions: ["0.0.0", "0.0.1", "0.0.0"] });
 		await expectRejectedWithoutWrites(root, () => prepareSuiteRelease(root, "0.0.2", "2026-09-05"), "suite package versions do not match");
@@ -119,6 +170,25 @@ describe("prepareSuiteRelease", () => {
 			value.private = privatePackage;
 		});
 		await expectRejectedWithoutWrites(root, () => prepareSuiteRelease(root, "0.0.1", "2026-09-05"), expectedMessage);
+	});
+
+	test.each(malformedVisibilityCases)("rejects malformed private value in %s during preparation", async (relativePath, privateValue, expectedMessage) => {
+		const root = await fixture();
+		await changeJson(root, relativePath, (value) => {
+			value.private = privateValue;
+		});
+		await expectRejectedWithoutWrites(root, () => prepareSuiteRelease(root, "0.0.1", "2026-09-05"), expectedMessage);
+	});
+
+	test("accepts an absent private field for the public package", async () => {
+		const root = await fixture();
+		await changeJson(root, "packages/ir/package.json", (value) => {
+			delete value.private;
+		});
+
+		await prepareSuiteRelease(root, "0.0.1", "2026-09-05");
+
+		expect(JSON.parse(await readFile(path.join(root, "packages/ir/package.json"), "utf8"))).not.toHaveProperty("private");
 	});
 
 	test("rejects a package with the wrong name without changing files", async () => {
@@ -209,6 +279,75 @@ describe("prepareSuiteRelease", () => {
 		expect(JSON.parse(await readFile(path.join(root, "packages/ir/package.json"), "utf8")).private).toBe(false);
 		expect(JSON.parse(await readFile(path.join(root, "packages/mck/package.json"), "utf8")).private).toBe(true);
 	});
+
+	test("removes every staged file when a temporary write fails", async () => {
+		const root = await fixture();
+		const before = await snapshot(root);
+		let writes = 0;
+		const fileSystem = {
+			writeFile: async (file: string, contents: string, options: { flag: "wx" }) => {
+				writes += 1;
+				await writeFile(file, contents, options);
+				if (writes === 2) throw new Error("injected temporary write failure");
+			},
+			rename,
+			unlink,
+		};
+
+		await expect(prepareSuiteRelease(root, "0.0.1", "2026-09-05", { fileSystem })).rejects.toThrow("injected temporary write failure");
+
+		expect(await snapshot(root)).toEqual(before);
+		expect(await transientReleaseFiles(root)).toEqual([]);
+	});
+
+	test("rolls back replaced destinations when a later replacement fails", async () => {
+		const root = await fixture();
+		const before = await snapshot(root);
+		let renames = 0;
+		const fileSystem = {
+			writeFile: async (file: string, contents: string, options: { flag: "wx" }) => writeFile(file, contents, options),
+			rename: async (from: string, to: string) => {
+				renames += 1;
+				if (renames === 4) throw new Error("injected destination replacement failure");
+				await rename(from, to);
+			},
+			unlink,
+		};
+
+		await expect(prepareSuiteRelease(root, "0.0.1", "2026-09-05", { fileSystem })).rejects.toThrow("injected destination replacement failure");
+
+		expect(await snapshot(root)).toEqual(before);
+		expect(await transientReleaseFiles(root)).toEqual([]);
+	});
+
+	test("reports a rollback failure and retains the affected backup", async () => {
+		const root = await fixture();
+		const originalIrManifest = await readFile(path.join(root, "packages/ir/package.json"), "utf8");
+		let renames = 0;
+		const fileSystem = {
+			writeFile: async (file: string, contents: string, options: { flag: "wx" }) => writeFile(file, contents, options),
+			rename: async (from: string, to: string) => {
+				renames += 1;
+				if (renames === 4) throw new Error("injected replacement failure");
+				if (renames === 5) throw new Error("injected rollback failure");
+				await rename(from, to);
+			},
+			unlink,
+		};
+
+		let caught: unknown;
+		try {
+			await prepareSuiteRelease(root, "0.0.1", "2026-09-05", { fileSystem });
+		} catch (error) {
+			caught = error;
+		}
+
+		expect(caught).toBeInstanceOf(AggregateError);
+		expect((caught as AggregateError).message).toContain("rollback also failed");
+		const retained = (await transientReleaseFiles(root)).filter((file) => file.endsWith(".backup"));
+		expect(retained).toHaveLength(1);
+		expect(await readFile(path.join(root, retained[0] as string), "utf8")).toBe(originalIrManifest);
+	});
 });
 
 describe("validateSuiteRelease", () => {
@@ -247,6 +386,15 @@ describe("validateSuiteRelease", () => {
 			value.private = true;
 		});
 		await expect(validateSuiteRelease(root, "v0.0.1")).rejects.toThrow("@finos/morphir-ir must be public");
+	});
+
+	test.each(malformedVisibilityCases)("rejects malformed private value in %s during validation", async (relativePath, privateValue, expectedMessage) => {
+		const root = await fixture();
+		await prepareSuiteRelease(root, "0.0.1", "2026-09-05");
+		await changeJson(root, relativePath, (value) => {
+			value.private = privateValue;
+		});
+		await expect(validateSuiteRelease(root, "v0.0.1")).rejects.toThrow(expectedMessage);
 	});
 
 	test.each([

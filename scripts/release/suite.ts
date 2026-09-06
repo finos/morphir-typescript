@@ -3,6 +3,7 @@
 
 import { readFile, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { applyEdits, modify, type ParseError, parse } from "jsonc-parser";
 import { extractReleaseNotes, prepareChangelog } from "./changelog.ts";
 import { compareVersions, parseStableVersion, parseVersionTag, type StableVersion } from "./version.ts";
 
@@ -40,6 +41,18 @@ interface SuiteFiles {
 	readonly changelog: string;
 }
 
+export interface ReleaseFileSystem {
+	readonly writeFile: (file: string, contents: string, options: { readonly flag: "wx" }) => Promise<unknown>;
+	readonly rename: (from: string, to: string) => Promise<unknown>;
+	readonly unlink: (file: string) => Promise<unknown>;
+}
+
+export interface PrepareSuiteReleaseOptions {
+	readonly fileSystem?: ReleaseFileSystem;
+}
+
+const NODE_FILE_SYSTEM: ReleaseFileSystem = { writeFile, rename, unlink };
+
 function parseObject(source: string, description: string): Record<string, unknown> {
 	const value: unknown = JSON.parse(source);
 	if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error(`${description} must contain a JSON object`);
@@ -73,7 +86,7 @@ function validateManifests(files: SuiteFiles): void {
 		if (definition.private && value.private !== true) {
 			throw new Error(definition.path === "package.json" ? "root package must be private" : `${definition.name} must be private`);
 		}
-		if (!definition.private && value.private === true) throw new Error(`${definition.name} must be public`);
+		if (!definition.private && value.private !== undefined && value.private !== false) throw new Error(`${definition.name} must be public`);
 	}
 }
 
@@ -98,27 +111,123 @@ function updatedLock(files: SuiteFiles, current: StableVersion, target: StableVe
 		const workspace = workspaces[definition.workspace];
 		if (workspace?.name !== definition.name) throw new Error(`bun.lock workspace ${definition.workspace || "<root>"} has the wrong name`);
 		if (workspace.version !== current.text) throw new Error(`bun.lock workspace ${definition.workspace || "<root>"} has the wrong version`);
-		workspace.version = target.text;
 	}
-	return formatJson(files.lock, files.lockSource);
+	const parseErrors: ParseError[] = [];
+	parse(files.lockSource, parseErrors, { allowTrailingComma: true });
+	if (parseErrors.length > 0) throw new Error(`jsonc-parser could not parse bun.lock at offset ${parseErrors[0]?.offset}`);
+	let source = files.lockSource;
+	for (const definition of MANIFESTS) {
+		const edits = modify(source, ["workspaces", definition.workspace, "version"], target.text, {});
+		source = applyEdits(source, edits);
+	}
+	return source;
 }
 
-async function atomicReplace(root: string, outputs: ReadonlyMap<string, string>): Promise<void> {
-	const temporaryFiles: { temporary: string; destination: string }[] = [];
-	try {
-		for (const [relativePath, contents] of outputs) {
-			const destination = path.join(root, relativePath);
-			const temporary = `${destination}.${crypto.randomUUID()}.tmp`;
-			await writeFile(temporary, contents, { flag: "wx" });
-			temporaryFiles.push({ temporary, destination });
+interface StagedReplacement {
+	readonly destination: string;
+	readonly temporary: string;
+	readonly backup: string;
+	readonly contents: string;
+	backedUp: boolean;
+	replaced: boolean;
+}
+
+async function cleanupFiles(fileSystem: ReleaseFileSystem, files: readonly string[]): Promise<unknown[]> {
+	const failures: unknown[] = [];
+	for (const file of files) {
+		try {
+			await fileSystem.unlink(file);
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "ENOENT") failures.push(error);
 		}
-		for (const file of temporaryFiles) await rename(file.temporary, file.destination);
-	} finally {
-		await Promise.all(temporaryFiles.map(({ temporary }) => unlink(temporary).catch(() => undefined)));
 	}
+	return failures;
 }
 
-export async function prepareSuiteRelease(root: string, targetInput: string, date: string): Promise<StableVersion> {
+/**
+ * Restores every replaced destination when an in-process operation fails. This
+ * is rollback across atomic per-file renames, not crash-level multi-file atomicity.
+ */
+async function atomicReplace(root: string, outputs: ReadonlyMap<string, string>, fileSystem: ReleaseFileSystem): Promise<void> {
+	const staged: StagedReplacement[] = [...outputs].map(([relativePath, contents]) => {
+		const destination = path.join(root, relativePath);
+		const id = crypto.randomUUID();
+		return {
+			destination,
+			temporary: `${destination}.release-${id}.tmp`,
+			backup: `${destination}.release-${id}.backup`,
+			contents,
+			backedUp: false,
+			replaced: false,
+		};
+	});
+
+	try {
+		for (const file of staged) await fileSystem.writeFile(file.temporary, file.contents, { flag: "wx" });
+	} catch (error) {
+		const cleanupFailures = await cleanupFiles(
+			fileSystem,
+			staged.map((file) => file.temporary),
+		);
+		if (cleanupFailures.length > 0) throw new AggregateError([error, ...cleanupFailures], "release staging failed and temporary-file cleanup also failed");
+		throw error;
+	}
+
+	try {
+		for (const file of staged) {
+			await fileSystem.rename(file.destination, file.backup);
+			file.backedUp = true;
+			await fileSystem.rename(file.temporary, file.destination);
+			file.replaced = true;
+		}
+	} catch (error) {
+		const rollbackFailures: unknown[] = [];
+		for (const file of staged.toReversed()) {
+			let destinationCleanupFailure: unknown;
+			if (file.replaced) {
+				try {
+					await fileSystem.unlink(file.destination);
+				} catch (rollbackError) {
+					if ((rollbackError as NodeJS.ErrnoException).code !== "ENOENT") destinationCleanupFailure = rollbackError;
+				}
+			}
+			if (file.backedUp) {
+				try {
+					await fileSystem.rename(file.backup, file.destination);
+					file.backedUp = false;
+					file.replaced = false;
+				} catch (rollbackError) {
+					if (destinationCleanupFailure !== undefined) rollbackFailures.push(destinationCleanupFailure);
+					rollbackFailures.push(rollbackError);
+				}
+			} else if (destinationCleanupFailure !== undefined) {
+				rollbackFailures.push(destinationCleanupFailure);
+			}
+		}
+		rollbackFailures.push(
+			...(await cleanupFiles(
+				fileSystem,
+				staged.map((file) => file.temporary),
+			)),
+		);
+		if (rollbackFailures.length > 0) {
+			const retainedBackups = staged.filter((file) => file.backedUp).map((file) => file.backup);
+			throw new AggregateError(
+				[error, ...rollbackFailures],
+				`release update failed and rollback also failed; original files may remain in: ${retainedBackups.join(", ")}`,
+			);
+		}
+		throw error;
+	}
+
+	const cleanupFailures = await cleanupFiles(
+		fileSystem,
+		staged.map((file) => file.backup),
+	);
+	if (cleanupFailures.length > 0) throw new AggregateError(cleanupFailures, "release updated, but backup-file cleanup failed");
+}
+
+export async function prepareSuiteRelease(root: string, targetInput: string, date: string, options: PrepareSuiteReleaseOptions = {}): Promise<StableVersion> {
 	const target = parseStableVersion(targetInput);
 	const files = await readSuite(root);
 	validateManifests(files);
@@ -131,7 +240,7 @@ export async function prepareSuiteRelease(root: string, targetInput: string, dat
 	}
 	outputs.set(LOCK_PATH, updatedLock(files, current, target));
 	outputs.set(CHANGELOG_PATH, prepareChangelog(files.changelog, target, date));
-	await atomicReplace(root, outputs);
+	await atomicReplace(root, outputs, options.fileSystem ?? NODE_FILE_SYSTEM);
 	return target;
 }
 
