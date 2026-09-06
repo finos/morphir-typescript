@@ -14,9 +14,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- A generic Morphir semantic model with attribute mapping and structured diagnostics.
-- Morphir IR v4 JSON readers and canonical writers.
-- The `@finos/morphir-ir` entry points `.`, `./model`, `./v4`, and `./codec/json`.
-- Tag-driven package publishing with separate artifact creation and publishing jobs.
+- A version-agnostic Morphir IR semantic model with attribute mapping and structured diagnostics.
+- Morphir IR v4 types plus JSON readers and canonical writers.
+- Public entry points for the current version, generic model, v4 model, and JSON value codec.
+- Tag-driven npm publishing with separated artifact and publish jobs.
 
 [Unreleased]: https://github.com/finos/morphir-typescript/compare/v0.0.0...HEAD
