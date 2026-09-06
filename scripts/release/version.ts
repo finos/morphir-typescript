@@ -12,7 +12,9 @@ export function parseStableVersion(input: string): StableVersion {
 	const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(input);
 	if (match === null) throw new Error(`invalid stable semantic version: ${input}`);
 	const [, major, minor, patch] = match;
-	return { major: Number(major), minor: Number(minor), patch: Number(patch), text: input };
+	const parsed = { major: Number(major), minor: Number(minor), patch: Number(patch), text: input };
+	if (![parsed.major, parsed.minor, parsed.patch].every(Number.isSafeInteger)) throw new Error(`invalid stable semantic version: ${input}`);
+	return parsed;
 }
 
 export function parseVersionTag(tag: string): StableVersion {

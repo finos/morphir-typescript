@@ -51,6 +51,15 @@ All notable changes to this project will be documented in this file.
 `);
 	});
 
+	test("uses CRLF for every generated line", () => {
+		const markdown = "# Changelog\r\n\r\n## [Unreleased]\r\n\r\n- Ready.\r\n";
+		const prepared = prepareChangelog(markdown, parseStableVersion("1.0.0"), "2026-09-05");
+		expect(prepared).toBe(
+			"# Changelog\r\n\r\n## [Unreleased]\r\n\r\n## [1.0.0] - 2026-09-05\r\n\r\n- Ready.\r\n\r\n[Unreleased]: https://github.com/finos/morphir-typescript/compare/v1.0.0...HEAD\r\n[1.0.0]: https://github.com/finos/morphir-typescript/releases/tag/v1.0.0\r\n",
+		);
+		expect(prepared.replaceAll("\r\n", "")).not.toContain("\n");
+	});
+
 	test("prepares a later release with a compare link and preserves older links once", () => {
 		const markdown = `# Changelog
 
@@ -298,6 +307,13 @@ describe("extractReleaseNotes", () => {
 `;
 
 		expect(extractReleaseNotes(markdown, parseStableVersion("1.0.0"))).toBe("### Added\n\n- The **first** release.\n");
+	});
+
+	test("uses CRLF for the generated trailing newline", () => {
+		const markdown = "## [1.0.0] - 2026-09-05\r\n\r\n- Release notes.\r\n\r\n## [0.9.0] - 2026-08-01\r\n\r\n- Older.\r\n";
+		const notes = extractReleaseNotes(markdown, parseStableVersion("1.0.0"));
+		expect(notes).toBe("- Release notes.\r\n");
+		expect(notes.replaceAll("\r\n", "")).not.toContain("\n");
 	});
 
 	test("rejects a missing release", () => {

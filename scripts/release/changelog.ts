@@ -93,6 +93,11 @@ function isIsoDate(date: string): boolean {
 	return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === date;
 }
 
+function documentEol(markdown: string): "\n" | "\r\n" {
+	const newline = markdown.indexOf("\n");
+	return newline > 0 && markdown[newline - 1] === "\r" ? "\r\n" : "\n";
+}
+
 function removeTrailingBlankLines(markdown: string): string {
 	return markdown.replace(/(?:\r?\n[\t ]*)+$/, "");
 }
@@ -128,6 +133,7 @@ function releaseVersion(heading: RootHeading): StableVersion | undefined {
 
 export function prepareChangelog(markdown: string, version: StableVersion, date: string): string {
 	if (!isIsoDate(date)) throw new Error(`invalid release date: ${date}`);
+	const eol = documentEol(markdown);
 	const blocks = changelogBlocks(markdown);
 	const headings = blocks.headings;
 	const releases = headings.flatMap((heading) => {
@@ -161,14 +167,15 @@ export function prepareChangelog(markdown: string, version: StableVersion, date:
 	const prefix = sliceWithoutRanges(markdown, 0, bodyStart, removalRanges);
 	const releaseBody = sliceWithoutRanges(markdown, bodyStart, bodyEnd, removalRanges);
 	const suffix = sliceWithoutRanges(markdown, bodyEnd, markdown.length, removalRanges);
-	const withoutComparisonLinks = `${prefix}\n\n## [${version.text}] - ${date}${releaseBody}${suffix}`;
+	const withoutComparisonLinks = `${prefix}${eol}${eol}## [${version.text}] - ${date}${releaseBody}${suffix}`;
 	const previous = releases.sort(compareVersions).at(-1);
 	const targetUrl = previous ? `${REPOSITORY_URL}/compare/v${previous.text}...v${version.text}` : `${REPOSITORY_URL}/releases/tag/v${version.text}`;
 	const links = [`[Unreleased]: ${REPOSITORY_URL}/compare/v${version.text}...HEAD`, `[${version.text}]: ${targetUrl}`, ...olderLinks.values()];
-	return `${removeTrailingBlankLines(withoutComparisonLinks)}\n\n${links.join("\n")}\n`;
+	return `${removeTrailingBlankLines(withoutComparisonLinks)}${eol}${eol}${links.join(eol)}${eol}`;
 }
 
 export function extractReleaseNotes(markdown: string, version: StableVersion): string {
+	const eol = documentEol(markdown);
 	const blocks = changelogBlocks(markdown);
 	const headings = blocks.headings;
 	const targetIndex = headings.findIndex((heading) => releaseVersion(heading)?.text === version.text);
@@ -185,5 +192,5 @@ export function extractReleaseNotes(markdown: string, version: StableVersion): s
 		.map((definition) => includeFollowingBlankLine(markdown, definition));
 	const body = removeSurroundingBlankLines(sliceWithoutRanges(markdown, bodyStart, bodyEnd, removalRanges));
 	if (body.trim().length === 0) throw new Error(`release ${version.text} is empty`);
-	return `${body}\n`;
+	return `${body}${eol}`;
 }
