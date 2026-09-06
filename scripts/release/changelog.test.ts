@@ -110,6 +110,11 @@ All notable changes to this project will be documented in this file.
 		expect(() => prepareChangelog(markdown, parseStableVersion("1.0.0"), "2026-09-05")).toThrow("changelog is missing ## [Unreleased]");
 	});
 
+	test.each(["##  [Unreleased]", "##\t[Unreleased]"])("rejects non-exact Unreleased heading spacing: %s", (heading) => {
+		const markdown = `${heading}\n\n- Ready.\n`;
+		expect(() => prepareChangelog(markdown, parseStableVersion("1.0.0"), "2026-09-05")).toThrow("changelog is missing ## [Unreleased]");
+	});
+
 	test("preserves significant trailing spaces in the released Markdown", () => {
 		const markdown = "## [Unreleased]\n\n- A line with a hard break.  \n";
 		const prepared = prepareChangelog(markdown, parseStableVersion("1.0.0"), "2026-09-05");
@@ -135,6 +140,66 @@ All notable changes to this project will be documented in this file.
 		const prepared = prepareChangelog(markdown, parseStableVersion("1.0.0"), "2026-09-05");
 		expect(prepared).toContain("```markdown\n[0.9.0]: literal example\n```");
 		expect(prepared.match(/^\[0\.9\.0\]: https:\/\/github\.com\/finos\/morphir-typescript\/releases\/tag\/v0\.9\.0$/gm)).toHaveLength(1);
+	});
+
+	test("ignores headings and definitions in root HTML literal blocks", () => {
+		const markdown = `## [Unreleased]
+
+<!--
+## Comment heading
+[8.0.0]: comment literal
+-->
+<pre>
+## Pre heading
+[8.0.0]: pre literal
+</pre>
+<script>
+## Script heading
+</script>
+<style>
+## Style heading
+</style>
+<textarea>
+## Textarea heading
+</textarea>
+<div>
+## Block-tag heading
+[8.0.0]: block literal
+</div>
+
+- Real release item.
+`;
+		const prepared = prepareChangelog(markdown, parseStableVersion("1.0.0"), "2026-09-05");
+		expect(prepared).toContain("## [1.0.0] - 2026-09-05\n\n<!--\n## Comment heading");
+		expect(prepared).toContain("<pre>\n## Pre heading\n[8.0.0]: pre literal\n</pre>");
+		expect(prepared).toContain("<div>\n## Block-tag heading\n[8.0.0]: block literal\n</div>");
+		expect(prepared).toContain("- Real release item.");
+	});
+
+	test("honors the shared CommonMark end condition for raw HTML tags", () => {
+		const markdown = "## [Unreleased]\n\n<pre>\n## Literal heading\n</script>\n\n- Real release item.\n\n## [0.9.0] - 2026-08-01\n\n- Previous.\n";
+		const prepared = prepareChangelog(markdown, parseStableVersion("1.0.0"), "2026-09-05");
+		expect(prepared).toContain("<pre>\n## Literal heading\n</script>\n\n- Real release item.");
+		expect(prepared).toContain("[1.0.0]: https://github.com/finos/morphir-typescript/compare/v0.9.0...v1.0.0");
+	});
+
+	test("rewrites 1-to-3-space comparison definitions but preserves 4-space code", () => {
+		const markdown = `## [Unreleased]
+
+- Ready.
+
+## [0.9.0] - 2026-08-01
+
+- Previous.
+
+ [Unreleased]: https://github.com/finos/morphir-typescript/compare/v0.9.0...HEAD
+  [0.9.0]: https://github.com/finos/morphir-typescript/releases/tag/v0.9.0
+    [8.0.0]: literal indented code
+`;
+		const prepared = prepareChangelog(markdown, parseStableVersion("1.0.0"), "2026-09-05");
+		expect(prepared).toContain("    [8.0.0]: literal indented code");
+		expect(prepared.match(/^\s{2}\[0\.9\.0\]: https:\/\/github\.com\/finos\/morphir-typescript\/releases\/tag\/v0\.9\.0$/gm)).toHaveLength(1);
+		expect(prepared).not.toContain(" [Unreleased]: https://github.com/finos/morphir-typescript/compare/v0.9.0...HEAD");
 	});
 });
 
@@ -163,6 +228,10 @@ describe("extractReleaseNotes", () => {
 
 	test("rejects an undated release", () => {
 		expect(() => extractReleaseNotes("## [1.0.0]\n\n- Notes.\n", parseStableVersion("1.0.0"))).toThrow("release 1.0.0 is not dated");
+	});
+
+	test.each(["##  [1.0.0] - 2026-09-05", "##\t[1.0.0] - 2026-09-05"])("rejects non-exact dated heading spacing: %s", (heading) => {
+		expect(() => extractReleaseNotes(`${heading}\n\n- Notes.\n`, parseStableVersion("1.0.0"))).toThrow("release 1.0.0 not found in changelog");
 	});
 
 	test("rejects an empty release", () => {
@@ -230,6 +299,66 @@ describe("extractReleaseNotes", () => {
 [example]: literal definition
 [1.0.0]: literal version definition
 \`\`\`
+`);
+	});
+
+	test("does not select a target heading from an HTML comment", () => {
+		const markdown = "<!--\n## [1.0.0] - 2026-09-05\n\n- Comment literal.\n-->\n";
+		expect(() => extractReleaseNotes(markdown, parseStableVersion("1.0.0"))).toThrow("release 1.0.0 not found in changelog");
+	});
+
+	test("preserves HTML literals while ignoring their headings and definitions", () => {
+		const markdown = `## [1.0.0] - 2026-09-05
+
+- Before HTML.
+
+<!--
+## Comment heading
+[docs]: comment literal
+-->
+<pre>
+## Pre heading
+[docs]: pre literal
+</pre>
+<script>
+## Script heading
+</script>
+<style>
+## Style heading
+</style>
+<textarea>
+## Textarea heading
+</textarea>
+<section>
+## Block-tag heading
+[docs]: block literal
+</section>
+
+- After HTML.
+
+[docs]: https://example.com/docs
+`;
+		const notes = extractReleaseNotes(markdown, parseStableVersion("1.0.0"));
+		expect(notes).toContain("<!--\n## Comment heading\n[docs]: comment literal\n-->");
+		expect(notes).toContain("<pre>\n## Pre heading\n[docs]: pre literal\n</pre>");
+		expect(notes).toContain("<section>\n## Block-tag heading\n[docs]: block literal\n</section>");
+		expect(notes).toContain("- After HTML.");
+		expect(notes).not.toContain("[docs]: https://example.com/docs");
+	});
+
+	test("removes 1-to-3-space root definitions but preserves 4-space code", () => {
+		const markdown = `## [1.0.0] - 2026-09-05
+
+- Notes.
+
+ [one]: https://example.com/one
+  [two]: https://example.com/two
+   [three]: https://example.com/three
+    [literal]: indented code
+`;
+		expect(extractReleaseNotes(markdown, parseStableVersion("1.0.0"))).toBe(`- Notes.
+
+    [literal]: indented code
 `);
 	});
 });
