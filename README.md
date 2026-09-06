@@ -9,16 +9,16 @@ Morphir captures business logic and domain models as language-independent data s
 
 ## Project status
 
-The packages are under active development. Both are currently private workspace packages at version `0.0.0` and are not published to npm. Use this repository from source for now; package publishing is planned as follow-up work.
+Publishing is prepared for the initial `@finos/morphir-ir` `0.0.1` npm release. `@finos/morphir-mck` remains private and will not be published. Every workspace uses the same repository-wide suite version, including packages that are not part of a given release. Initial release preparation moves the whole suite from `0.0.0` to `0.0.1`.
 
 Standalone CI temporarily skips conformance tests that require the upstream Morphir fixture and MCK directories. Unit tests still run. The upstream integration work will remove this opt-out once a compatible pinned corpus is available to standalone clones.
 
 ## Packages
 
-| Package | Purpose |
-| --- | --- |
-| `@finos/morphir-ir` | Generic Morphir IR semantic types, pinned v4 types, JSON readers and canonical writers, diagnostics, and attribute mapping. |
-| `@finos/morphir-mck` | MCK Markdown case parser, kit loader, structural checker CLI, and report model. |
+| Package | Publication | Purpose |
+| --- | --- | --- |
+| `@finos/morphir-ir` | Prepared for public npm release at `0.0.1` | Generic Morphir IR semantic types, pinned v4 types, JSON readers and canonical writers, diagnostics, and attribute mapping. |
+| `@finos/morphir-mck` | Private workspace package | MCK Markdown case parser, kit loader, structural checker CLI, and report model. |
 
 ## Morphir specifications
 
@@ -40,7 +40,7 @@ mise install
 mise run setup
 ```
 
-mise installs the pinned Bun version. The setup task installs workspace dependencies from `bun.lock` without changing the lockfile.
+mise installs the pinned Bun, Node.js, and actionlint versions. The setup task installs workspace dependencies from `bun.lock` without changing the lockfile.
 
 ## Usage
 
@@ -75,7 +75,7 @@ Add `--json` for machine-readable output.
 
 ## Development
 
-TypeScript is the implementation language. Bun supplies the runtime, package manager, task runtime, and default `bun:test` testing framework. Biome handles linting and formatting.
+TypeScript is the implementation language. Bun supplies the runtime, package manager, task runtime, and default `bun:test` testing framework. The npm artifact uses `Bun.build` to compile unminified ESM and TypeScript to emit declarations. Node.js 20 only runs an installed-package compatibility check. Biome handles linting and formatting.
 
 Effect is the preferred foundation for future service and integration work. It is not currently a dependency and must remain outside the core `@finos/morphir-ir` package; add it to a specific non-core package when that package begins using it.
 
@@ -86,8 +86,13 @@ Use mise tasks for repository automation:
 | `mise run setup` | Install dependencies from the frozen Bun lockfile. |
 | `mise run check:lint` | Check Biome lint rules, formatting, and imports. |
 | `mise run check:typecheck` | Typecheck every workspace package. |
+| `mise run check:package` | Build and verify the `@finos/morphir-ir` tarball in `.dev/out/package-check`. |
+| `mise run check:workflows` | Validate GitHub Actions workflows with the pinned actionlint version. |
 | `mise run test` | Run the available Bun test suite. |
 | `mise run ci` | Run the same checks as GitHub Actions. |
+| `mise run release:prepare -- VERSION` | Update the suite version and finalize the Keep a Changelog release entry. |
+| `mise run release:validate -- TAG` | Validate a `vVERSION` tag against the suite manifests and changelog. |
+| `mise run release:artifact -- OUTPUT_DIRECTORY` | Build and verify the publishable tarball in the requested directory. |
 
 To apply formatting and safe lint fixes, run:
 

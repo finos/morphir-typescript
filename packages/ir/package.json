@@ -1,14 +1,41 @@
 {
 	"name": "@finos/morphir-ir",
-	"version": "0.0.0",
-	"private": true,
+	"version": "0.0.1",
 	"type": "module",
 	"description": "The Morphir IR reference model and codecs: one generic semantic model, pinned version modules, JSON readers and canonical writers.",
+	"license": "Apache-2.0",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/finos/morphir-typescript.git",
+		"directory": "packages/ir"
+	},
+	"homepage": "https://github.com/finos/morphir-typescript#readme",
+	"bugs": "https://github.com/finos/morphir-typescript/issues",
+	"engines": {
+		"node": ">=20",
+		"bun": ">=1.2"
+	},
 	"exports": {
-		".": "./src/index.ts",
-		"./model": "./src/model/index.ts",
-		"./v4": "./src/versions/v4/index.ts",
-		"./codec/json": "./src/codec/json/value.ts"
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./model": {
+			"types": "./dist/model/index.d.ts",
+			"import": "./dist/model/index.js"
+		},
+		"./v4": {
+			"types": "./dist/versions/v4/index.d.ts",
+			"import": "./dist/versions/v4/index.js"
+		},
+		"./codec/json": {
+			"types": "./dist/codec/json/value.d.ts",
+			"import": "./dist/codec/json/value.js"
+		}
+	},
+	"sideEffects": false,
+	"publishConfig": {
+		"access": "public"
 	},
 	"scripts": {
 		"typecheck": "tsc -p tsconfig.json"
