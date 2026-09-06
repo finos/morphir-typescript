@@ -7,52 +7,36 @@ const REPOSITORY_URL = "https://github.com/finos/morphir-typescript";
 const VERSION_TEXT = "(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)\\.(?:0|[1-9]\\d*)";
 const DATED_RELEASE_TEXT = new RegExp(`^\\[(${VERSION_TEXT})\\] - \\d{4}-\\d{2}-\\d{2}$`);
 const RELEASE_LINK_LABEL = new RegExp(`^${VERSION_TEXT}$`);
-const HTML_BLOCK_TAG =
-	/^ {0,3}<\/?(?:address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:[\t />]|$)/i;
 
 interface SourceRange {
 	readonly start: number;
 	readonly end: number;
 }
 
-interface RootHeading extends SourceRange {
+interface HeadingCandidate extends SourceRange {
+	readonly bodyStart: number;
 	readonly text: string;
 }
 
-interface RootLinkDefinition extends SourceRange {
+interface DefinitionCandidate extends SourceRange {
 	readonly label: string;
+	readonly labelStart: number;
+	readonly labelEnd: number;
+	readonly value: string;
 }
 
-interface RootBlocks {
-	readonly headings: RootHeading[];
-	readonly links: RootLinkDefinition[];
+interface Candidates {
+	readonly headings: HeadingCandidate[];
+	readonly definitions: DefinitionCandidate[];
 }
 
-type HtmlBlockEnd = { readonly kind: "blank" } | { readonly kind: "rawTag" } | { readonly kind: "marker"; readonly marker: string };
-
-function htmlBlockStart(line: string): HtmlBlockEnd | undefined {
-	const rawTag = /^ {0,3}<(script|pre|style|textarea)(?:[\t >]|$)/i.exec(line);
-	if (rawTag !== null) return { kind: "rawTag" };
-	if (/^ {0,3}<!--/.test(line)) return { kind: "marker", marker: "-->" };
-	if (/^ {0,3}<\?/.test(line)) return { kind: "marker", marker: "?>" };
-	if (/^ {0,3}<!\[CDATA\[/.test(line)) return { kind: "marker", marker: "]]>" };
-	if (/^ {0,3}<![A-Za-z]/.test(line)) return { kind: "marker", marker: ">" };
-	if (HTML_BLOCK_TAG.test(line)) return { kind: "blank" };
-	if (/^ {0,3}<\/?[A-Za-z][A-Za-z0-9-]*(?:[\t ]+[^<>]*)?\/?>[\t ]*$/.test(line)) return { kind: "blank" };
-	return undefined;
+interface Replacement extends SourceRange {
+	readonly value: string;
 }
 
-function htmlBlockEnds(block: HtmlBlockEnd, line: string): boolean {
-	if (block.kind === "blank") return line.trim().length === 0;
-	if (block.kind === "rawTag") return /<\/(?:script|pre|style|textarea)>/i.test(line);
-	return line.includes(block.marker);
-}
-
-function scanRootBlocks(markdown: string): RootBlocks {
-	const headings: RootHeading[] = [];
-	const links: RootLinkDefinition[] = [];
-	let fence: { marker: "`" | "~"; length: number } | undefined;
-	let htmlBlock: HtmlBlockEnd | undefined;
+function scanCandidates(markdown: string): Candidates {
+	const headings: HeadingCandidate[] = [];
+	const definitions: DefinitionCandidate[] = [];
 	let start = 0;
 	while (start < markdown.length) {
 		const newline = markdown.indexOf("\n", start);
@@ -60,33 +44,96 @@ function scanRootBlocks(markdown: string): RootBlocks {
 		let contentEnd = newline === -1 ? markdown.length : newline;
 		if (contentEnd > start && markdown.charCodeAt(contentEnd - 1) === 13) contentEnd -= 1;
 		const line = markdown.slice(start, contentEnd);
-
-		if (fence !== undefined) {
-			const closing = /^ {0,3}(`{3,}|~{3,})[\t ]*$/.exec(line);
-			if (closing !== null && closing[1]?.[0] === fence.marker && closing[1].length >= fence.length) fence = undefined;
-		} else if (htmlBlock !== undefined) {
-			if (htmlBlockEnds(htmlBlock, line)) htmlBlock = undefined;
-		} else {
-			const opening = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
-			if (opening !== null && !(opening[1]?.startsWith("`") && opening[2]?.includes("`"))) {
-				const marker = opening[1]?.[0];
-				if (marker === "`" || marker === "~") fence = { marker, length: opening[1]?.length ?? 3 };
-			} else {
-				const startedHtmlBlock = htmlBlockStart(line);
-				if (startedHtmlBlock !== undefined) {
-					if (!htmlBlockEnds(startedHtmlBlock, line)) htmlBlock = startedHtmlBlock;
-				} else {
-					const heading = /^## (.*)$/.exec(line);
-					if (heading !== null) headings.push({ start, end: contentEnd, text: heading[1] ?? "" });
-					const link = /^ {0,3}\[([^\]]+)\]:[\t ]*\S.*$/.exec(line);
-					if (link !== null) links.push({ start, end: sourceEnd, label: link[1] as string });
-				}
-			}
+		const heading = /^## (\[[^\]]+\](?: - \d{4}-\d{2}-\d{2})?)$/.exec(line);
+		if (heading !== null) headings.push({ start, end: contentEnd, bodyStart: start + 3, text: heading[1] as string });
+		const definition = /^ {0,3}\[([^\]]+)\]:[\t ]*(\S.*)$/.exec(line);
+		if (definition !== null) {
+			const label = definition[1] as string;
+			const labelStart = start + line.indexOf("[") + 1;
+			definitions.push({ start, end: sourceEnd, label, labelStart, labelEnd: labelStart + label.length, value: definition[2] as string });
 		}
-
 		start = sourceEnd;
 	}
-	return { headings, links };
+	return { headings, definitions };
+}
+
+function uniqueMarkerPrefix(markdown: string, stem: string): string {
+	let prefix = stem;
+	while (markdown.includes(prefix)) prefix += "X";
+	return prefix;
+}
+
+function replaceRanges(markdown: string, replacements: readonly Replacement[]): string {
+	let result = "";
+	let cursor = 0;
+	for (const replacement of replacements) {
+		result += markdown.slice(cursor, replacement.start);
+		result += replacement.value;
+		cursor = replacement.end;
+	}
+	return result + markdown.slice(cursor);
+}
+
+function actualHeadings(markdown: string, candidates: readonly HeadingCandidate[]): HeadingCandidate[] {
+	if (candidates.length === 0) return [];
+	const prefix = uniqueMarkerPrefix(markdown, "MORPHIRRELEASEHEADINGMARKER");
+	const markers = candidates.map((_, index) => `${prefix}${index}END`);
+	const byMarker = new Map(markers.map((marker, index) => [marker, index]));
+	const annotated = replaceRanges(
+		markdown,
+		candidates.map((candidate, index) => ({ start: candidate.bodyStart, end: candidate.end, value: markers[index] as string })),
+	);
+	const actual = new Set<number>();
+	Bun.markdown.render(annotated, {
+		heading(children, meta) {
+			const index = meta.level === 2 ? byMarker.get(children) : undefined;
+			if (index !== undefined) actual.add(index);
+			return children;
+		},
+	});
+	return candidates.filter((_, index) => actual.has(index));
+}
+
+function actualDefinitions(markdown: string, candidates: readonly DefinitionCandidate[]): DefinitionCandidate[] {
+	if (candidates.length === 0) return [];
+	const prefix = uniqueMarkerPrefix(markdown, "MORPHIRRELEASEDEFINITIONMARKER");
+	const markers = candidates.map((_, index) => `${prefix}${index}END`);
+	const probes = candidates.map((_, index) => `${prefix}PROBE${index}END`);
+	const byProbe = new Map(probes.map((probe, index) => [probe, index]));
+	const annotated = replaceRanges(
+		markdown,
+		candidates.map((candidate, index) => ({ start: candidate.labelStart, end: candidate.labelEnd, value: markers[index] as string })),
+	);
+	const resolved = new Set<number>();
+	Bun.markdown.render(`${annotated}\n\n${probes.map((probe, index) => `[${probe}][${markers[index]}]`).join("\n")}`, {
+		link(children, meta) {
+			const index = byProbe.get(children);
+			if (index !== undefined && meta.href.length > 0) resolved.add(index);
+			return children;
+		},
+	});
+	return candidates.filter((_, index) => resolved.has(index));
+}
+
+function tailDefinitions(markdown: string, definitions: readonly DefinitionCandidate[]): DefinitionCandidate[] {
+	const tail: DefinitionCandidate[] = [];
+	let cursor = markdown.length;
+	for (let index = definitions.length - 1; index >= 0; index -= 1) {
+		const definition = definitions[index] as DefinitionCandidate;
+		if (markdown.slice(definition.end, cursor).trim().length !== 0) break;
+		tail.unshift(definition);
+		cursor = definition.start;
+	}
+	return tail;
+}
+
+function comparisonDefinitions(markdown: string, candidates: Candidates): DefinitionCandidate[] {
+	const definitions = tailDefinitions(markdown, actualDefinitions(markdown, candidates.definitions));
+	return definitions.filter((definition) => {
+		if (definition.label !== "Unreleased" && !RELEASE_LINK_LABEL.test(definition.label)) return false;
+		const destination = definition.value.trim().split(/[\t ]+/, 1)[0];
+		return destination?.startsWith(`${REPOSITORY_URL}/`) === true;
+	});
 }
 
 function hasTopLevelUnorderedListItem(markdown: string): boolean {
@@ -134,36 +181,37 @@ function sliceWithoutRanges(markdown: string, start: number, end: number, ranges
 	return result + markdown.slice(cursor, end);
 }
 
-function releaseVersion(heading: RootHeading): StableVersion | undefined {
+function releaseVersion(heading: HeadingCandidate): StableVersion | undefined {
 	const match = DATED_RELEASE_TEXT.exec(heading.text);
 	return match === null ? undefined : parseStableVersion(match[1] as string);
 }
 
 export function prepareChangelog(markdown: string, version: StableVersion, date: string): string {
 	if (!isIsoDate(date)) throw new Error(`invalid release date: ${date}`);
-	const blocks = scanRootBlocks(markdown);
-	const releases = blocks.headings.flatMap((heading) => {
+	const candidates = scanCandidates(markdown);
+	const headings = actualHeadings(markdown, candidates.headings);
+	const releases = headings.flatMap((heading) => {
 		const release = releaseVersion(heading);
 		return release === undefined ? [] : [release];
 	});
 	const undatedTarget = `[${version.text}]`;
 	if (
-		blocks.headings.some((heading) => {
+		headings.some((heading) => {
 			const release = releaseVersion(heading);
 			return heading.text === undatedTarget || (release !== undefined && compareVersions(release, version) === 0);
 		})
 	)
 		throw new Error(`changelog already contains release ${version.text}`);
 
-	const unreleasedIndex = blocks.headings.findIndex((heading) => heading.text === "[Unreleased]");
+	const unreleasedIndex = headings.findIndex((heading) => heading.text === "[Unreleased]");
 	if (unreleasedIndex === -1) throw new Error("changelog is missing ## [Unreleased]");
-	const unreleased = blocks.headings[unreleasedIndex] as RootHeading;
+	const unreleased = headings[unreleasedIndex] as HeadingCandidate;
 	const bodyStart = unreleased.end;
-	const bodyEnd = blocks.headings[unreleasedIndex + 1]?.start ?? markdown.length;
+	const bodyEnd = headings[unreleasedIndex + 1]?.start ?? markdown.length;
 	const body = markdown.slice(bodyStart, bodyEnd);
 	if (!hasTopLevelUnorderedListItem(body)) throw new Error("Unreleased section has no top-level unordered list items");
 
-	const comparisonLinks = blocks.links.filter((link) => link.label === "Unreleased" || RELEASE_LINK_LABEL.test(link.label));
+	const comparisonLinks = comparisonDefinitions(markdown, candidates);
 	const removalRanges = comparisonLinks.map((link) => includeFollowingBlankLine(markdown, link));
 	const olderLinks = new Map<string, string>();
 	for (const link of comparisonLinks) {
@@ -182,16 +230,19 @@ export function prepareChangelog(markdown: string, version: StableVersion, date:
 }
 
 export function extractReleaseNotes(markdown: string, version: StableVersion): string {
-	const blocks = scanRootBlocks(markdown);
-	const targetIndex = blocks.headings.findIndex((heading) => releaseVersion(heading)?.text === version.text);
+	const candidates = scanCandidates(markdown);
+	const headings = actualHeadings(markdown, candidates.headings);
+	const targetIndex = headings.findIndex((heading) => releaseVersion(heading)?.text === version.text);
 	if (targetIndex === -1) {
-		if (blocks.headings.some((heading) => heading.text === `[${version.text}]`)) throw new Error(`release ${version.text} is not dated`);
+		if (headings.some((heading) => heading.text === `[${version.text}]`)) throw new Error(`release ${version.text} is not dated`);
 		throw new Error(`release ${version.text} not found in changelog`);
 	}
-	const target = blocks.headings[targetIndex] as RootHeading;
+	const target = headings[targetIndex] as HeadingCandidate;
 	const bodyStart = target.end;
-	const bodyEnd = blocks.headings[targetIndex + 1]?.start ?? markdown.length;
-	const removalRanges = blocks.links.filter((link) => link.start >= bodyStart && link.end <= bodyEnd).map((link) => includeFollowingBlankLine(markdown, link));
+	const bodyEnd = headings[targetIndex + 1]?.start ?? markdown.length;
+	const removalRanges = comparisonDefinitions(markdown, candidates)
+		.filter((definition) => definition.start >= bodyStart && definition.end <= bodyEnd)
+		.map((definition) => includeFollowingBlankLine(markdown, definition));
 	const body = removeSurroundingBlankLines(sliceWithoutRanges(markdown, bodyStart, bodyEnd, removalRanges));
 	if (body.trim().length === 0) throw new Error(`release ${version.text} is empty`);
 	return `${body}\n`;

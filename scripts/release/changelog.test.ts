@@ -192,14 +192,27 @@ All notable changes to this project will be documented in this file.
 
 - Previous.
 
+    [8.0.0]: literal indented code
+
  [Unreleased]: https://github.com/finos/morphir-typescript/compare/v0.9.0...HEAD
   [0.9.0]: https://github.com/finos/morphir-typescript/releases/tag/v0.9.0
-    [8.0.0]: literal indented code
 `;
 		const prepared = prepareChangelog(markdown, parseStableVersion("1.0.0"), "2026-09-05");
 		expect(prepared).toContain("    [8.0.0]: literal indented code");
 		expect(prepared.match(/^\s{2}\[0\.9\.0\]: https:\/\/github\.com\/finos\/morphir-typescript\/releases\/tag\/v0\.9\.0$/gm)).toHaveLength(1);
 		expect(prepared).not.toContain(" [Unreleased]: https://github.com/finos/morphir-typescript/compare/v0.9.0...HEAD");
+	});
+
+	test("does not rewrite comparison-shaped text in a list", () => {
+		const literal = "  [0.9.0]: https://github.com/finos/morphir-typescript/releases/tag/v0.9.0";
+		const markdown = `## [Unreleased]
+
+- Example syntax:
+${literal}
+- Real release item.
+`;
+		const prepared = prepareChangelog(markdown, parseStableVersion("1.0.0"), "2026-09-05");
+		expect(prepared).toContain(`- Example syntax:\n${literal}\n- Real release item.`);
 	});
 });
 
@@ -278,7 +291,7 @@ describe("extractReleaseNotes", () => {
 `);
 	});
 
-	test("removes root link definitions while preserving fenced literal definitions", () => {
+	test("preserves ordinary definitions and fenced literals while excluding comparison definitions", () => {
 		const markdown = `## [1.0.0] - 2026-09-05
 
 - See the docs.
@@ -294,6 +307,8 @@ describe("extractReleaseNotes", () => {
 [1.0.0]: https://github.com/finos/morphir-typescript/releases/tag/v1.0.0
 `;
 		expect(extractReleaseNotes(markdown, parseStableVersion("1.0.0"))).toBe(`- See the docs.
+
+[docs]: https://example.com/docs
 
 \`\`\`markdown
 [example]: literal definition
@@ -343,10 +358,10 @@ describe("extractReleaseNotes", () => {
 		expect(notes).toContain("<pre>\n## Pre heading\n[docs]: pre literal\n</pre>");
 		expect(notes).toContain("<section>\n## Block-tag heading\n[docs]: block literal\n</section>");
 		expect(notes).toContain("- After HTML.");
-		expect(notes).not.toContain("[docs]: https://example.com/docs");
+		expect(notes).toContain("[docs]: https://example.com/docs");
 	});
 
-	test("removes 1-to-3-space root definitions but preserves 4-space code", () => {
+	test("preserves ordinary definitions regardless of valid root indentation", () => {
 		const markdown = `## [1.0.0] - 2026-09-05
 
 - Notes.
@@ -358,7 +373,57 @@ describe("extractReleaseNotes", () => {
 `;
 		expect(extractReleaseNotes(markdown, parseStableVersion("1.0.0"))).toBe(`- Notes.
 
+ [one]: https://example.com/one
+  [two]: https://example.com/two
+   [three]: https://example.com/three
     [literal]: indented code
 `);
+	});
+
+	test("does not remove comparison-shaped text from a list", () => {
+		const literal = "  [1.0.0]: https://github.com/finos/morphir-typescript/releases/tag/v1.0.0";
+		const markdown = `## [1.0.0] - 2026-09-05
+
+- Example syntax:
+${literal}
+- Still release content.
+`;
+		expect(extractReleaseNotes(markdown, parseStableVersion("1.0.0"))).toContain(literal);
+	});
+
+	test("uses Bun semantics for lowercase declaration-like text", () => {
+		const markdown = `## [1.0.0] - 2026-09-05
+
+<!doctype
+## [9.9.9] - 2026-09-05
+>
+
+- Real notes.
+`;
+		expect(extractReleaseNotes(markdown, parseStableVersion("1.0.0"))).toBe("<!doctype\n");
+	});
+
+	test("uses Bun paragraph context for type-7 HTML blocks", () => {
+		const markdown = `## [1.0.0] - 2026-09-05
+
+Paragraph text.
+<custom-element>
+## [0.9.0] - 2026-08-01
+
+- Older notes.
+`;
+		expect(extractReleaseNotes(markdown, parseStableVersion("1.0.0"))).toBe("Paragraph text.\n<custom-element>\n");
+	});
+
+	test("uses Bun tag parsing when an attribute contains a greater-than sign", () => {
+		const markdown = `## [1.0.0] - 2026-09-05
+
+<custom-element data-value="a > b">
+## [9.9.9] - 2026-09-05
+</custom-element>
+
+- Real notes.
+`;
+		expect(extractReleaseNotes(markdown, parseStableVersion("1.0.0"))).toContain('<custom-element data-value="a > b">\n## [9.9.9] - 2026-09-05');
 	});
 });
