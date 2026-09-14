@@ -182,10 +182,9 @@ async function copyTree(from: string, to: string): Promise<void> {
  * and the same run over the packed adapter as a child process.
  *
  * `mck run` exits 1 today because the vendored kit has two known failing records
- * in distributions-0004; the next kit resync drops them to zero. What must hold
- * either way is that the run reaches the end and writes a report for this
- * binding with no kit errors, so exit codes 0 and 1 both pass and anything else
- * fails.
+ * in distributions-0004; the next kit resync drops them to zero. Exit 1 is
+ * therefore tolerated, but `checkKitRunReport` decides whether the run actually
+ * passed, so only those known failures are allowed through.
  */
 async function smokeTest(mckTarball: string, irTarball: string, compiler: string): Promise<void> {
 	const consumer = await mkdtemp(path.join(tmpdir(), "morphir-mck-consumer-"));
@@ -206,6 +205,18 @@ async function smokeTest(mckTarball: string, irTarball: string, compiler: string
 		const cli = "node_modules/@finos/morphir-mck/dist/cli.js";
 		const adapter = "node_modules/@finos/morphir-mck/dist/adapter.js";
 
+		// `engines.node` is `>=20`, so the compatibility check has to be Node 20
+		// itself and not whichever newer Node happens to be first on PATH.
+		await runCommand(
+			[
+				"node",
+				"--input-type=module",
+				"--eval",
+				"if (process.versions.node.split('.')[0] !== '20') throw new Error('expected Node 20, received ' + process.versions.node);",
+			],
+			consumer,
+		);
+
 		const version = await runCommand(["node", cli, "--version"], consumer);
 		const manifest = JSON.parse(await readFile(path.join(consumer, "node_modules/@finos/morphir-mck/package.json"), "utf8")) as { version: string };
 		if (version !== manifest.version) throw new Error(`the packed driver reported version ${version}, not ${manifest.version}`);
@@ -220,14 +231,58 @@ async function smokeTest(mckTarball: string, irTarball: string, compiler: string
 	}
 }
 
+/**
+ * Reads the packed declarations back out of the archive and refuses to promote
+ * one whose specifiers still name repository sources: a `.ts` specifier no
+ * published file answers, or an `ir/src/` path the rewrite missed.
+ */
+async function verifyDeclarations(tarball: string, files: readonly string[], cwd: string): Promise<void> {
+	for (const declaration of files.filter((file) => file.endsWith(".d.ts"))) {
+		const contents = await runCommand(["tar", "-xOf", tarball, declaration], cwd);
+		const specifier = /(?:from\s+|import\s*\()["'][^"']*\.ts["']/.exec(contents);
+		if (specifier !== null) throw new Error(`${declaration} imports a TypeScript source: ${specifier[0]}`);
+		if (contents.includes("ir/src/")) throw new Error(`${declaration} still names the IR by repository path instead of @finos/morphir-ir`);
+	}
+}
+
+/**
+ * The case ids the packed driver is allowed to fail on, and how many records
+ * each may contribute. The vendored kit pins a `distributions-0004` document
+ * that two records still disagree with; the parent repository's fix and the
+ * next `mck kit sync` empty this map, and the check below then passes with no
+ * failing records at all. Nothing else may fail: a regression that broke
+ * hundreds of records must not ship a green package.
+ */
+const ALLOWED_FAILING_CASES: ReadonlyMap<string, number> = new Map([["distributions-0004", 2]]);
+
+/** Holds the packed driver to its report: this binding, no kit errors, and only the known failures. */
+export function checkKitRunReport(report: unknown, label: string): void {
+	if (!isRecord(report)) throw new Error(`${label} must contain a report object`);
+	if (report.binding !== "morphir-typescript") throw new Error(`${label} reports binding ${String(report.binding)}`);
+	if (!Array.isArray(report.records) || report.records.length === 0) throw new Error(`${label} contains no records`);
+
+	const kitErrors = report.records.filter((record) => isRecord(record) && record.result === "kit-error").length;
+	if (kitErrors > 0) throw new Error(`${label} reports ${kitErrors} kit-error record(s); the vendored kit must parse cleanly`);
+
+	const failuresByCase = new Map<string, number>();
+	for (const record of report.records) {
+		if (!isRecord(record) || record.result !== "fail") continue;
+		const caseId = String(record.caseId);
+		failuresByCase.set(caseId, (failuresByCase.get(caseId) ?? 0) + 1);
+	}
+	const unexpected = [...failuresByCase]
+		.filter(([caseId, count]) => count > (ALLOWED_FAILING_CASES.get(caseId) ?? 0))
+		.map(([caseId, count]) => `${caseId} (${count} failing record(s), at most ${ALLOWED_FAILING_CASES.get(caseId) ?? 0} allowed)`)
+		.sort();
+	if (unexpected.length > 0) throw new Error(`${label} reports failures the packaging check does not allow: ${unexpected.join(", ")}`);
+}
+
 async function expectKitRun(command: readonly string[], consumer: string, reportFile: string): Promise<void> {
 	const result = await executeCommand(command, consumer);
+	// Exit 1 is `mck run` saying some record failed, which the report check
+	// below adjudicates; any other non-zero exit is the driver itself failing.
 	if (result.exitCode !== 0 && result.exitCode !== 1) throw commandFailure(command, result);
-	const report: unknown = JSON.parse(await readFile(path.join(consumer, reportFile), "utf8"));
-	if (!isRecord(report)) throw new Error(`${reportFile} must contain a report object`);
-	if (report.binding !== "morphir-typescript") throw new Error(`${reportFile} reports binding ${String(report.binding)}`);
-	if (!Array.isArray(report.records) || report.records.length === 0) throw new Error(`${reportFile} contains no records`);
-	if (!/\b0 kit-error\b/.test(result.stdout)) throw new Error(`the packed driver reported kit errors:\n${result.stdout}`);
+	checkKitRunReport(JSON.parse(await readFile(path.join(consumer, reportFile), "utf8")), reportFile);
 }
 
 export async function buildMckArtifact(
@@ -308,6 +363,7 @@ export async function buildMckArtifact(
 		const files = await promoteVerifiedArtifact(stagedTarball, tarball, async (candidate) => {
 			const candidateFiles = await archiveFiles(validatePackageFiles, candidate, absoluteRoot, await expectedArchiveFiles(packageRoot));
 			await verifyExtractedFiles(candidate, candidateFiles, work);
+			await verifyDeclarations(candidate, candidateFiles, absoluteRoot);
 			await smokeTest(candidate, path.resolve(irTarball), path.join(absoluteRoot, "node_modules/.bin/tsc"));
 			return candidateFiles;
 		});

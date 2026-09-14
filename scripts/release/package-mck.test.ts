@@ -5,7 +5,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { buildMckArtifact, publishMckManifest, validatePackageFiles } from "./package-mck.ts";
+import { buildMckArtifact, checkKitRunReport, publishMckManifest, validatePackageFiles } from "./package-mck.ts";
 import { parseStableVersion } from "./version.ts";
 
 const root = path.resolve(import.meta.dir, "../..");
@@ -113,6 +113,42 @@ describe("validatePackageFiles", () => {
 			expect(() => validatePackageFiles([file], new Set(), new Set([file]))).toThrow();
 		}
 		expect(() => validatePackageFiles(["package/dist/cli.js"], new Set(["package/dist/cli.js"]), new Set(["package/dist/cli.js"]))).toThrow("link");
+	});
+});
+
+describe("checkKitRunReport", () => {
+	function record(caseId: string, result: string): Record<string, unknown> {
+		return { caseId, fenceIndex: 0, profile: "json", role: "canonical", result };
+	}
+	function report(records: readonly Record<string, unknown>[]): Record<string, unknown> {
+		return { contractVersion: 1, binding: "morphir-typescript", language: "typescript", driverVersion: "0.0.1", kitVersion: "abc", records };
+	}
+
+	test("accepts a clean run and the two known distributions-0004 failures", () => {
+		expect(() => checkKitRunReport(report([record("types-0001", "pass")]), "r.json")).not.toThrow();
+		expect(() =>
+			checkKitRunReport(
+				report([record("types-0001", "pass"), record("distributions-0004", "fail"), record("distributions-0004", "fail"), record("names-0001", "skipped")]),
+				"r.json",
+			),
+		).not.toThrow();
+	});
+
+	test("rejects a failing case the allowance does not cover, naming it", () => {
+		const extra = report([record("distributions-0004", "fail"), record("values-0007", "fail")]);
+
+		expect(() => checkKitRunReport(extra, "r.json")).toThrow(/values-0007/);
+		expect(() => checkKitRunReport(extra, "r.json")).toThrow("does not allow");
+	});
+
+	test("rejects more known failures than the allowance, kit errors, another binding, and an empty run", () => {
+		const tooMany = report([record("distributions-0004", "fail"), record("distributions-0004", "fail"), record("distributions-0004", "fail")]);
+		expect(() => checkKitRunReport(tooMany, "r.json")).toThrow(/distributions-0004 \(3 failing record\(s\), at most 2 allowed\)/);
+
+		expect(() => checkKitRunReport(report([record("types-0001", "kit-error")]), "r.json")).toThrow("kit-error");
+		expect(() => checkKitRunReport({ ...report([record("types-0001", "pass")]), binding: "morphir-rust" }, "r.json")).toThrow("morphir-rust");
+		expect(() => checkKitRunReport(report([]), "r.json")).toThrow("no records");
+		expect(() => checkKitRunReport("not a report", "r.json")).toThrow("report object");
 	});
 });
 

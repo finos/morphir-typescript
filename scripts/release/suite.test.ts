@@ -277,7 +277,7 @@ describe("prepareSuiteRelease", () => {
 		expect(preparedChangelog.replaceAll("\r\n", "")).not.toContain("\n");
 		expect(JSON.parse(await readFile(path.join(root, "package.json"), "utf8")).private).toBe(true);
 		expect(JSON.parse(await readFile(path.join(root, "packages/ir/package.json"), "utf8")).private).toBe(false);
-		expect(JSON.parse(await readFile(path.join(root, "packages/mck/package.json"), "utf8")).private).toBe(true);
+		expect(JSON.parse(await readFile(path.join(root, "packages/mck/package.json"), "utf8")).private).toBe(false);
 	});
 
 	test("removes every staged file when a temporary write fails", async () => {

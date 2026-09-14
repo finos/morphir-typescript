@@ -18,6 +18,7 @@
 import { execFileSync } from "node:child_process";
 import { readdirSync, statSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { VOCABULARY } from "../../ir/src/versions/v4/index.ts";
 import { coverageGaps, formatGap } from "./coverage/coverage.ts";
 import { runKit as driveKit, exitCodeFor } from "./driver/run.ts";
@@ -37,7 +38,8 @@ const RUN_USAGE =
 const COVERAGE_USAGE = "usage: mck coverage [--kit <dir>] [--repo-root <dir>]";
 
 function packageRoot(): string {
-	return process.env.MCK_PACKAGE_ROOT ?? path.resolve(import.meta.dirname, "..");
+	// `import.meta.dirname` only exists from Node 20.11; `engines.node` is `>=20`.
+	return process.env.MCK_PACKAGE_ROOT ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 }
 
 async function runCheck(rest: readonly string[]): Promise<number> {

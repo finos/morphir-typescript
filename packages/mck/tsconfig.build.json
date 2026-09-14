@@ -9,6 +9,6 @@
 		"declarationMap": true,
 		"rewriteRelativeImportExtensions": true,
 		"rootDir": "..",
-		"outDir": "dist"
+		"outDir": "../../.dev/out/mck-declarations"
 	}
 }
