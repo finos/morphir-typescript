@@ -73,6 +73,10 @@ mise exec -- bun run packages/mck/src/cli.ts check /path/to/morphir/spec/ir/mck
 
 Add `--json` for machine-readable output.
 
+### Check a binding's conformance with `mck`
+
+`mck` is the driver for the Morphir Compatibility Kit: it runs a binding's decoder and structural checker against every kit case and reports pass, fail, or skip per fence. Install it as the `mck` binary from `@finos/morphir-mck` (`npm install -g @finos/morphir-mck`, or `npx @finos/morphir-mck`), or download the standalone `mck` binary from a [release](https://github.com/finos/morphir-typescript/releases). `mck run` checks the in-process TypeScript binding against the kit vendored in the package; `mck run --adapter <exe> [--adapter-arg <arg>]...` runs the same kit against any binding that speaks the adapter's JSON-lines protocol (see `mck-adapter-typescript` for the reference implementation) as a child process; `mck coverage` reports every IR v4 vocabulary entry the kit does not yet exercise.
+
 ## Development
 
 TypeScript is the implementation language. Bun supplies the runtime, package manager, task runtime, and default `bun:test` testing framework. The npm artifact uses `Bun.build` to compile unminified ESM and TypeScript to emit declarations. Node.js 20 only runs an installed-package compatibility check. Biome handles linting and formatting.
@@ -88,6 +92,8 @@ Use mise tasks for repository automation:
 | `mise run check:typecheck` | Typecheck every workspace package. |
 | `mise run check:package` | Build and verify the `@finos/morphir-ir` and `@finos/morphir-mck` tarballs in `.dev/out/package-check`. |
 | `mise run check:workflows` | Validate GitHub Actions workflows with the pinned actionlint version. |
+| `mise run check:kit` | Verify the vendored kit matches `kit.lock.json`. |
+| `mise run check:conformance` | Run the vendored kit in-process and through the adapter, compare the two reports, and check coverage. |
 | `mise run test` | Run the available Bun test suite. |
 | `mise run ci` | Run the same checks as GitHub Actions. |
 | `mise run release:prepare -- VERSION` | Update the suite version and finalize the Keep a Changelog release entry. |

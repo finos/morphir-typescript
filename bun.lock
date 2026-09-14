@@ -15,9 +15,6 @@
     "packages/ir": {
       "name": "@finos/morphir-ir",
       "version": "0.0.1",
-      "devDependencies": {
-        "@finos/morphir-mck": "workspace:*",
-      },
     },
     "packages/mck": {
       "name": "@finos/morphir-mck",

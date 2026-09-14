@@ -181,10 +181,8 @@ async function copyTree(from: string, to: string): Promise<void> {
  * Runs the packed driver the way a user does: `--version`, an embedded-kit run,
  * and the same run over the packed adapter as a child process.
  *
- * `mck run` exits 1 today because the vendored kit has two known failing records
- * in distributions-0004; the next kit resync drops them to zero. Exit 1 is
- * therefore tolerated, but `checkKitRunReport` decides whether the run actually
- * passed, so only those known failures are allowed through.
+ * The vendored kit runs clean, so `mck run` exits 0; `checkKitRunReport` still
+ * adjudicates the report rather than trusting the exit code.
  */
 async function smokeTest(mckTarball: string, irTarball: string, compiler: string): Promise<void> {
 	const consumer = await mkdtemp(path.join(tmpdir(), "morphir-mck-consumer-"));
@@ -247,13 +245,12 @@ async function verifyDeclarations(tarball: string, files: readonly string[], cwd
 
 /**
  * The case ids the packed driver is allowed to fail on, and how many records
- * each may contribute. The vendored kit pins a `distributions-0004` document
- * that two records still disagree with; the parent repository's fix and the
- * next `mck kit sync` empty this map, and the check below then passes with no
- * failing records at all. Nothing else may fail: a regression that broke
- * hundreds of records must not ship a green package.
+ * each may contribute. The vendored kit now runs clean, so this map is empty:
+ * any failing record fails the packaging check. Kept as a map, rather than a
+ * bare "no failures allowed" check, so a future known gap can be allowed
+ * through deliberately, the way distributions-0004 once was.
  */
-const ALLOWED_FAILING_CASES: ReadonlyMap<string, number> = new Map([["distributions-0004", 2]]);
+const ALLOWED_FAILING_CASES: ReadonlyMap<string, number> = new Map();
 
 /** Holds the packed driver to its report: this binding, no kit errors, and only the known failures. */
 export function checkKitRunReport(report: unknown, label: string): void {

@@ -148,17 +148,10 @@ describe("mck kit", () => {
 });
 
 describe("mck run", () => {
-	test("over the embedded kit, fails only on the known distributions-0004 fixture gap", () => {
+	test("over the embedded kit, every case passes", () => {
 		const r = run(["run"]);
-		// distributions-0004 (fence 0, current + pinned) is the one remaining known
-		// gap (see task-5-report.md, "Fix round 1"): its text fence names a
-		// pretty-printed, "4.0.0"-spelled file, an accepted historical spelling
-		// rather than the writer's canonical. That is a parent-repo fixture fix
-		// (Task 8) followed by a kit resync (Task 11); this count drops to 0 once
-		// both land. The document-tree manifest-file cases that used to fail
-		// alongside it are now skipped instead, per Ruling A (capabilities.nodes).
-		expect(r.out).toMatch(/\d+ pass, 2 fail, 0 kit-error, \d+ skipped/);
-		expect(r.code).toBe(1);
+		expect(r.out).toMatch(/\d+ pass, 0 fail, 0 kit-error, \d+ skipped/);
+		expect(r.code).toBe(0);
 	});
 	test("--only restricts the report to matching case ids", () => {
 		const reportFile = path.join(temp(), "report.json");

@@ -12,7 +12,7 @@
 		"format": "biome check --write .",
 		"lint": "biome check .",
 		"typecheck": "bun run --filter '*' typecheck",
-		"test": "bun test ./packages ./scripts/release"
+		"test": "bun test ./packages ./scripts/release ./scripts/conformance"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.5.12",

@@ -124,26 +124,21 @@ describe("checkKitRunReport", () => {
 		return { contractVersion: 1, binding: "morphir-typescript", language: "typescript", driverVersion: "0.0.1", kitVersion: "abc", records };
 	}
 
-	test("accepts a clean run and the two known distributions-0004 failures", () => {
+	test("accepts a clean run with no failing records", () => {
 		expect(() => checkKitRunReport(report([record("types-0001", "pass")]), "r.json")).not.toThrow();
-		expect(() =>
-			checkKitRunReport(
-				report([record("types-0001", "pass"), record("distributions-0004", "fail"), record("distributions-0004", "fail"), record("names-0001", "skipped")]),
-				"r.json",
-			),
-		).not.toThrow();
+		expect(() => checkKitRunReport(report([record("types-0001", "pass"), record("names-0001", "skipped")]), "r.json")).not.toThrow();
 	});
 
-	test("rejects a failing case the allowance does not cover, naming it", () => {
+	test("rejects a failing case, naming it, since the allowance is empty", () => {
 		const extra = report([record("distributions-0004", "fail"), record("values-0007", "fail")]);
 
 		expect(() => checkKitRunReport(extra, "r.json")).toThrow(/values-0007/);
 		expect(() => checkKitRunReport(extra, "r.json")).toThrow("does not allow");
 	});
 
-	test("rejects more known failures than the allowance, kit errors, another binding, and an empty run", () => {
+	test("rejects repeated failures of the same case, kit errors, another binding, and an empty run", () => {
 		const tooMany = report([record("distributions-0004", "fail"), record("distributions-0004", "fail"), record("distributions-0004", "fail")]);
-		expect(() => checkKitRunReport(tooMany, "r.json")).toThrow(/distributions-0004 \(3 failing record\(s\), at most 2 allowed\)/);
+		expect(() => checkKitRunReport(tooMany, "r.json")).toThrow(/distributions-0004 \(3 failing record\(s\), at most 0 allowed\)/);
 
 		expect(() => checkKitRunReport(report([record("types-0001", "kit-error")]), "r.json")).toThrow("kit-error");
 		expect(() => checkKitRunReport({ ...report([record("types-0001", "pass")]), binding: "morphir-rust" }, "r.json")).toThrow("morphir-rust");

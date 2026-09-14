@@ -129,9 +129,10 @@ describe("release automation contract", () => {
 
 		expect(byName.get("check:package")?.depends).toEqual(["setup"]);
 		expect(byName.get("check:workflows")?.depends).toEqual([]);
+		expect(byName.get("check:conformance")?.depends).toEqual(["setup"]);
 		expect(byName.get("release:artifact")?.depends).toEqual(["setup"]);
 		expect(byName.get("release:binaries")?.depends).toEqual(["setup"]);
-		for (const dependency of ["check:lint", "check:typecheck", "test", "check:package", "check:workflows"])
+		for (const dependency of ["check:lint", "check:typecheck", "check:kit", "test", "check:package", "check:workflows", "check:conformance"])
 			expect(byName.get("ci")?.depends).toContain(dependency);
 
 		const sources = new Map<string, string>();
@@ -152,6 +153,18 @@ describe("release automation contract", () => {
 		expect(taskInvocation(sources.get("release:binaries") as string)).toBe(
 			'await exec(["bun", "scripts/release/cli.ts", "binaries", ...process.argv.slice(2)]);',
 		);
+
+		const conformanceFile = byName.get("check:conformance")?.file;
+		expect(conformanceFile).toBeString();
+		await access(conformanceFile as string, constants.X_OK);
+		const conformanceSource = await readFile(conformanceFile as string, "utf8");
+		expect(conformanceSource).toMatch(/^#!\/usr\/bin\/env bun\n\/\/ Copyright 2026 FINOS\n\/\/ SPDX-License-Identifier: Apache-2\.0\n/);
+		const conformanceInvocations = conformanceSource.match(/^await exec\(.+\);$/gm) ?? [];
+		expect(conformanceInvocations).toHaveLength(4);
+		expect(conformanceInvocations[0]).toContain('"run", "--report"');
+		expect(conformanceInvocations[1]).toContain('"--adapter", "bun"');
+		expect(conformanceInvocations[2]).toContain("scripts/conformance/compare-reports.ts");
+		expect(conformanceInvocations[3]).toContain('"coverage"');
 	});
 
 	// actionlint 1.7.12 deadlocks on Windows when it feeds shellcheck a `run:`
