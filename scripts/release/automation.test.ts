@@ -154,6 +154,22 @@ describe("release automation contract", () => {
 		);
 	});
 
+	// actionlint 1.7.12 deadlocks on Windows when it feeds shellcheck a `run:`
+	// script longer than the 4 KiB pipe buffer: a 4008-byte script lints, a
+	// 4108-byte one hangs forever. That silently breaks `mise run ci` for
+	// Windows contributors, so every step in every workflow stays under it.
+	test("keeps every workflow run script under the 4 KiB actionlint limit", async () => {
+		for (const file of [".github/workflows/release.yml", ".github/workflows/ci.yml"]) {
+			const workflow = Bun.YAML.parse(await readFile(path.join(root, file), "utf8")) as { jobs: Record<string, WorkflowJob> };
+			const scripts = Object.entries(workflow.jobs).flatMap(([job, definition]) =>
+				definition.steps.flatMap((step) => (step.run === undefined ? [] : [[`${file} ${job} / ${step.name ?? "(unnamed)"}`, step.run] as const])),
+			);
+			expect(scripts.length).toBeGreaterThan(0);
+			const oversized = scripts.filter(([, script]) => script.length >= 4096).map(([where, script]) => `${where}: ${script.length} bytes`);
+			expect(oversized).toEqual([]);
+		}
+	});
+
 	test("keeps workflow orchestration as one local CI invocation", async () => {
 		const workflow = await readFile(path.join(root, ".github/workflows/ci.yml"), "utf8");
 		const invocations = workflow.match(/\brun:\s*mise run ci\s*$/gm) ?? [];
@@ -192,12 +208,11 @@ describe("release automation contract", () => {
 		const publishing = markdownSection(guide, "Publishing");
 		for (const expected of [
 			"ORG_MORPHIR_NPM_TOKEN",
-			"initial 0.0.1 release is already prepared",
-			"VERSION=0.0.2",
+			"VERSION=X.Y.Z",
 			'mise run release:prepare -- "$VERSION"',
 			"mise run ci",
-			'git tag -s v0.0.1 -m "Release 0.0.1"',
-			"git push origin v0.0.1",
+			'git tag -s "v$VERSION" -m "Release $VERSION"',
+			'git push origin "v$VERSION"',
 			"Signed tags are an operator requirement",
 			"does not cryptographically verify tag signatures",
 			"provenance",
@@ -209,8 +224,19 @@ describe("release automation contract", () => {
 		expect(publishing).not.toContain("mise run release:prepare -- 0.0.1");
 		expect(publishing).toMatch(/does not (?:commit|create commits), tag, or push/i);
 		expect(publishing).toContain("One tag publishes both packages");
-		expect(publishing).toContain("@finos/morphir-mck is public from suite version 0.0.2");
-		for (const expected of ["mck-VERSION-OS-ARCH", "mck-adapter-typescript-VERSION-OS-ARCH", "bun build --compile", "chmod +x"])
+		// 0.0.1 shipped ir only; the version mck first publishes at is whatever
+		// the next `release:prepare` assigns, so the docs must not name one.
+		expect(publishing).toContain("0.0.1 published only @finos/morphir-ir");
+		expect(publishing).toContain("@finos/morphir-mck publishes from the next suite release");
+		expect(publishing).not.toMatch(/(?:public|publishes) (?:from|at) suite version \d/);
+		for (const expected of [
+			"mck-VERSION-OS-ARCH",
+			"mck-adapter-typescript-VERSION-OS-ARCH",
+			"bun build --compile",
+			"chmod +x",
+			"mck kit status",
+			"mck kit sync",
+		])
 			expect(publishing).toContain(expected);
 	});
 
@@ -360,7 +386,6 @@ describe("release automation contract", () => {
 		expect(helpers).toContain("BigInt");
 		expect(helpers).toContain("createHash");
 		expect(helpers).toContain("sha512-");
-		for (const step of publish.steps) expect((step.run ?? "").length).toBeLessThan(4096);
 
 		expect(publishScript).toContain("E404");
 		expect(publishScript).toContain('"$comparison" == "older"');

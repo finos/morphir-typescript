@@ -25,8 +25,8 @@ async function workspace(): Promise<string> {
 	return directory;
 }
 
-async function runBinary(binary: string, args: readonly string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-	const child = Bun.spawn([binary, ...args], { cwd: root, stdout: "pipe", stderr: "pipe" });
+async function runBinary(binary: string, args: readonly string[], cwd: string): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+	const child = Bun.spawn([binary, ...args], { cwd, stdout: "pipe", stderr: "pipe" });
 	const [stdout, stderr, exitCode] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
 	return { stdout, stderr, exitCode };
 }
@@ -94,15 +94,24 @@ describe("buildBinaries", () => {
 		]);
 		for (const binary of built) expect(path.dirname(binary)).toBe(output);
 
+		// Everything below runs from the temp workspace, never the checkout, so
+		// what the test proves is that the binary is self-contained: no
+		// repository, no `node_modules`, and no Node installation.
 		const driver = built[0] as string;
-		const reported = await runBinary(driver, ["--version"]);
+		const reported = await runBinary(driver, ["--version"], output);
 		expect(reported.exitCode).toBe(0);
 		expect(reported.stdout.trim()).toBe(version);
 
-		// The compiled driver carries the vendored kit, so it runs a case with
-		// no checkout, no `node_modules`, and no Node installation.
-		const run = await runBinary(driver, ["run", "--only", "^types-0001$"]);
+		// The compiled driver carries the vendored kit.
+		const run = await runBinary(driver, ["run", "--only", "^types-0001$"], output);
 		expect(run.exitCode).toBe(0);
 		expect(run.stdout).toContain("pass");
+
+		// There is no `kit.lock.json` inside the compiled binary's virtual
+		// root, so `kit status` reports the embedded kit instead of failing
+		// with ENOENT on a path under it.
+		const status = await runBinary(driver, ["kit", "status"], output);
+		expect(status.exitCode).toBe(0);
+		expect(status.stdout).toContain("embedded kit:");
 	}, 600_000);
 });

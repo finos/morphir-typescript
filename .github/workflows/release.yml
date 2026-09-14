@@ -274,6 +274,14 @@ jobs:
           # first: a failure there stops the tag before mck can reference a
           # version the registry does not have.
           for package_name in "@finos/morphir-ir" "@finos/morphir-mck"; do
+            # Bash has no per-iteration scope, so every carried variable is
+            # reset here: a stale value from the ir iteration must never decide
+            # anything about mck.
+            latest_present=false
+            latest_json=""
+            remote_integrity=""
+            confirmed=false
+
             tarball=".dev/out/release/finos-${package_name#@finos/}-${version}.tgz"
             local_integrity="$(node "$RUNNER_TEMP/tarball-integrity.cjs" "$tarball")"
 
@@ -322,7 +330,6 @@ jobs:
             fi
 
             echo "npm publish returned an error; checking whether the registry accepted ${package_name}." >&2
-            confirmed=false
             for attempt in 1 2 3 4 5; do
               remote_integrity="$(published_integrity "$package_name" "$version")" || remote_integrity=""
               if [[ "$remote_integrity" == "$local_integrity" ]]; then

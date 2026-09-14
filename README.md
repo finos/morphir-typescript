@@ -9,7 +9,7 @@ Morphir captures business logic and domain models as language-independent data s
 
 ## Project status
 
-Publishing is prepared for the initial `0.0.1` npm release of `@finos/morphir-ir` and `@finos/morphir-mck`. The root workspace stays private and is never published. Every workspace uses the same repository-wide suite version, including packages that are not part of a given release. Initial release preparation moves the whole suite from `0.0.0` to `0.0.1`.
+`@finos/morphir-ir` is published to public npm at `0.0.1`. `@finos/morphir-mck` publishes with the next suite release, whichever version `mise run release:prepare` assigns. The root workspace stays private and is never published. Every workspace uses the same repository-wide suite version, including packages that are not part of a given release, and the manifests read the last released version until release preparation bumps them.
 
 Standalone CI temporarily skips conformance tests that require the upstream Morphir fixture and MCK directories. Unit tests still run. The upstream integration work will remove this opt-out once a compatible pinned corpus is available to standalone clones.
 
@@ -17,8 +17,8 @@ Standalone CI temporarily skips conformance tests that require the upstream Morp
 
 | Package | Publication | Purpose |
 | --- | --- | --- |
-| `@finos/morphir-ir` | Prepared for public npm release at `0.0.1` | Generic Morphir IR semantic types, pinned v4 types, JSON readers and canonical writers, diagnostics, and attribute mapping. |
-| `@finos/morphir-mck` | Prepared for public npm release at `0.0.1` | MCK Markdown case parser, kit loader, structural checker, the `mck` driver and its reference adapter, and the report model. Ships the vendored kit. |
+| `@finos/morphir-ir` | Published to public npm at `0.0.1` | Generic Morphir IR semantic types, pinned v4 types, JSON readers and canonical writers, diagnostics, and attribute mapping. |
+| `@finos/morphir-mck` | Published with the next suite release | MCK Markdown case parser, kit loader, structural checker, the `mck` driver and its reference adapter, and the report model. Ships the vendored kit. |
 
 ## Morphir specifications
 

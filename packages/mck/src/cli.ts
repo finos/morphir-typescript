@@ -16,14 +16,14 @@
 // given; and `coverage` (spec S7), which reports every v4 vocabulary entry
 // (a variant or a member spelling) that no kit case exercises.
 import { execFileSync } from "node:child_process";
-import { readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { VOCABULARY } from "../../ir/src/versions/v4/index.ts";
 import { coverageGaps, formatGap } from "./coverage/coverage.ts";
 import { runKit as driveKit, exitCodeFor } from "./driver/run.ts";
 import { driverVersion, kitVersion } from "./driver/version.ts";
-import { embeddedKitFiles } from "./kit/embedded-source.ts";
+import { embeddedKitCommit, embeddedKitFiles } from "./kit/embedded-source.ts";
 import { loadKit, loadKitFromFiles } from "./kit/load.ts";
 import { kitStatus, readLock, syncKit } from "./kit/sync.ts";
 import { formatSummary, writeReport } from "./report.ts";
@@ -69,7 +69,23 @@ async function runCheck(rest: readonly string[]): Promise<number> {
 	return kit.errors.length === 0 ? 0 : 1;
 }
 
+/**
+ * True when the package root holds no `kit.lock.json`. `bun build --compile`
+ * bundles the sources under a virtual root (`B:/~BUN`) that contains only the
+ * modules it bundled, so `kit.lock.json` and the `kit/` tree are not there: a
+ * compiled binary carries the kit through `kit/embedded.ts` instead. The `kit`
+ * subcommands read both, so they report the embedded kit rather than failing
+ * with ENOENT on a path inside the virtual root.
+ */
+function compiledWithoutCheckout(): boolean {
+	return !existsSync(path.join(packageRoot(), "kit.lock.json"));
+}
+
 async function runKitSync(rest: readonly string[]): Promise<number> {
+	if (compiledWithoutCheckout()) {
+		console.error(`error: kit sync needs a source checkout of @finos/morphir-mck; this binary embeds the kit at finos/morphir ${embeddedKitCommit()}`);
+		return 2;
+	}
 	const force = rest.includes("--force");
 	const repositoryRoot = rest.find((a) => !a.startsWith("--"));
 	if (repositoryRoot === undefined) {
@@ -97,24 +113,33 @@ function countSyncedFiles(root: string): number {
 
 function runKitStatus(rest: readonly string[]): number {
 	const root = packageRoot();
-	const status = kitStatus(root);
-	const lock = readLock(root);
-	if (status.ok) {
-		console.log(`kit matches kit.lock.json (${lock.commit})`);
+	let commit: string;
+	let code: number;
+	if (compiledWithoutCheckout()) {
+		commit = embeddedKitCommit();
+		console.log(`embedded kit: finos/morphir ${commit} (compiled binary; lock file not available)`);
+		code = 0;
 	} else {
-		console.error(`kit differs from kit.lock.json: expected ${status.expected} actual ${status.actual}`);
+		const status = kitStatus(root);
+		commit = readLock(root).commit;
+		if (status.ok) {
+			console.log(`kit matches kit.lock.json (${commit})`);
+		} else {
+			console.error(`kit differs from kit.lock.json: expected ${status.expected} actual ${status.actual}`);
+		}
+		code = status.ok ? 0 : 1;
 	}
 	if (rest.includes("--remote")) {
 		try {
 			const out = execFileSync("git", ["ls-remote", "https://github.com/finos/morphir", "refs/heads/main"], { encoding: "utf8" }).trim();
 			const remote = out.split(/\s+/)[0] ?? "";
-			const relation = remote === lock.commit ? "same as" : "behind";
-			console.log(`pinned ${lock.commit} is ${relation} origin/main ${remote}`);
+			const relation = remote === commit ? "same as" : "behind";
+			console.log(`pinned ${commit} is ${relation} origin/main ${remote}`);
 		} catch (error) {
 			console.error(`could not reach origin/main: ${(error as Error).message}`);
 		}
 	}
-	return status.ok ? 0 : 1;
+	return code;
 }
 
 async function runKitCommand(rest: readonly string[]): Promise<number> {

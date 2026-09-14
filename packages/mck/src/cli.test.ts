@@ -98,6 +98,21 @@ describe("mck kit", () => {
 		expect(status.code).toBe(1);
 		expect(status.err).toMatch(/kit differs from kit\.lock\.json: expected sha256-\S+ actual sha256-\S+/);
 	});
+	// A compiled binary has no `kit.lock.json` and no `kit/` tree: `bun build
+	// --compile` puts the bundled modules under a virtual root. An empty
+	// package root reproduces that layout without compiling.
+	test("kit status in a compiled binary reports the embedded kit and succeeds", () => {
+		const r = run(["kit", "status"], { MCK_PACKAGE_ROOT: temp() });
+		expect(r.code).toBe(0);
+		expect(r.out).toMatch(/^embedded kit: finos\/morphir [0-9a-f]{40} \(compiled binary; lock file not available\)$/m);
+		expect(r.err).toBe("");
+	});
+	test("kit sync in a compiled binary refuses with a one-line error, not a stack trace", () => {
+		const r = run(["kit", "sync", fakeParent()], { MCK_PACKAGE_ROOT: temp() });
+		expect(r.code).toBe(2);
+		expect(r.err).toMatch(/^error: kit sync needs a source checkout of @finos\/morphir-mck; this binary embeds the kit at finos\/morphir [0-9a-f]{40}$/m);
+		expect(r.err).not.toContain("ENOENT");
+	});
 	test("unknown kit subcommand is a usage error", () => {
 		const r = run(["kit", "frobnicate"]);
 		expect(r.code).toBe(2);
