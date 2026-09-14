@@ -237,6 +237,7 @@ test("parseEnvelope rejects a message without a numeric id", () => {
 const schemaDocument = JSON.parse(readFileSync(path.join(import.meta.dirname, "..", "..", "protocol.schema.json"), "utf8")) as {
 	readonly $id: string;
 	readonly definitions: Record<string, unknown>;
+	readonly oneOf: readonly { readonly $ref: string }[];
 };
 // The schema is draft-07, which is Ajv 8's default dialect. `strict: false`
 // because draft-07's `allOf` composition (an envelope merged with a message
@@ -360,4 +361,55 @@ for (const id of [0, -1]) {
 
 test("parseCapabilities rejects an empty nodes list", () => {
 	expect(() => parseCapabilities(body(capabilitiesWith({ nodes: [] })))).toThrow('"nodes" must list at least one node kind');
+});
+
+// --- the root schema, for a validator given no entrypoint ---
+//
+// A validator that is handed a line with no idea what it should be validates
+// against the document root, whose `oneOf` must therefore discriminate: exactly
+// one branch may accept any given message. The failure answer to decode,
+// readTree and writeTree is one shape, so it is one branch (ErrorResponse) and
+// the two success shapes are their own; listing DecodeResponse and
+// WriteTreeResponse at the root instead would make every error response match
+// twice and fail the root schema while passing its own entrypoint.
+
+const ROOT_BRANCHES: readonly string[] = schemaDocument.oneOf.map((branch) => branch.$ref.replace("#/definitions/", ""));
+
+function rootBranchesAccepting(message: unknown): readonly string[] {
+	return ROOT_BRANCHES.filter((definition) => schemaVerdict(definition, message) === true);
+}
+
+function rootValidator(): ValidateFunction {
+	const compiled = ajv.getSchema(schemaDocument.$id);
+	if (compiled === undefined) throw new Error("protocol.schema.json did not compile at its root");
+	return compiled;
+}
+
+test("the root oneOf lists disjoint branches, not the op-dispatched response wrappers", () => {
+	expect(ROOT_BRANCHES).toEqual(["Request", "Capabilities", "DecodeSuccess", "WriteTreeSuccess", "ErrorResponse"]);
+});
+
+for (const entry of all) {
+	const id = entry.message.id as number;
+	test(`example ${entry.direction} id ${id} validates against the root schema, matching exactly one branch`, () => {
+		const validate = rootValidator();
+		expect(validate(entry.message) === true ? true : ajv.errorsText(validate.errors)).toBe(true);
+		expect(rootBranchesAccepting(entry.message)).toHaveLength(1);
+	});
+}
+
+test("an error response matches the root schema exactly once, and both op entrypoints still accept it", () => {
+	const errorResponse = { id: 4, ok: false, diagnostic: { code: "invalid_type", stage: "semantic", cursor: "/Library/def", message: "no" } };
+	expect(rootBranchesAccepting(errorResponse)).toEqual(["ErrorResponse"]);
+	const validate = rootValidator();
+	expect(validate(errorResponse) === true ? true : ajv.errorsText(validate.errors)).toBe(true);
+	// The wrappers a validator reaches by op name still cover both outcomes.
+	expect(schemaVerdict("DecodeResponse", errorResponse)).toBe(true);
+	expect(schemaVerdict("WriteTreeResponse", errorResponse)).toBe(true);
+});
+
+test("the entrypoint names a validator dispatches by op all still resolve", () => {
+	for (const definition of ["Request", "Capabilities", "DecodeResponse", "WriteTreeResponse"]) {
+		expect(() => validator(definition)).not.toThrow();
+	}
 });
