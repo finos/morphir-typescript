@@ -19,11 +19,15 @@
 //
 // A handful of legacy spellings are not read through windowed() — a
 // three-way check for a type Function's parameter, a bare field map standing
-// in for a Record's whole payload, and the Documented nested {doc,value}
-// wrapper — so the drift test's scan cannot find them by pattern; they are
-// asserted by hand there instead, against a member named "<direct map>" here
-// for the whole-payload shape (it is never a real JSON key; it exists so the
-// gap list still names something a reader can go looking for).
+// in for a Record's whole payload, the Documented nested {doc,value}
+// wrapper, and ValueDefinition's ExternalBody top-level pair — so the drift
+// test's scan cannot find them by pattern; they are asserted by hand there
+// instead. The Record bare-field-map shape has no member entry here: a
+// member name is a JSON key, and that legacy shape has none (the whole
+// payload stands in for {"fields": ..}), so a fake member would only ever
+// show as a gap the kit can never close. The kit already exercises the shape
+// through an `accepted warning=legacy_spelling` fence; the drift test
+// acknowledges the reader's `isRecordPayload` warn site directly instead.
 import type { NodeKind } from "./index.ts";
 
 export interface VocabularySpelling {
@@ -48,9 +52,10 @@ const ATTRIBUTES_PAIR: readonly VocabularySpelling[] = [canonical("attributes"),
 
 // The Record payload has two shapes: the canonical { "fields": {..} }, and the
 // legacy bare field map directly under the wrapper (read-types.ts
-// isRecordPayload, read-values.ts isRecordPayload). "<direct map>" stands for
-// that whole-payload shape; it is never itself a JSON member name.
-const RECORD_MEMBERS: readonly VocabularySpelling[] = [canonical("fields"), legacy("<direct map>"), ...ATTRIBUTES_PAIR];
+// isRecordPayload, read-values.ts isRecordPayload). That legacy shape has no
+// member of its own to list — see the file header — so only "fields" and the
+// attributes pair appear here.
+const RECORD_MEMBERS: readonly VocabularySpelling[] = [canonical("fields"), ...ATTRIBUTES_PAIR];
 
 export const VOCABULARY: readonly VocabularyEntry[] = [
 	// -------------------------------------------------------------- Type
@@ -141,6 +146,23 @@ export const VOCABULARY: readonly VocabularyEntry[] = [
 	{ node: "Value", variant: "UpdateRecord", members: [] },
 	{ node: "Value", variant: "Unit", members: [] },
 	{ node: "Value", variant: "Hole", members: [] },
+
+	// -------------------------------------------------------- ValueDefinition
+	// readValueDefinition checks DEFINITION_KEYS membership with if/else, not a
+	// switch, so these four are not case labels the drift test's regex scan
+	// can find; it asserts their presence as plain string literals in
+	// read-values.ts by hand instead (NON_LABEL_VARIANTS). ExternalBody alone
+	// has a legacy shape: the pre-decision-0008 top-level "externalName"/
+	// "targetPlatform" pair, read as a one-entry "externals" list with a
+	// warning (readExternals), not through windowed() either.
+	{ node: "ValueDefinition", variant: "ExpressionBody", members: [] },
+	{ node: "ValueDefinition", variant: "NativeBody", members: [] },
+	{ node: "ValueDefinition", variant: "IncompleteBody", members: [] },
+	{
+		node: "ValueDefinition",
+		variant: "ExternalBody",
+		members: [canonical("externals"), legacy("externalName"), legacy("targetPlatform"), canonical("body")],
+	},
 
 	// ------------------------------------------- AccessControlledTypeDefinition
 	// readAccess's case labels resolve to "Public"/"Private"; "pub" (and the

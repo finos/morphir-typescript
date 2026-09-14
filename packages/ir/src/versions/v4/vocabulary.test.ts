@@ -25,7 +25,9 @@ const SOURCES: readonly (readonly [string, string])[] = [
 // accept a handful of lowercase access spellings ("pub", "public",
 // "private") that are not variants; restricting the scan to labels starting
 // with an uppercase letter excludes them without an explicit exclusion list
-// for each one.
+// for each one. The tradeoff: a future variant spelled lowercase (unlikely,
+// given the convention, but not impossible) would silently miss this scan
+// rather than fail loudly.
 const LABEL = /case\s+"([A-Z][A-Za-z0-9]*)"\s*:/g;
 
 function scanLabels(source: string): ReadonlySet<string> {
@@ -63,8 +65,6 @@ const NON_VARIANT_LABELS: readonly string[] = ["pub"];
 // source substring check so removing the behavior still fails this test.
 const WARN_ONLY_LEGACY: readonly { readonly node: string; readonly variant: string; readonly member: string }[] = [
 	{ node: "Type", variant: "Function", member: "arg" },
-	{ node: "Type", variant: "Record", member: "<direct map>" },
-	{ node: "Value", variant: "Record", member: "<direct map>" },
 	// The attributes/attrs pair is read once, in expanded.ts's shared helper,
 	// not per wrapper via windowed() — so it is not in the scanned files at
 	// all and is asserted here for the two places it is modeled (Type/Record,
@@ -73,7 +73,36 @@ const WARN_ONLY_LEGACY: readonly { readonly node: string; readonly variant: stri
 	{ node: "Value", variant: "Record", member: "attrs" },
 	{ node: "AccessControlledTypeDefinition", variant: "Public", member: "value" },
 	{ node: "AccessControlledTypeDefinition", variant: "Private", member: "value" },
+	// ValueDefinition's ExternalBody: the pre-decision-0008 top-level
+	// "externalName"/"targetPlatform" pair, read as a one-entry "externals"
+	// list by readExternals rather than through windowed().
+	{ node: "ValueDefinition", variant: "ExternalBody", member: "externalName" },
+	{ node: "ValueDefinition", variant: "ExternalBody", member: "targetPlatform" },
 ];
+
+// Warn sites with no member representation in VOCABULARY at all: the legacy
+// shape is the whole payload, not a named member, so there is no JSON key to
+// model as a VocabularySpelling — the coverage rule can only ever look for
+// object keys. The kit already exercises the shape via an
+// `accepted warning=legacy_spelling` fence; this list just keeps the reader's
+// warn site itself anchored, by variant and a source substring, so removing
+// it still fails this test.
+const WARN_ONLY_VARIANT_SITES: readonly { readonly node: string; readonly variant: string; readonly source: string; readonly sourceContains: string }[] = [
+	{ node: "Type", variant: "Record", source: "read-types.ts", sourceContains: "isRecordPayload" },
+	{ node: "Value", variant: "Record", source: "read-values.ts", sourceContains: "isRecordPayload" },
+];
+
+// Variants recognized by key membership (readValueDefinition's if/else over
+// DEFINITION_KEYS) rather than a `case "<Label>":` switch, so the LABEL scan
+// above cannot find them. Each is asserted here against a plain string
+// literal in read-values.ts instead, so a rename still breaks this test.
+const NON_LABEL_VARIANTS: readonly { readonly node: string; readonly variant: string; readonly source: string }[] = [
+	{ node: "ValueDefinition", variant: "ExpressionBody", source: "read-values.ts" },
+	{ node: "ValueDefinition", variant: "NativeBody", source: "read-values.ts" },
+	{ node: "ValueDefinition", variant: "IncompleteBody", source: "read-values.ts" },
+	{ node: "ValueDefinition", variant: "ExternalBody", source: "read-values.ts" },
+];
+const SOURCE_BY_NAME = new Map(SOURCES);
 
 describe("VOCABULARY drift guard", () => {
 	test("every scanned case label is a VOCABULARY variant, or a listed non-variant label", () => {
@@ -84,8 +113,10 @@ describe("VOCABULARY drift guard", () => {
 		}
 	});
 
-	test("every VOCABULARY variant appears as a scanned case label", () => {
+	test("every VOCABULARY variant appears as a scanned case label, or is a listed non-label variant", () => {
+		const nonLabel = new Set(NON_LABEL_VARIANTS.map((w) => `${w.node}/${w.variant}`));
 		for (const entry of VOCABULARY) {
+			if (nonLabel.has(`${entry.node}/${entry.variant}`)) continue;
 			expect(ALL_LABELS.has(entry.variant), `VOCABULARY entry ${entry.node}/${entry.variant} has no matching case label`).toBe(true);
 		}
 	});
@@ -120,6 +151,27 @@ describe("VOCABULARY drift guard", () => {
 		expect(READ_TYPES).toContain("isRecordPayload");
 		expect(READ_VALUES).toContain("isRecordPayload");
 		expect(READ_DEFINITIONS).toContain('"doc"');
+	});
+
+	test("the non-label variants (ValueDefinition's body kinds) are present in VOCABULARY and still named in the readers", () => {
+		for (const w of NON_LABEL_VARIANTS) {
+			const entry = VOCABULARY.find((e) => e.node === w.node && e.variant === w.variant);
+			expect(entry, `no VOCABULARY entry for ${w.node}/${w.variant}`).toBeDefined();
+			const source = SOURCE_BY_NAME.get(w.source);
+			expect(source, `no scanned source named "${w.source}"`).toBeDefined();
+			expect(source).toContain(`"${w.variant}"`);
+		}
+	});
+
+	test("the Record direct-field-map warn site is acknowledged without a fake member entry", () => {
+		for (const w of WARN_ONLY_VARIANT_SITES) {
+			const entry = VOCABULARY.find((e) => e.node === w.node && e.variant === w.variant);
+			expect(entry, `no VOCABULARY entry for ${w.node}/${w.variant}`).toBeDefined();
+			expect(entry?.members.some((m) => m.name === "<direct map>")).toBe(false);
+			const source = SOURCE_BY_NAME.get(w.source);
+			expect(source, `no scanned source named "${w.source}"`).toBeDefined();
+			expect(source).toContain(w.sourceContains);
+		}
 	});
 
 	test("attributes/attrs is modeled once under Type/Record and once under Value/Record", () => {

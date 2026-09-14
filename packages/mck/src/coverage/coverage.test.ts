@@ -84,6 +84,40 @@ describe("coverageGaps", () => {
 		expect(coverageGaps(k, vocabulary, noResolve)).toEqual([{ node: "Type", variant: "Tuple" }]);
 	});
 
+	test("an unambiguous variant is covered by a fence nested in a case of a different node kind", () => {
+		// TypeAliasDefinition only ever appears under node "TypeDefinition" in
+		// the manifest, so it is unambiguous even though the kit case that
+		// exercises it is tagged node=AccessControlledTypeDefinition (its own
+		// access-controlled wrapper nests a TypeDefinition's tag inside).
+		const vocabulary: readonly VocabularyEntry[] = [{ node: "TypeDefinition", variant: "TypeAliasDefinition", members: [] }];
+		const k = kit([
+			kitCase({
+				node: "AccessControlledTypeDefinition",
+				fences: [fence('{ "Public": { "TypeAliasDefinition": { "typeParams": [], "typeExp": "a" } } }')],
+			}),
+		]);
+		expect(coverageGaps(k, vocabulary, resolveNode)).toEqual([]);
+	});
+
+	test("an ambiguous variant is still a gap when only a different node kind's case carries the tag", () => {
+		// "Record" is a variant of both Type and Value in the real manifest;
+		// putting it under two nodes here reproduces that ambiguity.
+		const vocabulary: readonly VocabularyEntry[] = [
+			{ node: "Type", variant: "Record", members: [] },
+			{ node: "Value", variant: "Record", members: [] },
+		];
+		const k = kit([kitCase({ node: "Value", fences: [fence('{ "Record": { "fields": { "a": 1 } } }')] })]);
+		const gaps = coverageGaps(k, vocabulary, resolveNode);
+		expect(gaps).toEqual([{ node: "Type", variant: "Record" }]);
+	});
+
+	test("a member spelling is still a gap when only a different node kind's case carries it", () => {
+		const vocabulary: readonly VocabularyEntry[] = [{ node: "Type", variant: "Function", members: [{ name: "arg", spelling: "legacy" }] }];
+		const k = kit([kitCase({ node: "Value", fences: [fence('{ "Function": { "arg": "a", "returnType": "b" } }')] })]);
+		const gaps = coverageGaps(k, vocabulary, resolveNode);
+		expect(gaps).toEqual([{ node: "Type", variant: "Function", member: "arg" }]);
+	});
+
 	test("formatGap formats a variant gap and a member gap", () => {
 		expect(formatGap({ node: "Value", variant: "Destructure" })).toBe("Value/Destructure has no case");
 		expect(formatGap({ node: "Type", variant: "Function", member: "arg" })).toBe("Type/Function member arg has no case");
