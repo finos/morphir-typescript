@@ -17,3 +17,21 @@ export {
 	textFenceTarget,
 } from "./kit/source.ts";
 export { emptyReport, type Report, type ReportDiagnostic, type ReportProfile, type ReportRecord, type ReportResult, type ReportRole } from "./report.ts";
+export { ProtocolError, parseCapabilities, parseDecodeResponse, parseEnvelope, parseRequest, parseWriteTreeResponse } from "./testee/protocol.ts";
+export type {
+	Capabilities,
+	DecodeRequest,
+	DecodeResponse,
+	Envelope,
+	Layout,
+	PathMode,
+	Profile,
+	ProtocolDiagnostic,
+	ReadTreeRequest,
+	Request,
+	Testee,
+	TreeFile,
+	Warning,
+	WriteTreeRequest,
+	WriteTreeResponse,
+} from "./testee/testee.ts";
