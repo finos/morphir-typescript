@@ -61,9 +61,15 @@
 						},
 						"profiles": { "type": "array", "items": { "$ref": "#/definitions/Profile" } },
 						"layouts": { "type": "array", "items": { "$ref": "#/definitions/Layout" } },
-						"paths": { "type": "array", "items": { "$ref": "#/definitions/PathMode" } }
+						"paths": { "type": "array", "items": { "$ref": "#/definitions/PathMode" } },
+						"nodes": {
+							"type": "array",
+							"items": { "type": "string" },
+							"minItems": 1,
+							"description": "Node kinds this adapter decodes, spelled as the kit names them (aliases included, e.g. \"Distribution\")."
+						}
 					},
-					"required": ["id", "contractVersion", "binding", "language", "versions", "profiles", "layouts", "paths"]
+					"required": ["id", "contractVersion", "binding", "language", "versions", "profiles", "layouts", "paths", "nodes"]
 				}
 			]
 		},

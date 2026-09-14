@@ -93,6 +93,23 @@ test("parseCapabilities rejects an extra field", () => {
 	expect(() => parseCapabilities({ ...capabilities, extra: true })).toThrow('unknown field "extra"');
 });
 
+test("parseCapabilities accepts the example capabilities response's nodes", () => {
+	const parsed = parseCapabilities(body(response(1)));
+	expect(parsed.nodes).toContain("Type");
+	expect(parsed.nodes).toContain("Distribution");
+});
+
+test("parseCapabilities rejects capabilities missing nodes", () => {
+	const capabilities = body(response(1)) as Record<string, unknown>;
+	const { nodes, ...withoutNodes } = capabilities;
+	expect(() => parseCapabilities(withoutNodes)).toThrow('"nodes" must be an array of strings');
+});
+
+test("parseCapabilities rejects a non-string nodes entry", () => {
+	const capabilities = body(response(1));
+	expect(() => parseCapabilities({ ...capabilities, nodes: ["Type", 42] })).toThrow('"nodes" must be an array of strings');
+});
+
 // --- parseDecodeResponse ---
 
 test("parseDecodeResponse accepts the example ok:true decode response", () => {

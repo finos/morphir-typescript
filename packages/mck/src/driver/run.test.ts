@@ -20,6 +20,7 @@ const FULL_CAPS: Capabilities = {
 	profiles: ["json"],
 	layouts: ["single"],
 	paths: ["current"],
+	nodes: ["Type", "Value", "Pattern", "IRFile"],
 };
 
 function kitFrom(files: ReadonlyMap<string, string>): Promise<Kit> {
@@ -376,5 +377,172 @@ describe("runKit", () => {
 		expect(report.records).toHaveLength(2);
 		for (const r of report.records) expect(r.result).toBe("kit-error");
 		expect(decodeCalls).toHaveLength(0);
+	});
+
+	test("15. (fix round 1, Critical 1) a kit-error sharing a caseId with a two-path case is never swept into path reconciliation", async () => {
+		// Two identical-content canonical fences still trip case.ts's "more than
+		// one canonical" rule (a kit error, attributed to types-0001,
+		// fenceIndex 0, no path), while every fence in the case decodes and
+		// compares consistently on both paths. Before the fix, reconcilePaths
+		// scanned the whole report by caseId, so the kit-error record joined the
+		// fenceIndex-0 group and its mismatched signature (no `path`, "kit-error"
+		// vs "pass") flipped both real path records to a false "paths disagree".
+		const kit = await kitFrom(
+			new Map([
+				[
+					`${KIT_PATH}/types.md`,
+					[
+						"## types-0001: t {node=Type}",
+						"```json canonical",
+						'{"a":1}',
+						"```",
+						"```json canonical",
+						'{"a":1}',
+						"```",
+						"```json accepted",
+						'{"a":1}',
+						"```",
+						"",
+					].join("\n"),
+				],
+			]),
+		);
+		expect(kit.errors.length).toBe(1);
+		const caps: Capabilities = { ...FULL_CAPS, paths: ["current", "pinned"] };
+		const { testee } = scriptedTestee(caps, () => ({ ok: true, kind: "Type", canonical: { json: '{"a":1}' }, warnings: [] }));
+		const report = await runKit(kit, testee, opts);
+
+		const kitError = report.records.find((r) => r.result === "kit-error");
+		expect(kitError).toMatchObject({ caseId: "types-0001", fenceIndex: 0 });
+		expect(kitError?.path).toBeUndefined();
+
+		for (const fenceIndex of [0, 1, 2]) {
+			const pair = report.records.filter((r) => r.fenceIndex === fenceIndex && r.path !== undefined);
+			expect(pair).toHaveLength(2);
+			for (const r of pair) expect(r.result).toBe("pass");
+		}
+	});
+
+	test("16. (fix round 1, Critical 2) a kit error inside the second case of a file is owned by that case, not the file's first", async () => {
+		const kit = await kitFrom(
+			new Map([
+				[
+					`${KIT_PATH}/types.md`,
+					[
+						"## types-0001: first {node=Type}",
+						"```json canonical",
+						'{"a":1}',
+						"```",
+						"## types-0002: second {node=Type}",
+						"```json canonical",
+						'{"a":1}',
+						"```",
+						"```json canonical",
+						'{"a":2}',
+						"```",
+						"",
+					].join("\n"),
+				],
+			]),
+		);
+		expect(kit.errors.length).toBe(1);
+		const { testee } = scriptedTestee(FULL_CAPS, () => ({ ok: true, kind: "Type", canonical: { json: '{"a":1}' }, warnings: [] }));
+		const report = await runKit(kit, testee, opts);
+		const kitError = report.records.find((r) => r.result === "kit-error");
+		expect(kitError?.caseId).toBe("types-0002");
+	});
+
+	test("17. (fix round 1, Critical 2) the same, with two declared paths, does not misattribute or downgrade unrelated records", async () => {
+		const kit = await kitFrom(
+			new Map([
+				[
+					`${KIT_PATH}/types.md`,
+					[
+						"## types-0001: first {node=Type}",
+						"```json canonical",
+						'{"a":1}',
+						"```",
+						"## types-0002: second {node=Type}",
+						"```json canonical",
+						'{"a":1}',
+						"```",
+						"```json canonical",
+						'{"a":2}',
+						"```",
+						"",
+					].join("\n"),
+				],
+			]),
+		);
+		expect(kit.errors.length).toBe(1);
+		const caps: Capabilities = { ...FULL_CAPS, paths: ["current", "pinned"] };
+		const { testee } = scriptedTestee(caps, () => ({ ok: true, kind: "Type", canonical: { json: '{"a":1}' }, warnings: [] }));
+		const report = await runKit(kit, testee, opts);
+		const kitError = report.records.find((r) => r.result === "kit-error");
+		expect(kitError?.caseId).toBe("types-0002");
+		const firstCaseRecords = report.records.filter((r) => r.caseId === "types-0001");
+		expect(firstCaseRecords).toHaveLength(2);
+		for (const r of firstCaseRecords) expect(r.result).toBe("pass");
+	});
+
+	test("18. (fix round 1, Important 3) an accepted fence with no canonical of its profile is kit-error, not self-compared", async () => {
+		const kit = await kitFrom(
+			new Map([
+				[`${KIT_PATH}/types.md`, ["## types-0001: t {node=Type}", "```yaml canonical", "a: 1", "```", "```json accepted", '{"a":1}', "```", ""].join("\n")],
+			]),
+		);
+		const { testee, decodeCalls } = scriptedTestee(FULL_CAPS, () => ({ ok: true, kind: "Type", canonical: { json: '{"a":1}' }, warnings: [] }));
+		const report = await runKit(kit, testee, opts);
+		const accepted = report.records.find((r) => r.role === "accepted");
+		expect(accepted).toMatchObject({ result: "kit-error", message: "no canonical json fence in types-0001" });
+		expect(decodeCalls).toHaveLength(1);
+	});
+
+	test("19. (fix round 1, Ruling A) an undeclared node is skipped and the testee is never asked to decode it", async () => {
+		const kit = await kitFrom(
+			new Map([[`${KIT_PATH}/types.md`, ["## types-0001: t {node=Frobnicate}", "```json canonical", '{"a":1}', "```", ""].join("\n")]]),
+		);
+		const { testee, decodeCalls } = scriptedTestee(FULL_CAPS, () => ({ ok: true, kind: "Type", canonical: { json: '{"a":1}' }, warnings: [] }));
+		const report = await runKit(kit, testee, opts);
+		expect(report.records).toHaveLength(1);
+		expect(report.records[0]).toMatchObject({ result: "skipped", message: "node Frobnicate not in capabilities" });
+		expect(decodeCalls).toHaveLength(0);
+	});
+
+	test("20. (fix round 1, Ruling A) a case with no node= is skipped as node unset", async () => {
+		const kit = await kitFrom(new Map([[`${KIT_PATH}/types.md`, ["## types-0001: t", "```json canonical", '{"a":1}', "```", ""].join("\n")]]));
+		const { testee, decodeCalls } = scriptedTestee(FULL_CAPS, () => ({ ok: true, kind: "Type", canonical: { json: '{"a":1}' }, warnings: [] }));
+		const report = await runKit(kit, testee, opts);
+		expect(report.records).toHaveLength(1);
+		expect(report.records[0]).toMatchObject({ result: "skipped", message: "node unset not in capabilities" });
+		expect(decodeCalls).toHaveLength(0);
+	});
+
+	test("21. (fix round 1, minor 7) a text fence whose role is file gets profile tree, like a literal file fence", async () => {
+		const kit = await kitFrom(
+			new Map([
+				[
+					`${KIT_PATH}/document-tree.md`,
+					[
+						"## document-tree-0001: d {node=IRFile}",
+						"```json canonical",
+						'{"a":1}',
+						"```",
+						"```text file path=manifest",
+						`${KIT_PATH}/documents/manifest.json`,
+						"```",
+						"",
+					].join("\n"),
+				],
+				[`${KIT_PATH}/documents/manifest.json`, '{"m":1}\n'],
+			]),
+		);
+		const { testee, decodeCalls } = scriptedTestee(FULL_CAPS, () => ({ ok: true, kind: "IRFile", canonical: { json: '{"a":1}' }, warnings: [] }));
+		const report = await runKit(kit, testee, opts);
+		const fileRecord = report.records.find((r) => r.role === "file");
+		expect(fileRecord).toMatchObject({ result: "skipped", profile: "tree", message: "layout tree not in capabilities" });
+		// Only the canonical fence's decode call happened; the text-file fence
+		// was never resolved into a json/yaml decode attempt.
+		expect(decodeCalls).toHaveLength(1);
 	});
 });

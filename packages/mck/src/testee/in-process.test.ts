@@ -15,6 +15,13 @@ describe("inProcessTestee", () => {
 	test("capabilities", async () => {
 		expect(await t.capabilities()).toEqual(IN_PROCESS_CAPABILITIES);
 	});
+	test("capabilities declares every node kind and alias it decodes", async () => {
+		const caps = await t.capabilities();
+		expect(caps.nodes).toContain("Type");
+		expect(caps.nodes).toContain("IRFile");
+		expect(caps.nodes).toContain("Distribution"); // the kit alias for IRFile
+		expect(caps.nodes).not.toContain("DistributionManifestFile"); // not implemented yet (plan 2c)
+	});
 	test("decodes a Type and returns its canonical JSON, kind, and no warnings", async () => {
 		const r = await decode("Type", '{ "Reference": { "fqname": "morphir/SDK:list#list", "args": ["a"] } }');
 		expect(r).toEqual({ ok: true, kind: "Reference", canonical: { json: '{ "Reference": ["morphir/SDK:list#list", "a"] }' }, warnings: [] });

@@ -133,17 +133,17 @@ describe("mck kit", () => {
 });
 
 describe("mck run", () => {
-	test("over the embedded kit, prints a summary and its exit code tracks exitCodeFor", () => {
+	test("over the embedded kit, fails only on the known distributions-0004 fixture gap", () => {
 		const r = run(["run"]);
-		expect(r.out).toMatch(/\d+ pass, \d+ fail, 0 kit-error, \d+ skipped/);
-		// Two pre-existing gaps unrelated to the driver currently keep this above
-		// zero fail (see task-5-report.md): a stale website/static/ir/examples/v4
-		// fixture predating the IR v4 stabilization, and document-tree
-		// manifest-file node kinds that arrive with plan 2c. Once those are fixed
-		// this reads 0 fail and exits 0; until then the exit code must still
-		// follow exitCodeFor's math, which this asserts against the printed count.
-		const fail = Number(/(\d+) fail/.exec(r.out)?.[1] ?? "-1");
-		expect(r.code).toBe(fail > 0 ? 1 : 0);
+		// distributions-0004 (fence 0, current + pinned) is the one remaining known
+		// gap (see task-5-report.md, "Fix round 1"): its text fence names a
+		// pretty-printed, "4.0.0"-spelled file, an accepted historical spelling
+		// rather than the writer's canonical. That is a parent-repo fixture fix
+		// (Task 8) followed by a kit resync (Task 11); this count drops to 0 once
+		// both land. The document-tree manifest-file cases that used to fail
+		// alongside it are now skipped instead, per Ruling A (capabilities.nodes).
+		expect(r.out).toMatch(/\d+ pass, 2 fail, 0 kit-error, \d+ skipped/);
+		expect(r.code).toBe(1);
 	});
 	test("--only restricts the report to matching case ids", () => {
 		const reportFile = path.join(temp(), "report.json");
@@ -171,6 +171,17 @@ describe("mck run", () => {
 		const r = run(["run", "--adapter", "some-exe"]);
 		expect(r.code).toBe(2);
 		expect(r.err).toMatch(/--adapter arrives with the process testee/);
+	});
+	test("an invalid --only regex is a usage error naming the problem", () => {
+		const r = run(["run", "--only", "("]);
+		expect(r.code).toBe(2);
+		expect(r.err).toMatch(/^usage: mck run /m);
+		expect(r.err).toMatch(/^error: invalid --only regex: /m);
+	});
+	test("a flag missing its operand at the end of argv is a usage error", () => {
+		const r = run(["run", "--kit"]);
+		expect(r.code).toBe(2);
+		expect(r.err).toMatch(/^usage: mck run /m);
 	});
 });
 

@@ -16,6 +16,8 @@ export interface Capabilities {
 	readonly profiles: readonly Profile[];
 	readonly layouts: readonly Layout[];
 	readonly paths: readonly PathMode[];
+	/** Node kinds this adapter decodes, spelled as the kit names them (aliases included, e.g. "Distribution"). */
+	readonly nodes: readonly string[];
 }
 
 export interface TreeFile {

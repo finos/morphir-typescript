@@ -38,6 +38,11 @@ function list<T extends string>(o: Record<string, unknown>, key: string, allowed
 function knownKeys(o: Record<string, unknown>, allowed: readonly string[], prefix = ""): void {
 	for (const key of Object.keys(o)) need(allowed.includes(key), `unknown field "${prefix}${key}"`, key);
 }
+function stringArray(o: Record<string, unknown>, key: string): readonly string[] {
+	const v = o[key];
+	need(Array.isArray(v) && (v as unknown[]).every((item) => typeof item === "string" && item.length > 0), `"${key}" must be an array of strings`, v);
+	return v as string[];
+}
 
 export function parseEnvelope(line: string): { readonly id: number; readonly body: Record<string, unknown> } {
 	let parsed: unknown;
@@ -56,7 +61,7 @@ export function parseEnvelope(line: string): { readonly id: number; readonly bod
 export function parseCapabilities(v: unknown): Capabilities {
 	need(isRecord(v), "capabilities must be an object", v);
 	const o = v as Record<string, unknown>;
-	knownKeys(o, ["contractVersion", "binding", "language", "versions", "profiles", "layouts", "paths"]);
+	knownKeys(o, ["contractVersion", "binding", "language", "versions", "profiles", "layouts", "paths", "nodes"]);
 	need(o.contractVersion === 1, `unsupported contractVersion ${JSON.stringify(o.contractVersion)}; this driver speaks 1`, o);
 	const versions = o.versions;
 	need(Array.isArray(versions) && versions.every((n) => Number.isInteger(n) && (n as number) > 0), '"versions" must be positive integers', versions);
@@ -68,6 +73,7 @@ export function parseCapabilities(v: unknown): Capabilities {
 		profiles: list(o, "profiles", PROFILES),
 		layouts: list(o, "layouts", LAYOUTS),
 		paths: list(o, "paths", PATHS),
+		nodes: stringArray(o, "nodes"),
 	};
 }
 

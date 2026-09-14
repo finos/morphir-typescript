@@ -32,15 +32,38 @@ interface Target {
 	readonly message: string | null;
 }
 
-// A fence's profile and body: the literal fence, or the file a text fence names.
+// A fence's profile and body: the literal fence, or the file a text fence
+// names. A `file`-role fence is always the tree layout's, whether it embeds
+// its content literally or (like a canonical/accepted text fence) names
+// another file for it: the language token only ever picks the fence's own
+// syntax, never its role in the comparison.
 function targetOf(kit: Kit, fence: KitFence): Target {
+	if (fence.info.role === "file") {
+		if (fence.info.language !== "text") return { fence, role: "file", profile: "tree", body: fence.body, message: null };
+		const r = resolveTextFence(kit, fence);
+		return r.ok
+			? { fence, role: "file", profile: "tree", body: r.content, message: null }
+			: { fence, role: "file", profile: "tree", body: null, message: r.message };
+	}
 	if (fence.info.language !== "text") {
-		return { fence, role: fence.info.role, profile: fence.info.role === "file" ? "tree" : fence.info.language, body: fence.body, message: null };
+		return { fence, role: fence.info.role, profile: fence.info.language, body: fence.body, message: null };
 	}
 	const r = resolveTextFence(kit, fence);
 	return r.ok
 		? { fence, role: fence.info.role, profile: r.profile, body: r.content, message: null }
 		: { fence, role: fence.info.role, profile: "json", body: null, message: r.message };
+}
+
+// The nearest case whose heading precedes the error, in the file the error
+// belongs to; a file may hold several cases, so "the first case in the file"
+// is wrong whenever the error is not inside the first one.
+function ownerOf(cases: readonly KitCase[], file: string, line: number): KitCase | undefined {
+	let owner: KitCase | undefined;
+	for (const c of cases) {
+		if (c.file !== file || c.line > line) continue;
+		if (owner === undefined || c.line > owner.line) owner = c;
+	}
+	return owner;
 }
 
 export async function runKit(kit: Kit, testee: Testee, options: RunOptions): Promise<Report> {
@@ -57,7 +80,7 @@ export async function runKit(kit: Kit, testee: Testee, options: RunOptions): Pro
 	}
 
 	for (const e of kit.errors) {
-		const owner = kit.cases.find((c) => c.file === e.file && c.line <= e.line);
+		const owner = ownerOf(kit.cases, e.file, e.line);
 		records.push({
 			caseId: owner?.id ?? KIT_ERROR_CASE,
 			irVersion: CURRENT_VERSION,
@@ -77,6 +100,12 @@ export async function runKit(kit: Kit, testee: Testee, options: RunOptions): Pro
 		const targets = c.fences.map((f) => targetOf(kit, f));
 		for (const t of targets) if (t.role === "canonical" && t.body !== null) canonicals.set(t.profile, normalizeCanonical(t.body));
 		const paths: readonly PathMode[] = caps?.paths ?? ["current"];
+		// Kept per path, not folded into `records`, until path agreement (below)
+		// has had its say: reconciliation must only ever touch what this case's
+		// own fences produced for this case's own paths, never anything else
+		// that happens to share its caseId (a kit-error record has no `path` and
+		// must never be swept into a fence-index comparison).
+		const byPath = new Map<PathMode, ReportRecord[]>();
 		for (const path of paths) {
 			const perPath: ReportRecord[] = [];
 			for (const t of targets) {
@@ -97,7 +126,7 @@ export async function runKit(kit: Kit, testee: Testee, options: RunOptions): Pro
 					finish({ result: "kit-error", message: caps === null ? dead : `adapter unavailable: ${dead}` });
 					continue;
 				}
-				const skip = unsupported(caps as Capabilities, version, t.profile, path);
+				const skip = unsupported(caps as Capabilities, version, t.profile, path, c.node);
 				if (skip !== null) {
 					finish({ result: "skipped", message: skip });
 					continue;
@@ -129,21 +158,23 @@ export async function runKit(kit: Kit, testee: Testee, options: RunOptions): Pro
 						});
 						continue;
 					}
-					finish(judgeAccepted(t, response, canonicals.get(t.profile)));
+					finish(judgeAccepted(t, response, canonicals.get(t.profile), c.id));
 				} catch (error) {
 					if (!(error instanceof ProtocolError)) throw error;
 					dead = error.message;
 					finish({ result: "kit-error", message: error.message });
 				}
 			}
-			records.push(...perPath);
+			byPath.set(path, perPath);
 		}
-		reconcilePaths(records, c, paths);
+		reconcilePaths(byPath, c, paths);
+		for (const path of paths) records.push(...(byPath.get(path) ?? []));
 	}
 	return { ...emptyReport(header), records };
 }
 
-function unsupported(caps: Capabilities, version: number, profile: ReportProfile, path: PathMode): string | null {
+function unsupported(caps: Capabilities, version: number, profile: ReportProfile, path: PathMode, node: string | null): string | null {
+	if (node === null || !caps.nodes.includes(node)) return `node ${node ?? "unset"} not in capabilities`;
 	if (!caps.versions.includes(version)) return `version ${version} not in capabilities`;
 	if (profile === "tree") return caps.layouts.includes("tree") ? null : "layout tree not in capabilities";
 	if (!caps.profiles.includes(profile)) return `profile ${profile} not in capabilities`;
@@ -155,6 +186,7 @@ function judgeAccepted(
 	t: Target,
 	response: DecodeResponse,
 	expected: string | undefined,
+	caseId: string,
 ): Omit<ReportRecord, "caseId" | "irVersion" | "profile" | "role" | "fenceIndex" | "path" | "durationMs"> {
 	if (!response.ok)
 		return {
@@ -166,24 +198,44 @@ function judgeAccepted(
 	if (warn !== null) return { result: "fail", message: warn };
 	const got = response.canonical[t.profile as Profile];
 	if (got === undefined) return { result: "fail", message: `adapter returned no ${t.profile} canonical` };
-	const want = expected ?? normalizeCanonical(t.body ?? "");
+	let want: string;
+	if (expected !== undefined) {
+		want = expected;
+	} else if (t.role === "canonical") {
+		// A canonical fence with no sibling of its own profile compares against
+		// itself: it is its own expectation.
+		want = normalizeCanonical(t.body ?? "");
+	} else {
+		return { result: "kit-error", message: `no canonical ${t.profile} fence in ${caseId}` };
+	}
 	const diff = checkCanonical(want, got);
 	return diff === null ? { result: "pass" } : { result: "fail", message: diff };
 }
 
-// The two paths must agree fence by fence (S5.2 step 5).
-function reconcilePaths(records: ReportRecord[], c: KitCase, paths: readonly PathMode[]): void {
+// The two paths must agree fence by fence (S5.2 step 5). Only this case's own
+// per-path records are in scope, so a kit-error record sharing this caseId
+// but no path is never touched.
+function reconcilePaths(byPath: Map<PathMode, ReportRecord[]>, c: KitCase, paths: readonly PathMode[]): void {
 	if (paths.length < 2) return;
-	const mine = records.filter((r) => r.caseId === c.id);
 	for (const f of c.fences) {
-		const group = mine.filter((r) => r.fenceIndex === f.index);
-		const signatures = new Set(group.map((r) => `${r.result}|${r.message ?? ""}|${r.observedDiagnostic?.code ?? ""}`));
+		const group = paths
+			.map((path) => {
+				const list = byPath.get(path);
+				const index = list?.findIndex((r) => r.fenceIndex === f.index) ?? -1;
+				return list !== undefined && index !== -1 ? { path, list, index } : null;
+			})
+			.filter((entry): entry is { path: PathMode; list: ReportRecord[]; index: number } => entry !== null);
+		const signatures = new Set(group.map(({ list, index }) => signatureOf(list[index] as ReportRecord)));
 		if (signatures.size <= 1) continue;
-		for (const r of group) {
-			const i = records.indexOf(r);
-			records[i] = { ...r, result: "fail", message: `paths disagree: ${[...signatures].join(" vs ")}` };
+		for (const { list, index } of group) {
+			const r = list[index] as ReportRecord;
+			list[index] = { ...r, result: "fail", message: `paths disagree: ${[...signatures].join(" vs ")}` };
 		}
 	}
+}
+
+function signatureOf(r: ReportRecord): string {
+	return `${r.result}|${r.message ?? ""}|${r.observedDiagnostic?.code ?? ""}`;
 }
 
 export function exitCodeFor(report: Report, strict: boolean): 0 | 1 {

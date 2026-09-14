@@ -55,6 +55,7 @@ export const IN_PROCESS_CAPABILITIES: Capabilities = {
 	profiles: ["json"],
 	layouts: ["single"],
 	paths: ["current", "pinned"],
+	nodes: [...NODE_KINDS, ...Object.keys(pinned.NODE_ALIASES)],
 };
 
 const refuse = (code: string, message: string): DecodeResponse => ({ ok: false, diagnostic: { code, stage: "semantic", cursor: "/", message } });

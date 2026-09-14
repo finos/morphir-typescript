@@ -138,7 +138,9 @@ interface RunArgs {
 	readonly only?: RegExp;
 }
 
-function parseRunArgs(rest: readonly string[]): RunArgs | null {
+type ParsedRunArgs = { readonly ok: true; readonly args: RunArgs } | { readonly ok: false; readonly message?: string };
+
+function parseRunArgs(rest: readonly string[]): ParsedRunArgs {
 	let kit: string | undefined;
 	let repoRoot: string | undefined;
 	let adapter: string | undefined;
@@ -147,27 +149,50 @@ function parseRunArgs(rest: readonly string[]): RunArgs | null {
 	let only: RegExp | undefined;
 	for (let i = 0; i < rest.length; i++) {
 		const arg = rest[i];
-		if (arg === "--kit") kit = rest[++i];
-		else if (arg === "--repo-root") repoRoot = rest[++i];
-		else if (arg === "--adapter") adapter = rest[++i];
-		else if (arg === "--adapter-arg")
-			i += 1; // consumed; wired to the process testee in Task 6
-		else if (arg === "--report") report = rest[++i];
-		else if (arg === "--strict") strict = true;
-		else if (arg === "--only") only = new RegExp(rest[++i] ?? "");
-		else if (arg === "--timeout")
-			i += 1; // accepted; only meaningful once an out-of-process adapter exists
-		else return null;
+		// Every flag below takes an operand; a flag at the end of argv with
+		// nothing after it is a usage error, not a silently-undefined value.
+		if (
+			arg === "--kit" ||
+			arg === "--repo-root" ||
+			arg === "--adapter" ||
+			arg === "--adapter-arg" ||
+			arg === "--report" ||
+			arg === "--only" ||
+			arg === "--timeout"
+		) {
+			const value = rest[++i];
+			if (value === undefined) return { ok: false };
+			if (arg === "--kit") kit = value;
+			else if (arg === "--repo-root") repoRoot = value;
+			else if (arg === "--adapter") adapter = value;
+			else if (arg === "--report") report = value;
+			else if (arg === "--only") {
+				try {
+					only = new RegExp(value);
+				} catch (error) {
+					return { ok: false, message: `invalid --only regex: ${(error as Error).message}` };
+				}
+			}
+			// --adapter-arg and --timeout are consumed here and otherwise unused:
+			// --adapter-arg is wired to the process testee in Task 6, and
+			// --timeout is only meaningful once an out-of-process adapter exists.
+		} else if (arg === "--strict") {
+			strict = true;
+		} else {
+			return { ok: false };
+		}
 	}
-	return { kit, repoRoot, adapter, report, strict, only };
+	return { ok: true, args: { kit, repoRoot, adapter, report, strict, only } };
 }
 
 async function runRun(rest: readonly string[]): Promise<number> {
-	const args = parseRunArgs(rest);
-	if (args === null) {
+	const parsed = parseRunArgs(rest);
+	if (!parsed.ok) {
 		console.error(RUN_USAGE);
+		if (parsed.message !== undefined) console.error(`error: ${parsed.message}`);
 		return 2;
 	}
+	const args = parsed.args;
 	if (args.adapter !== undefined) {
 		console.error("--adapter arrives with the process testee");
 		return 2;
