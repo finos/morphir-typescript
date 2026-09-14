@@ -167,11 +167,47 @@ describe("mck run", () => {
 		const report = JSON.parse(readFileSync(reportFile, "utf8")) as { records: { result: string }[] };
 		expect(report.records.some((rec) => rec.result === "kit-error")).toBe(true);
 	});
-	test("--adapter is a usage error until the process testee lands", () => {
-		const r = run(["run", "--adapter", "some-exe"]);
-		expect(r.code).toBe(2);
-		expect(r.err).toMatch(/--adapter arrives with the process testee/);
+	test("--adapter runs the kit through the given child process, matching the in-process result", () => {
+		const inProcess = run(["run", "--only", "^types-0001$"]);
+		const viaAdapter = run(["run", "--only", "^types-0001$", "--adapter", "bun", "--adapter-arg", path.join(packageRoot, "src", "adapter.ts")]);
+		expect(viaAdapter.code).toBe(inProcess.code);
+		expect(viaAdapter.out).toBe(inProcess.out);
 	});
+	test("--adapter naming a nonexistent executable is reported as a kit-error, not a crash", () => {
+		const r = run(["run", "--only", "^types-0001$", "--adapter", "definitely-not-an-executable", "--timeout", "500"]);
+		expect(r.code).toBe(1);
+		expect(r.err).not.toMatch(/ at /);
+		expect(r.out).toMatch(/kit-error/);
+	}, 10000);
+	test("--adapter-arg is repeatable", () => {
+		const r = run([
+			"run",
+			"--only",
+			"^types-0001$",
+			"--adapter",
+			"bun",
+			"--adapter-arg",
+			path.join(packageRoot, "src", "adapter.ts"),
+			"--adapter-arg",
+			"extra-ignored-arg",
+		]);
+		expect(r.code).toBe(0);
+	});
+	test("--timeout too small surfaces the adapter as unavailable instead of hanging", () => {
+		const r = run([
+			"run",
+			"--only",
+			"^types-0001$",
+			"--adapter",
+			"bun",
+			"--adapter-arg",
+			path.join(packageRoot, "test", "fixtures", "adapter-hang.ts"),
+			"--timeout",
+			"50",
+		]);
+		expect(r.code).toBe(1);
+		expect(r.out).toMatch(/kit-error/);
+	}, 10000);
 	test("an invalid --only regex is a usage error naming the problem", () => {
 		const r = run(["run", "--only", "("]);
 		expect(r.code).toBe(2);

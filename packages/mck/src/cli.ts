@@ -10,8 +10,9 @@
 // Plan 1 shipped `check`. Plan 2 adds `kit sync` (vendor the parent
 // repository's kit into packages/mck/kit) and `kit status` (prove the
 // vendored copy still matches kit.lock.json). Plan 2b adds `run`, the driver
-// itself, over the in-process TypeScript binding; `--adapter` (an
-// out-of-process binding) arrives with the process testee in a later task.
+// itself, over the in-process TypeScript binding by default, or over
+// `--adapter <exe>` (a child process speaking the JSON-lines protocol) when
+// given.
 import { execFileSync } from "node:child_process";
 import { readdirSync, statSync } from "node:fs";
 import path from "node:path";
@@ -22,6 +23,7 @@ import { loadKit, loadKitFromFiles } from "./kit/load.ts";
 import { kitStatus, readLock, syncKit } from "./kit/sync.ts";
 import { formatSummary, writeReport } from "./report.ts";
 import { inProcessTestee } from "./testee/in-process.ts";
+import { processTestee } from "./testee/process.ts";
 
 const USAGE =
 	"usage: mck check <dir> [--json]\n       mck kit sync <repository-root> [--force]\n       mck kit status [--remote]\n       mck run [--kit <dir>] [--repo-root <dir>] [--adapter <exe> [--adapter-arg <arg>]...] [--report <file>] [--strict] [--only <regex>] [--timeout <ms>]\n       mck --version";
@@ -129,13 +131,17 @@ function inferredRoot(kitDirectory: string): string | undefined {
 	return normalized.endsWith("spec/ir/mck") ? path.resolve(kitDirectory, "..", "..", "..") : undefined;
 }
 
+const DEFAULT_TIMEOUT_MS = 30000;
+
 interface RunArgs {
 	readonly kit?: string;
 	readonly repoRoot?: string;
 	readonly adapter?: string;
+	readonly adapterArgs: readonly string[];
 	readonly report?: string;
 	readonly strict: boolean;
 	readonly only?: RegExp;
+	readonly timeoutMs: number;
 }
 
 type ParsedRunArgs = { readonly ok: true; readonly args: RunArgs } | { readonly ok: false; readonly message?: string };
@@ -144,9 +150,11 @@ function parseRunArgs(rest: readonly string[]): ParsedRunArgs {
 	let kit: string | undefined;
 	let repoRoot: string | undefined;
 	let adapter: string | undefined;
+	const adapterArgs: string[] = [];
 	let report: string | undefined;
 	let strict = false;
 	let only: RegExp | undefined;
+	let timeoutMs = DEFAULT_TIMEOUT_MS;
 	for (let i = 0; i < rest.length; i++) {
 		const arg = rest[i];
 		// Every flag below takes an operand; a flag at the end of argv with
@@ -165,6 +173,7 @@ function parseRunArgs(rest: readonly string[]): ParsedRunArgs {
 			if (arg === "--kit") kit = value;
 			else if (arg === "--repo-root") repoRoot = value;
 			else if (arg === "--adapter") adapter = value;
+			else if (arg === "--adapter-arg") adapterArgs.push(value);
 			else if (arg === "--report") report = value;
 			else if (arg === "--only") {
 				try {
@@ -172,17 +181,18 @@ function parseRunArgs(rest: readonly string[]): ParsedRunArgs {
 				} catch (error) {
 					return { ok: false, message: `invalid --only regex: ${(error as Error).message}` };
 				}
+			} else if (arg === "--timeout") {
+				const ms = Number(value);
+				if (!Number.isFinite(ms) || ms <= 0) return { ok: false, message: `invalid --timeout: ${value}` };
+				timeoutMs = ms;
 			}
-			// --adapter-arg and --timeout are consumed here and otherwise unused:
-			// --adapter-arg is wired to the process testee in Task 6, and
-			// --timeout is only meaningful once an out-of-process adapter exists.
 		} else if (arg === "--strict") {
 			strict = true;
 		} else {
 			return { ok: false };
 		}
 	}
-	return { ok: true, args: { kit, repoRoot, adapter, report, strict, only } };
+	return { ok: true, args: { kit, repoRoot, adapter, adapterArgs, report, strict, only, timeoutMs } };
 }
 
 async function runRun(rest: readonly string[]): Promise<number> {
@@ -193,25 +203,25 @@ async function runRun(rest: readonly string[]): Promise<number> {
 		return 2;
 	}
 	const args = parsed.args;
-	if (args.adapter !== undefined) {
-		console.error("--adapter arrives with the process testee");
-		return 2;
-	}
 	const kit =
 		args.kit === undefined
 			? await loadKitFromFiles(embeddedKitFiles())
 			: await loadKit(path.resolve(args.kit), args.repoRoot === undefined ? inferredRoot(path.resolve(args.kit)) : path.resolve(args.repoRoot));
 	const kv = args.kit === undefined ? kitVersion(null) : kitVersion(path.resolve(args.kit));
-	const testee = inProcessTestee();
-	const report = await driveKit(kit, testee, { strict: args.strict, only: args.only, driverVersion: driverVersion(), kitVersion: kv });
-	if (args.report !== undefined) writeReport(report, path.resolve(args.report));
-	console.log(formatSummary(report));
-	for (const r of report.records) {
-		if (r.result === "pass") continue;
-		const pathSuffix = r.path === undefined ? "" : ` [${r.path}]`;
-		console.log(`${r.result} ${r.caseId} fence ${r.fenceIndex}${pathSuffix}: ${r.message ?? ""}`);
+	const testee = args.adapter === undefined ? inProcessTestee() : processTestee([args.adapter, ...args.adapterArgs], { timeoutMs: args.timeoutMs });
+	try {
+		const report = await driveKit(kit, testee, { strict: args.strict, only: args.only, driverVersion: driverVersion(), kitVersion: kv });
+		if (args.report !== undefined) writeReport(report, path.resolve(args.report));
+		console.log(formatSummary(report));
+		for (const r of report.records) {
+			if (r.result === "pass") continue;
+			const pathSuffix = r.path === undefined ? "" : ` [${r.path}]`;
+			console.log(`${r.result} ${r.caseId} fence ${r.fenceIndex}${pathSuffix}: ${r.message ?? ""}`);
+		}
+		return exitCodeFor(report, args.strict);
+	} finally {
+		await testee.close();
 	}
-	return exitCodeFor(report, args.strict);
 }
 
 async function main(argv: readonly string[]): Promise<number> {
