@@ -103,4 +103,31 @@ describe("mck kit", () => {
 		expect(r.code).toBe(2);
 		expect(r.err).toMatch(/usage: mck kit sync <repository-root> \[--force\]/);
 	});
+	test("kit sync against a repository without spec/ir/mck fails with a one-line message, not a stack trace", () => {
+		const notAKit = temp();
+		git(notAKit, "init", "-q");
+		writeFileSync(path.join(notAKit, "README.md"), "not a kit\n");
+		git(notAKit, "-c", "user.email=t@example.com", "-c", "user.name=t", "add", ".");
+		git(notAKit, "-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-q", "-m", "one");
+		const pkg = fakePackage();
+		const r = run(["kit", "sync", notAKit], { MCK_PACKAGE_ROOT: pkg });
+		expect(r.code).toBe(1);
+		expect(r.err).toMatch(/^error: /m);
+		expect(r.err).not.toMatch(/ at /);
+	});
+	test("kit sync refuses to move to an ancestor of the pinned commit, reported as a one-line error", () => {
+		const parent = fakeParent();
+		const first = git(parent, "rev-parse", "HEAD");
+		writeFileSync(path.join(parent, "spec", "ir", "mck", "values.md"), "## values-0001: v\n```json canonical\n1\n```\n");
+		git(parent, "-c", "user.email=t@example.com", "-c", "user.name=t", "add", ".");
+		git(parent, "-c", "user.email=t@example.com", "-c", "user.name=t", "commit", "-q", "-m", "two");
+		const pkg = fakePackage();
+		const firstSync = run(["kit", "sync", parent], { MCK_PACKAGE_ROOT: pkg });
+		expect(firstSync.code).toBe(0);
+		git(parent, "checkout", "-q", first);
+		const r = run(["kit", "sync", parent], { MCK_PACKAGE_ROOT: pkg });
+		expect(r.code).toBe(1);
+		expect(r.err).toMatch(/^error: /m);
+		expect(r.err).toContain("older than the pinned commit");
+	});
 });

@@ -98,8 +98,13 @@ function runKitStatus(rest: readonly string[]): number {
 
 async function runKit(rest: readonly string[]): Promise<number> {
 	const [sub, ...rest2] = rest;
-	if (sub === "sync") return runKitSync(rest2);
-	if (sub === "status") return runKitStatus(rest2);
+	try {
+		if (sub === "sync") return await runKitSync(rest2);
+		if (sub === "status") return runKitStatus(rest2);
+	} catch (error) {
+		console.error(`error: ${(error as Error).message}`);
+		return 1;
+	}
 	console.error(KIT_USAGE);
 	return 2;
 }
