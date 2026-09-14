@@ -3,7 +3,12 @@
 // process. YAML and text fences are skipped until the YAML profile lands (plan 2c).
 // Run with: bun test packages/ir/test/mck.test.ts   (MORPHIR_MCK_DIR overrides the kit path)
 import { describe, expect, test } from "bun:test";
-import { embeddedKitFiles, type KitCase, loadKit, loadKitFromFiles } from "@finos/morphir-mck";
+// The kit modules are imported by source path, not by the `@finos/morphir-mck`
+// specifier: that package now publishes `./dist`, which a checkout does not
+// build. This test is retired in plan 2b task 11 in favour of `check:conformance`.
+import type { KitCase } from "../../mck/src/kit/case.ts";
+import { embeddedKitFiles } from "../../mck/src/kit/embedded-source.ts";
+import { loadKit, loadKitFromFiles } from "../../mck/src/kit/load.ts";
 import { NODE_ALIASES, type NodeKind, nodeKindOf, readNodeChecked, stripNode, writeNode } from "../src/versions/v4/index.ts";
 
 // The kit names a node; this is the node kind that name reads as, including the

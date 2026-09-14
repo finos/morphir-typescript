@@ -27,7 +27,7 @@ Run that command before opening or updating a pull request. When adding or chang
 
 ## Publishing
 
-Releases use one suite version and one signed `vVERSION` tag for every workspace. The initial `0.0.1` release publishes only `@finos/morphir-ir`; `@finos/morphir-mck` stays private. The release validator is the authority for accepted tags, manifest versions, package visibility, and changelog state. Signed tags are an operator requirement. The workflow validates exact tag syntax and `main` ancestry but does not cryptographically verify tag signatures.
+Releases use one suite version and one signed `vVERSION` tag for every workspace. The initial `0.0.1` release publishes only `@finos/morphir-ir`. `@finos/morphir-mck` is now a public package and `mise run check:package` builds and verifies its tarball too, but the release workflow does not upload or publish it yet. The release validator is the authority for accepted tags, manifest versions, package visibility, and changelog state. Signed tags are an operator requirement. The workflow validates exact tag syntax and `main` ancestry but does not cryptographically verify tag signatures.
 
 The publishing workflow contract separates artifact creation from publication:
 

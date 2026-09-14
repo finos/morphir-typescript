@@ -284,10 +284,12 @@ test("builds the artifact through a symlinked repository root", async () => {
 }, 60_000);
 
 describe("artifact CLI", () => {
-	test("resolves one output directory, builds it, and prints the exact tarball", async () => {
+	test("resolves one output directory, builds both packages, and prints the exact tarballs", async () => {
 		const calls: [string, string][] = [];
+		const mckCalls: [string, string, string][] = [];
 		const output: string[] = [];
 		const tarball = path.join(root, ".dev/out/cli", repositoryArtifactFilename);
+		const mckTarball = path.join(root, ".dev/out/cli", "finos-morphir-mck-0.0.0.tgz");
 
 		await runReleaseCli(["artifact", ".dev/out/cli"], {
 			root,
@@ -296,10 +298,15 @@ describe("artifact CLI", () => {
 				calls.push([buildRoot, artifactOutput]);
 				return { tarball, files: [] };
 			},
+			buildMckArtifact: async (buildRoot, artifactOutput, irTarball) => {
+				mckCalls.push([buildRoot, artifactOutput, irTarball]);
+				return { tarball: mckTarball, files: [] };
+			},
 		});
 
 		expect(calls).toEqual([[root, path.join(root, ".dev/out/cli")]]);
-		expect(output).toEqual([tarball]);
+		expect(mckCalls).toEqual([[root, path.join(root, ".dev/out/cli"), tarball]]);
+		expect(output).toEqual([tarball, mckTarball]);
 	});
 
 	test("rejects a missing output directory or extra arguments", async () => {

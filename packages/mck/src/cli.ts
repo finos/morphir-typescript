@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 // Command-line entry for @finos/morphir-mck.
 //
 //   mck check <dir> [--json]

@@ -5,6 +5,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { extractReleaseNotes } from "./changelog.ts";
 import { buildIrArtifact } from "./package-ir.ts";
+import { buildMckArtifact } from "./package-mck.ts";
 import { prepareSuiteRelease, validateSuiteRelease } from "./suite.ts";
 import { parseStableVersion } from "./version.ts";
 
@@ -21,6 +22,7 @@ export interface ReleaseCliContext {
 	readonly now?: Date;
 	readonly stdout?: (line: string) => void;
 	readonly buildArtifact?: typeof buildIrArtifact;
+	readonly buildMckArtifact?: typeof buildMckArtifact;
 }
 
 function usageError(message?: string): Error {
@@ -74,8 +76,13 @@ export async function runReleaseCli(args: readonly string[], context: ReleaseCli
 	if (command === "artifact") {
 		if (commandArgs.length !== 1) throw usageError();
 		const outputDirectory = path.resolve(root, commandArgs[0] as string);
-		const artifact = await (context.buildArtifact ?? buildIrArtifact)(root, outputDirectory);
-		stdout(artifact.tarball);
+		// The mck package depends on the ir package, and its smoke test installs
+		// both tarballs into one consumer, so the ir artifact is built first and
+		// printed first.
+		const ir = await (context.buildArtifact ?? buildIrArtifact)(root, outputDirectory);
+		stdout(ir.tarball);
+		const mck = await (context.buildMckArtifact ?? buildMckArtifact)(root, outputDirectory, ir.tarball);
+		stdout(mck.tarball);
 		return;
 	}
 	throw usageError(`unknown release command: ${command}`);

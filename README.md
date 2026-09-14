@@ -9,7 +9,7 @@ Morphir captures business logic and domain models as language-independent data s
 
 ## Project status
 
-Publishing is prepared for the initial `@finos/morphir-ir` `0.0.1` npm release. `@finos/morphir-mck` remains private and will not be published. Every workspace uses the same repository-wide suite version, including packages that are not part of a given release. Initial release preparation moves the whole suite from `0.0.0` to `0.0.1`.
+Publishing is prepared for the initial `0.0.1` npm release of `@finos/morphir-ir` and `@finos/morphir-mck`. The root workspace stays private and is never published. Every workspace uses the same repository-wide suite version, including packages that are not part of a given release. Initial release preparation moves the whole suite from `0.0.0` to `0.0.1`.
 
 Standalone CI temporarily skips conformance tests that require the upstream Morphir fixture and MCK directories. Unit tests still run. The upstream integration work will remove this opt-out once a compatible pinned corpus is available to standalone clones.
 
@@ -18,7 +18,7 @@ Standalone CI temporarily skips conformance tests that require the upstream Morp
 | Package | Publication | Purpose |
 | --- | --- | --- |
 | `@finos/morphir-ir` | Prepared for public npm release at `0.0.1` | Generic Morphir IR semantic types, pinned v4 types, JSON readers and canonical writers, diagnostics, and attribute mapping. |
-| `@finos/morphir-mck` | Private workspace package | MCK Markdown case parser, kit loader, structural checker CLI, and report model. |
+| `@finos/morphir-mck` | Prepared for public npm release at `0.0.1` | MCK Markdown case parser, kit loader, structural checker, the `mck` driver and its reference adapter, and the report model. Ships the vendored kit. |
 
 ## Morphir specifications
 
@@ -86,13 +86,13 @@ Use mise tasks for repository automation:
 | `mise run setup` | Install dependencies from the frozen Bun lockfile. |
 | `mise run check:lint` | Check Biome lint rules, formatting, and imports. |
 | `mise run check:typecheck` | Typecheck every workspace package. |
-| `mise run check:package` | Build and verify the `@finos/morphir-ir` tarball in `.dev/out/package-check`. |
+| `mise run check:package` | Build and verify the `@finos/morphir-ir` and `@finos/morphir-mck` tarballs in `.dev/out/package-check`. |
 | `mise run check:workflows` | Validate GitHub Actions workflows with the pinned actionlint version. |
 | `mise run test` | Run the available Bun test suite. |
 | `mise run ci` | Run the same checks as GitHub Actions. |
 | `mise run release:prepare -- VERSION` | Update the suite version and finalize the Keep a Changelog release entry. |
 | `mise run release:validate -- TAG` | Validate a `vVERSION` tag against the suite manifests and changelog. |
-| `mise run release:artifact -- OUTPUT_DIRECTORY` | Build and verify the publishable tarball in the requested directory. |
+| `mise run release:artifact -- OUTPUT_DIRECTORY` | Build and verify both publishable tarballs in the requested directory. |
 
 To apply formatting and safe lint fixes, run:
 

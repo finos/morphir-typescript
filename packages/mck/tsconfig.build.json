@@ -1,0 +1,14 @@
+{
+	"extends": "./tsconfig.json",
+	"include": ["src/**/*.ts", "kit/embedded.ts"],
+	"exclude": ["src/**/*.test.ts", "test/**/*.ts"],
+	"compilerOptions": {
+		"noEmit": false,
+		"emitDeclarationOnly": true,
+		"declaration": true,
+		"declarationMap": true,
+		"rewriteRelativeImportExtensions": true,
+		"rootDir": "..",
+		"outDir": "dist"
+	}
+}
