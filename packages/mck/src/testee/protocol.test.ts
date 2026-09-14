@@ -5,9 +5,16 @@
 // parser (drawn from protocol.example.json), a table-driven pass over every
 // example so none is silently skipped, and the invalid shapes an untrusted
 // adapter process might send.
+//
+// protocol.schema.json states the same contract a second time, for adapter
+// authors in languages that cannot import these guards. Two statements of one
+// contract can disagree, so the last section here compiles the schema and runs
+// every example and every negative case through it too: a message the guards
+// accept must validate, and a message the guards reject must not.
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import Ajv, { type ValidateFunction } from "ajv";
 import { ProtocolError, parseCapabilities, parseDecodeResponse, parseEnvelope, parseRequest, parseWriteTreeResponse } from "./protocol.ts";
 
 type Example = { readonly direction: "request" | "response"; readonly message: Record<string, unknown> };
@@ -223,4 +230,134 @@ test("parseEnvelope rejects a line that is not JSON", () => {
 
 test("parseEnvelope rejects a message without a numeric id", () => {
 	expect(() => parseEnvelope(JSON.stringify({ op: "capabilities" }))).toThrow("missing id");
+});
+
+// --- the schema and the guards state one contract ---
+
+const schemaDocument = JSON.parse(readFileSync(path.join(import.meta.dirname, "..", "..", "protocol.schema.json"), "utf8")) as {
+	readonly $id: string;
+	readonly definitions: Record<string, unknown>;
+};
+// The schema is draft-07, which is Ajv 8's default dialect. `strict: false`
+// because draft-07's `allOf` composition (an envelope merged with a message
+// body) is exactly what Ajv's strict mode warns about, and the composition is
+// deliberate.
+const ajv = new Ajv({ allErrors: true, strict: false });
+ajv.addSchema(schemaDocument);
+
+function validator(definition: string): ValidateFunction {
+	const compiled = ajv.getSchema(`${schemaDocument.$id}#/definitions/${definition}`);
+	if (compiled === undefined) throw new Error(`protocol.schema.json has no definition "${definition}"`);
+	return compiled;
+}
+
+/** Validates, and on failure reports Ajv's own message rather than a bare `false`. */
+function schemaVerdict(definition: string, message: unknown): true | string {
+	const validate = validator(definition);
+	return validate(message) === true ? true : ajv.errorsText(validate.errors);
+}
+
+const REQUEST_DEFINITION_BY_OP: Record<string, string> = {
+	capabilities: "CapabilitiesRequest",
+	decode: "DecodeRequest",
+	readTree: "ReadTreeRequest",
+	writeTree: "WriteTreeRequest",
+	exit: "ExitRequest",
+};
+const RESPONSE_DEFINITION_BY_OP: Record<string, string> = {
+	capabilities: "Capabilities",
+	decode: "DecodeResponse",
+	readTree: "DecodeResponse",
+	writeTree: "WriteTreeResponse",
+};
+
+test("protocol.schema.json defines every message this driver speaks", () => {
+	for (const definition of [...Object.values(REQUEST_DEFINITION_BY_OP), ...Object.values(RESPONSE_DEFINITION_BY_OP), "Request"]) {
+		expect(Object.keys(schemaDocument.definitions)).toContain(definition);
+	}
+});
+
+// The whole example file, message by message, dispatched by the op of the
+// request carrying the same id — so a response can never be checked against
+// the wrong definition, and no example can be silently skipped.
+for (const entry of all) {
+	const id = entry.message.id as number;
+	const op = REQUEST_OP_BY_ID[id];
+	if (op === undefined) throw new Error(`no request op known for id ${id}`);
+	const definition = (entry.direction === "request" ? REQUEST_DEFINITION_BY_OP : RESPONSE_DEFINITION_BY_OP)[op];
+	if (definition === undefined) throw new Error(`no schema definition known for a ${entry.direction} with op ${op}`);
+	const okness = entry.direction === "response" && entry.message.ok === false ? ", ok:false" : "";
+	test(`example ${entry.direction} id ${id} (${op}${okness}) validates against ${definition}`, () => {
+		expect(schemaVerdict(definition, entry.message)).toBe(true);
+	});
+}
+
+interface Negative {
+	readonly what: string;
+	readonly definition: string;
+	readonly message: Record<string, unknown>;
+	readonly guard: (body: Record<string, unknown>) => unknown;
+}
+
+function capabilitiesWith(patch: Record<string, unknown>): Record<string, unknown> {
+	return { ...response(1), ...patch };
+}
+function withoutKey(source: Record<string, unknown>, key: string): Record<string, unknown> {
+	const { [key]: _removed, ...rest } = source;
+	return rest;
+}
+
+// Every negative the guard tests above use, restated as a whole message so the
+// schema sees the same thing an adapter would send. Both must reject each one.
+const NEGATIVES: readonly Negative[] = [
+	{ what: "capabilities with contractVersion 2", definition: "Capabilities", message: capabilitiesWith({ contractVersion: 2 }), guard: parseCapabilities },
+	{ what: "capabilities with an unknown profile", definition: "Capabilities", message: capabilitiesWith({ profiles: ["xml"] }), guard: parseCapabilities },
+	{ what: "capabilities with an extra field", definition: "Capabilities", message: capabilitiesWith({ extra: true }), guard: parseCapabilities },
+	{ what: "capabilities without nodes", definition: "Capabilities", message: withoutKey(response(1), "nodes"), guard: parseCapabilities },
+	{ what: "capabilities with a non-string node", definition: "Capabilities", message: capabilitiesWith({ nodes: ["Type", 42] }), guard: parseCapabilities },
+	{ what: "capabilities with no nodes at all", definition: "Capabilities", message: capabilitiesWith({ nodes: [] }), guard: parseCapabilities },
+	{ what: "a decode response without warnings", definition: "DecodeResponse", message: withoutKey(response(2, 0), "warnings"), guard: parseDecodeResponse },
+	{
+		what: "a decode response whose diagnostic has no code",
+		definition: "DecodeResponse",
+		message: { ...response(2, 1), diagnostic: withoutKey(response(2, 1).diagnostic as Record<string, unknown>, "code") },
+		guard: parseDecodeResponse,
+	},
+	{ what: "a decode response with an extra field", definition: "DecodeResponse", message: { ...response(2, 0), extra: true }, guard: parseDecodeResponse },
+	{
+		what: "a writeTree response whose file has no content",
+		definition: "WriteTreeResponse",
+		message: { ...response(4), files: [withoutKey((response(4).files as Record<string, unknown>[])[0] as Record<string, unknown>, "content")] },
+		guard: parseWriteTreeResponse,
+	},
+	{
+		what: "a writeTree response with an extra field",
+		definition: "WriteTreeResponse",
+		message: { ...response(4), extra: true },
+		guard: parseWriteTreeResponse,
+	},
+	{ what: "a decode request with an extra field", definition: "DecodeRequest", message: { ...request(2), extra: true }, guard: parseRequest },
+	{ what: "a request with an unknown op", definition: "Request", message: { id: 1, op: "frobnicate" }, guard: parseRequest },
+];
+
+for (const negative of NEGATIVES) {
+	test(`${negative.what} is rejected by both the guard and the schema`, () => {
+		expect(() => negative.guard(body(negative.message))).toThrow(ProtocolError);
+		expect(schemaVerdict(negative.definition, negative.message)).not.toBe(true);
+	});
+}
+
+// The envelope's own negatives cannot go through `body()` — parseEnvelope is
+// what rejects them — so they are checked directly against the same schema
+// definition the valid message uses.
+for (const id of [0, -1]) {
+	test(`an id of ${id} is rejected by both parseEnvelope and the schema`, () => {
+		const message = { ...request(1), id };
+		expect(() => parseEnvelope(JSON.stringify(message))).toThrow(`"id" must be at least 1, got ${id}`);
+		expect(schemaVerdict("CapabilitiesRequest", message)).not.toBe(true);
+	});
+}
+
+test("parseCapabilities rejects an empty nodes list", () => {
+	expect(() => parseCapabilities(body(capabilitiesWith({ nodes: [] })))).toThrow('"nodes" must list at least one node kind');
 });

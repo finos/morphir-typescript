@@ -68,6 +68,30 @@ describe("processTestee", () => {
 		await t.close();
 	});
 
+	// The timed-out read stays pending after the exchange gives up on it, and
+	// close() then kills the child out from under it. Nothing awaits that read
+	// any more, so a rejection from the destroyed stream must already be marked
+	// handled or it escapes as an unhandled rejection.
+	test("a timed-out read that later fails does not surface as an unhandled rejection", async () => {
+		const unhandled: unknown[] = [];
+		const record = (reason: unknown): void => {
+			unhandled.push(reason);
+		};
+		process.on("unhandledRejection", record);
+		try {
+			const t = processTestee(["bun", fixture("adapter-hang.ts")], { timeoutMs: 200 });
+			await t.capabilities();
+			expect(await rejection(t.decode(decodeRequest))).toMatch(/timed out after 200 ms/);
+			await t.close();
+			// Unhandled-rejection detection is deferred to a later turn of the
+			// loop, so give the killed child's streams a moment to settle first.
+			await new Promise((resolve) => setTimeout(resolve, 500));
+			expect(unhandled).toEqual([]);
+		} finally {
+			process.off("unhandledRejection", record);
+		}
+	});
+
 	test("an adapter that answers and then exits promptly is not mistaken for one that failed to answer", async () => {
 		const t = processTestee(["bun", fixture("adapter-answer-then-exit.ts")], { timeoutMs: 5000 });
 		await t.capabilities();

@@ -234,6 +234,19 @@ function reconcilePaths(byPath: Map<PathMode, ReportRecord[]>, c: KitCase, paths
 	}
 }
 
+/**
+ * What "the paths agree" means for one fence: the same verdict, reached for the
+ * same stated reason.
+ *
+ * It compares the record's outcome rather than the canonical text the adapter
+ * returned, which is equivalent here and cheaper. Every path runs the same
+ * fence, so every path is adjudicated against the same expected string: a
+ * canonical mismatch is already reported as `result: "fail"` with a `message`
+ * that names the diff against that one expectation, so two paths whose
+ * canonicals differ cannot both carry the same result-and-message pair. The
+ * diagnostic code is included for the reject fences, where the message may be
+ * absent and the code is the whole verdict.
+ */
 function signatureOf(r: ReportRecord): string {
 	return `${r.result}|${r.message ?? ""}|${r.observedDiagnostic?.code ?? ""}`;
 }

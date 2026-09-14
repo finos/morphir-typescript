@@ -167,6 +167,33 @@ describe("release automation contract", () => {
 		expect(conformanceInvocations[3]).toContain('"coverage"');
 	});
 
+	// The naming and format-version conformance corpora live only in the parent
+	// finos/morphir repository, and their tests throw at load when the files are
+	// absent. Dropping MORPHIR_FIXTURES_OPTIONAL therefore turns a standalone
+	// checkout's suite red before a single test runs. Pin the variable, the
+	// comment that scopes it to those two corpora, and the README sentence that
+	// tells a standalone contributor the same thing.
+	// The task file is read by path rather than through `mise tasks --json`: a
+	// checkout nested inside the parent finos/morphir repository inherits that
+	// repository's own `test` task and mise renames this one out from under a
+	// lookup by name. The test above already pins `ci` to a `test` dependency.
+	test("keeps the fixture opt-out on the test task, scoped to the two parent-only corpora", async () => {
+		const file = path.join(root, ".config/mise/tasks/test.ts");
+		await access(file, constants.X_OK);
+		const source = await readFile(file, "utf8");
+		expect(source).toMatch(/^#!\/usr\/bin\/env bun\n\/\/ Copyright 2026 FINOS\n\/\/ SPDX-License-Identifier: Apache-2\.0\n/);
+		expect(source).toContain('//MISE depends=["setup"]');
+		expect(taskInvocation(source)).toBe('await exec(["bun", "run", "test"], { MORPHIR_FIXTURES_OPTIONAL: "1" });');
+		expect(source).toContain("docs/spec/ir/fixtures/{naming,format-version}-conformance.json");
+		expect(source).toContain("format-version.test.ts throw at load when they are absent");
+		expect(source).toContain("MCK kit is vendored under packages/mck/kit and needs no opt-out");
+
+		const status = markdownSection(await readFile(path.join(root, "README.md"), "utf8"), "Project status");
+		expect(status).toContain("vendored into packages/mck/kit");
+		expect(status).toContain("MORPHIR_FIXTURES_OPTIONAL=1");
+		expect(status).not.toContain("Standalone CI temporarily skips");
+	});
+
 	// actionlint 1.7.12 deadlocks on Windows when it feeds shellcheck a `run:`
 	// script longer than the 4 KiB pipe buffer: a 4008-byte script lints, a
 	// 4108-byte one hangs forever. That silently breaks `mise run ci` for

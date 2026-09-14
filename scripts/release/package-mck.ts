@@ -49,7 +49,19 @@ const EXPORTS = { ".": { types: "./dist/index.d.ts", import: "./dist/index.js" }
 const BIN = { mck: "./dist/cli.js", "mck-adapter-typescript": "./dist/adapter.js" } as const;
 const WORKSPACE_DEPENDENCIES = { "@finos/morphir-ir": "workspace:*" } as const;
 
-const ROOT_FILES = ["package/package.json", "package/README.md", "package/LICENSE", "package/NOTICE", "package/kit.lock.json"] as const;
+// The adapter protocol's schema and worked example ship beside the kit: an
+// installed consumer writing an adapter needs the contract it is held to, and
+// the README points at both by name.
+const CONTRACT_FILES = ["protocol.schema.json", "protocol.example.json"] as const;
+
+const ROOT_FILES = [
+	"package/package.json",
+	"package/README.md",
+	"package/LICENSE",
+	"package/NOTICE",
+	"package/kit.lock.json",
+	...CONTRACT_FILES.map((file) => `package/${file}` as const),
+] as const;
 const REQUIRED_FILES = [
 	...ROOT_FILES,
 	"package/dist/index.js",
@@ -118,7 +130,7 @@ export function publishMckManifest(source: JsonRecord): JsonRecord & { readonly 
 		exports: structuredClone(EXPORTS),
 		bin: structuredClone(BIN),
 		sideEffects: false,
-		files: ["dist", "kit", "kit.lock.json", "README.md", "LICENSE", "NOTICE"],
+		files: ["dist", "kit", "kit.lock.json", ...CONTRACT_FILES, "README.md", "LICENSE", "NOTICE"],
 		dependencies: { "@finos/morphir-ir": source.version },
 		publishConfig: { access: "public" },
 	};
@@ -230,6 +242,15 @@ async function smokeTest(mckTarball: string, irTarball: string, compiler: string
 }
 
 /**
+ * The first specifier in a declaration file that names a TypeScript source, or
+ * null. Three forms reach a `.ts` path: `from "…"` (import and re-export),
+ * `import("…")` (a type-position dynamic import), and a bare side-effect
+ * `import "…"`, which `tsc` emits for a module imported only for its global
+ * declarations and which no published file answers either.
+ */
+export const TYPESCRIPT_SPECIFIER = /(?:from\s+|import\s*\(|import\s+)["'][^"']*\.ts["']/;
+
+/**
  * Reads the packed declarations back out of the archive and refuses to promote
  * one whose specifiers still name repository sources: a `.ts` specifier no
  * published file answers, or an `ir/src/` path the rewrite missed.
@@ -237,7 +258,7 @@ async function smokeTest(mckTarball: string, irTarball: string, compiler: string
 async function verifyDeclarations(tarball: string, files: readonly string[], cwd: string): Promise<void> {
 	for (const declaration of files.filter((file) => file.endsWith(".d.ts"))) {
 		const contents = await runCommand(["tar", "-xOf", tarball, declaration], cwd);
-		const specifier = /(?:from\s+|import\s*\()["'][^"']*\.ts["']/.exec(contents);
+		const specifier = TYPESCRIPT_SPECIFIER.exec(contents);
 		if (specifier !== null) throw new Error(`${declaration} imports a TypeScript source: ${specifier[0]}`);
 		if (contents.includes("ir/src/")) throw new Error(`${declaration} still names the IR by repository path instead of @finos/morphir-ir`);
 	}
@@ -344,6 +365,7 @@ export async function buildMckArtifact(
 			Bun.write(path.join(stage, "package.json"), `${JSON.stringify(manifest, null, "\t")}\n`),
 			copyFile(path.join(packageRoot, "README.md"), path.join(stage, "README.md")),
 			copyFile(path.join(packageRoot, "kit.lock.json"), path.join(stage, "kit.lock.json")),
+			...CONTRACT_FILES.map((file) => copyFile(path.join(packageRoot, file), path.join(stage, file))),
 			copyFile(path.join(absoluteRoot, "LICENSE"), path.join(stage, "LICENSE")),
 			copyFile(path.join(absoluteRoot, "NOTICE"), path.join(stage, "NOTICE")),
 		]);

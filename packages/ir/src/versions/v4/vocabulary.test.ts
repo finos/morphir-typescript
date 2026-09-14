@@ -3,8 +3,8 @@
 //
 // The drift guard for vocabulary.ts (ruling in plan 2b's global constraints):
 // VOCABULARY is hand-written, so this test scans read-types.ts,
-// read-values.ts and read-definitions.ts for the variant names and member
-// spellings the readers actually accept, and fails when VOCABULARY has
+// read-values.ts, read-definitions.ts and read-distribution.ts for the variant
+// names and member spellings the readers actually accept, and fails when it has
 // drifted from them. It is the arbiter of completeness — extend it, watch it
 // fail, then edit vocabulary.ts to match.
 import { describe, expect, test } from "bun:test";
@@ -15,10 +15,14 @@ import { VOCABULARY } from "./vocabulary.ts";
 const READ_TYPES = readFileSync(path.join(import.meta.dir, "read-types.ts"), "utf8");
 const READ_VALUES = readFileSync(path.join(import.meta.dir, "read-values.ts"), "utf8");
 const READ_DEFINITIONS = readFileSync(path.join(import.meta.dir, "read-definitions.ts"), "utf8");
+const READ_DISTRIBUTION = readFileSync(path.join(import.meta.dir, "read-distribution.ts"), "utf8");
 const SOURCES: readonly (readonly [string, string])[] = [
 	["read-types.ts", READ_TYPES],
 	["read-values.ts", READ_VALUES],
 	["read-definitions.ts", READ_DEFINITIONS],
+	// The distribution reader owns the IRFile node's three variants and their
+	// members; without it in this scan those entries had no drift guard at all.
+	["read-distribution.ts", READ_DISTRIBUTION],
 ];
 
 // A variant label is PascalCase by Morphir convention. The readers also
@@ -73,6 +77,10 @@ const WARN_ONLY_LEGACY: readonly { readonly node: string; readonly variant: stri
 	{ node: "Value", variant: "Record", member: "attrs" },
 	{ node: "AccessControlledTypeDefinition", variant: "Public", member: "value" },
 	{ node: "AccessControlledTypeDefinition", variant: "Private", member: "value" },
+	// The value twin goes through the same readAccessControlled/readDocumented
+	// pair, so it accepts the same nested {doc,value} wrapper.
+	{ node: "AccessControlledValueDefinition", variant: "Public", member: "value" },
+	{ node: "AccessControlledValueDefinition", variant: "Private", member: "value" },
 	// ValueDefinition's ExternalBody: the pre-decision-0008 top-level
 	// "externalName"/"targetPlatform" pair, read as a one-entry "externals"
 	// list by readExternals rather than through windowed().
@@ -101,6 +109,28 @@ const NON_LABEL_VARIANTS: readonly { readonly node: string; readonly variant: st
 	{ node: "ValueDefinition", variant: "NativeBody", source: "read-values.ts" },
 	{ node: "ValueDefinition", variant: "IncompleteBody", source: "read-values.ts" },
 	{ node: "ValueDefinition", variant: "ExternalBody", source: "read-values.ts" },
+	// readDistribution's DISTRIBUTION_KEYS list, checked with `includes`.
+	{ node: "IRFile", variant: "Library", source: "read-distribution.ts" },
+	{ node: "IRFile", variant: "Specs", source: "read-distribution.ts" },
+	{ node: "IRFile", variant: "Application", source: "read-distribution.ts" },
+];
+
+// The IRFile members the distribution reader names, with the variants that
+// carry each. Every one is canonical — this reader accepts no legacy spelling —
+// so the windowed() scan cannot find them; they are anchored here against a
+// plain string literal in read-distribution.ts instead.
+const DISTRIBUTION_MEMBERS: readonly { readonly variant: string; readonly member: string }[] = [
+	{ variant: "Library", member: "packageName" },
+	{ variant: "Library", member: "dependencies" },
+	{ variant: "Library", member: "def" },
+	{ variant: "Specs", member: "packageName" },
+	{ variant: "Specs", member: "dependencies" },
+	{ variant: "Specs", member: "spec" },
+	{ variant: "Application", member: "packageName" },
+	{ variant: "Application", member: "dependencies" },
+	{ variant: "Application", member: "def" },
+	{ variant: "Application", member: "entryPoints" },
+	{ variant: "Application", member: "doc" },
 ];
 const SOURCE_BY_NAME = new Map(SOURCES);
 
@@ -172,6 +202,35 @@ describe("VOCABULARY drift guard", () => {
 			expect(source, `no scanned source named "${w.source}"`).toBeDefined();
 			expect(source).toContain(w.sourceContains);
 		}
+	});
+
+	test("every IRFile member is in VOCABULARY as canonical and still named in read-distribution.ts", () => {
+		for (const w of DISTRIBUTION_MEMBERS) {
+			const entry = VOCABULARY.find((e) => e.node === "IRFile" && e.variant === w.variant);
+			expect(entry, `no VOCABULARY entry for IRFile/${w.variant}`).toBeDefined();
+			expect(
+				entry?.members.some((m) => m.name === w.member && m.spelling === "canonical"),
+				`IRFile/${w.variant} is missing member "${w.member}"`,
+			).toBe(true);
+			expect(READ_DISTRIBUTION).toContain(`"${w.member}"`);
+		}
+		// And nothing extra: an entry whose members drift ahead of this list is
+		// as much of a gap as one that drifts behind it.
+		for (const entry of VOCABULARY.filter((e) => e.node === "IRFile")) {
+			const listed = DISTRIBUTION_MEMBERS.filter((w) => w.variant === entry.variant).map((w) => w.member);
+			expect([...entry.members].map((m) => m.name).sort()).toEqual([...listed].sort());
+		}
+	});
+
+	test("the AccessControlled twins carry the same legacy wrapper member", () => {
+		for (const node of ["AccessControlledTypeDefinition", "AccessControlledValueDefinition"] as const) {
+			for (const variant of ["Public", "Private"] as const) {
+				const entry = VOCABULARY.find((e) => e.node === node && e.variant === variant);
+				expect(entry, `no VOCABULARY entry for ${node}/${variant}`).toBeDefined();
+				expect(entry?.members.some((m) => m.name === "value" && m.spelling === "legacy")).toBe(true);
+			}
+		}
+		expect(READ_DEFINITIONS).toContain("readAccessControlled");
 	});
 
 	test("attributes/attrs is modeled once under Type/Record and once under Value/Record", () => {

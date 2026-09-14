@@ -175,4 +175,30 @@ export const VOCABULARY: readonly VocabularyEntry[] = [
 	// instead of nesting them, so it is listed as a bare legacy member here.
 	{ node: "AccessControlledTypeDefinition", variant: "Public", members: [legacy("value")] },
 	{ node: "AccessControlledTypeDefinition", variant: "Private", members: [legacy("value")] },
+
+	// ------------------------------------------ AccessControlledValueDefinition
+	// readAccessControlled is shared, so the value twin accepts exactly what the
+	// type twin above does, including readDocumented's nested {doc,value}
+	// wrapper. It is its own NodeKind, so the kit needs its own cases for it.
+	{ node: "AccessControlledValueDefinition", variant: "Public", members: [legacy("value")] },
+	{ node: "AccessControlledValueDefinition", variant: "Private", members: [legacy("value")] },
+
+	// ------------------------------------------------------------------ IRFile
+	// The three distribution kinds. read-distribution.ts recognizes them by
+	// membership in DISTRIBUTION_KEYS (["Library", "Specs", "Application"]),
+	// not through a `case "<Label>":` switch, so the drift test finds them
+	// through NON_LABEL_VARIANTS rather than its label scan.
+	//
+	// The node is IRFile because that is the NodeKind a reader is asked for; the
+	// kit spells the same node "Distribution" (NODE_ALIASES). Every member below
+	// is canonical: this reader accepts no legacy spelling for any of them.
+	// "dependencies", "def" and "spec" are optional and default to empty, and
+	// "doc" is the optional documentation slot on an entry point.
+	{ node: "IRFile", variant: "Library", members: [canonical("packageName"), canonical("dependencies"), canonical("def")] },
+	{ node: "IRFile", variant: "Specs", members: [canonical("packageName"), canonical("dependencies"), canonical("spec")] },
+	{
+		node: "IRFile",
+		variant: "Application",
+		members: [canonical("packageName"), canonical("dependencies"), canonical("def"), canonical("entryPoints"), canonical("doc")],
+	},
 ];

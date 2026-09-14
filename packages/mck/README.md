@@ -20,7 +20,7 @@ Run it against any other binding by naming an executable that speaks the adapter
 mck run --adapter my-binding-adapter --adapter-arg --profile=json --report report.json
 ```
 
-`mck run` exits 0 when every record passes, 1 when a record fails or the kit itself does not parse, and 2 on a usage error. `--strict` also fails the run on warnings. `--kit <dir>` runs a checkout's `spec/ir/mck` instead of the embedded copy, and `--only <regex>` narrows the run to matching case ids.
+`mck run` exits 0 when every record passes, 1 when a record fails or the kit itself does not parse, and 2 on a usage error. `--strict` also fails the run on skipped records. `--kit <dir>` runs a checkout's `spec/ir/mck` instead of the embedded copy, and `--only <regex>` narrows the run to matching case ids.
 
 Report which vocabulary entries — variants and member spellings — no case exercises:
 
@@ -34,6 +34,6 @@ Show which kit the embedded copy is pinned to, and whether it still matches its 
 mck kit status --remote
 ```
 
-A report validates against [`spec/ir/mck/report.schema.json`](https://github.com/finos/morphir/blob/main/spec/ir/mck/report.schema.json) in finos/morphir, which also ships as `kit/spec/ir/mck/report.schema.json` inside this package. An adapter validates against [`packages/mck/protocol.schema.json`](https://github.com/finos/morphir-typescript/blob/main/packages/mck/protocol.schema.json) in finos/morphir-typescript. The embedded kit's provenance — the commit it was vendored from and its content hash — is `kit.lock.json` beside this file.
+A report validates against [`spec/ir/mck/report.schema.json`](https://github.com/finos/morphir/blob/main/spec/ir/mck/report.schema.json) in finos/morphir, which also ships as `kit/spec/ir/mck/report.schema.json` inside this package. An adapter validates against [`packages/mck/protocol.schema.json`](https://github.com/finos/morphir-typescript/blob/main/packages/mck/protocol.schema.json) in finos/morphir-typescript, which ships as `protocol.schema.json` beside this file along with a worked exchange in `protocol.example.json`. The embedded kit's provenance — the commit it was vendored from and its content hash — is `kit.lock.json` beside this file.
 
 Copyright 2026 FINOS. Licensed under Apache-2.0.

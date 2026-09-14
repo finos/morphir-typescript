@@ -5,7 +5,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { buildMckArtifact, checkKitRunReport, publishMckManifest, validatePackageFiles } from "./package-mck.ts";
+import { buildMckArtifact, checkKitRunReport, publishMckManifest, TYPESCRIPT_SPECIFIER, validatePackageFiles } from "./package-mck.ts";
 import { parseStableVersion } from "./version.ts";
 
 const root = path.resolve(import.meta.dir, "../..");
@@ -58,7 +58,7 @@ describe("publishMckManifest", () => {
 			exports: exportsMap,
 			bin: binMap,
 			sideEffects: false,
-			files: ["dist", "kit", "kit.lock.json", "README.md", "LICENSE", "NOTICE"],
+			files: ["dist", "kit", "kit.lock.json", "protocol.schema.json", "protocol.example.json", "README.md", "LICENSE", "NOTICE"],
 			dependencies: { "@finos/morphir-ir": "0.0.0" },
 			publishConfig: { access: "public" },
 		});
@@ -108,11 +108,34 @@ describe("validatePackageFiles", () => {
 		const kitFile = "package/kit/spec/ir/mck/types.md";
 		expect(() => validatePackageFiles([kitFile], new Set(), new Set([kitFile]))).not.toThrow();
 		expect(() => validatePackageFiles(["package/kit.lock.json"], new Set(), new Set(["package/kit.lock.json"]))).not.toThrow();
+		// The adapter protocol contract ships so an installed consumer can read it.
+		for (const contract of ["package/protocol.schema.json", "package/protocol.example.json"]) {
+			expect(() => validatePackageFiles([contract], new Set(), new Set([contract]))).not.toThrow();
+		}
 
 		for (const file of ["package/src/cli.ts", "package/kit/embedded.ts", "package/dist/cli.test.js", "package/tsconfig.json", "../outside"]) {
 			expect(() => validatePackageFiles([file], new Set(), new Set([file]))).toThrow();
 		}
 		expect(() => validatePackageFiles(["package/dist/cli.js"], new Set(["package/dist/cli.js"]), new Set(["package/dist/cli.js"]))).toThrow("link");
+	});
+});
+
+describe("TYPESCRIPT_SPECIFIER", () => {
+	test("catches every import form that can name a repository source", () => {
+		for (const source of [
+			'import { Kit } from "../../ir/src/index.ts";',
+			'export type { Kit } from "./kit.ts";',
+			'declare const k: import("./kit.ts").Kit;',
+			// A bare side-effect import: no `from`, no parentheses. tsc emits one
+			// for a module imported only for its global declarations.
+			'import "./globals.ts";',
+			"import\t'./globals.ts';",
+		]) {
+			expect(source).toMatch(TYPESCRIPT_SPECIFIER);
+		}
+		for (const source of ['import { Kit } from "@finos/morphir-ir";', 'import "@finos/morphir-ir/v4";', 'const path = "kit/spec.ts";']) {
+			expect(source).not.toMatch(TYPESCRIPT_SPECIFIER);
+		}
 	});
 });
 
@@ -169,6 +192,8 @@ describe.if(canBuild)("@finos/morphir-mck artifact", () => {
 			"package/LICENSE",
 			"package/NOTICE",
 			"package/kit.lock.json",
+			"package/protocol.schema.json",
+			"package/protocol.example.json",
 			"package/kit/spec/ir/mck/types.md",
 			"package/dist/index.js",
 			"package/dist/cli.js",
@@ -194,7 +219,7 @@ describe.if(canBuild)("@finos/morphir-mck artifact", () => {
 
 		for (const declaration of artifact.files.filter((file) => file.endsWith(".d.ts"))) {
 			const contents = await Bun.$`tar -xOf ${artifact.tarball} ${declaration}`.text();
-			expect(contents).not.toMatch(/(?:from\s+|import\s*\()["'][^"']*\.ts["']/);
+			expect(contents).not.toMatch(TYPESCRIPT_SPECIFIER);
 			expect(contents).not.toContain("ir/src/");
 		}
 		for (const sourceMap of artifact.files.filter((file) => file.endsWith(".map"))) {

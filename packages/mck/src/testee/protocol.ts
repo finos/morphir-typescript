@@ -54,6 +54,11 @@ export function parseEnvelope(line: string): { readonly id: number; readonly bod
 	need(isRecord(parsed), "message must be a JSON object", parsed);
 	const raw = parsed as Record<string, unknown>;
 	need(typeof raw.id === "number" && Number.isInteger(raw.id), "missing id", raw.id);
+	// Ids start at 1 and increase by one, so 0 and negatives are not ids at all.
+	// protocol.schema.json says the same ("id": { "minimum": 1 }); the guard and
+	// the schema have to reject the same messages or the contract has two
+	// answers.
+	need((raw.id as number) >= 1, `"id" must be at least 1, got ${raw.id as number}`, raw.id);
 	const { id, ...body } = raw;
 	return { id: id as number, body };
 }
@@ -65,6 +70,11 @@ export function parseCapabilities(v: unknown): Capabilities {
 	need(o.contractVersion === 1, `unsupported contractVersion ${JSON.stringify(o.contractVersion)}; this driver speaks 1`, o);
 	const versions = o.versions;
 	need(Array.isArray(versions) && versions.every((n) => Number.isInteger(n) && (n as number) > 0), '"versions" must be positive integers', versions);
+	// An adapter that decodes no node kinds has nothing to say about the kit, so
+	// an empty list is a malformed capabilities answer rather than a testee that
+	// skips everything. protocol.schema.json says the same ("minItems": 1).
+	const nodes = stringArray(o, "nodes");
+	need(nodes.length > 0, '"nodes" must list at least one node kind', nodes);
 	return {
 		contractVersion: 1,
 		binding: str(o, "binding"),
@@ -73,7 +83,7 @@ export function parseCapabilities(v: unknown): Capabilities {
 		profiles: list(o, "profiles", PROFILES),
 		layouts: list(o, "layouts", LAYOUTS),
 		paths: list(o, "paths", PATHS),
-		nodes: stringArray(o, "nodes"),
+		nodes,
 	};
 }
 

@@ -95,10 +95,23 @@ export function processTestee(command: readonly string[], options: ProcessOption
 			timer = setTimeout(() => resolve("timeout"), options.timeoutMs);
 		});
 		const lineDone = lines.next();
+		// Every path below that gives up on `lineDone` abandons a promise that is
+		// still pending: the read outlives this exchange and can still reject
+		// later (close() kills the child, and a destroyed stdout rejects the
+		// pending read). Nothing awaits it by then, so without a catch that
+		// rejection surfaces as an unhandled rejection and can fail an unrelated
+		// test or crash the driver. Attaching a no-op catch marks it handled
+		// without changing what this exchange reports.
+		const abandonLineRead = (): void => {
+			void lineDone.catch(() => {});
+		};
 		const exitDone = exited.then(() => "exit" as const);
 		try {
 			const first = await Promise.race([lineDone, exitDone, timeout]);
-			if (first === "timeout") throw new ProtocolError(`adapter timed out after ${options.timeoutMs} ms waiting for id ${id}`);
+			if (first === "timeout") {
+				abandonLineRead();
+				throw new ProtocolError(`adapter timed out after ${options.timeoutMs} ms waiting for id ${id}`);
+			}
 			let next: NextLine;
 			if (first === "exit") {
 				// The child's "exit" event arrived before we saw its next stdout
@@ -112,7 +125,10 @@ export function processTestee(command: readonly string[], options: ProcessOption
 				});
 				try {
 					const raced = await Promise.race([lineDone, grace]);
-					if (raced === "grace-timeout") throw new ProtocolError(exitMessage());
+					if (raced === "grace-timeout") {
+						abandonLineRead();
+						throw new ProtocolError(exitMessage());
+					}
 					next = raced;
 				} finally {
 					clearTimeout(graceTimer);

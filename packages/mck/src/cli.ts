@@ -311,7 +311,14 @@ async function main(argv: readonly string[]): Promise<number> {
 		console.log(driverVersion());
 		return 0;
 	}
-	if (command === "check") return runCheck(rest);
+	if (command === "check") {
+		try {
+			return await runCheck(rest);
+		} catch (error) {
+			console.error(`error: ${(error as Error).message}`);
+			return 1;
+		}
+	}
 	if (command === "kit") return runKitCommand(rest);
 	if (command === "run") {
 		try {

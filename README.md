@@ -11,7 +11,7 @@ Morphir captures business logic and domain models as language-independent data s
 
 `@finos/morphir-ir` is published to public npm at `0.0.1`. `@finos/morphir-mck` publishes with the next suite release, whichever version `mise run release:prepare` assigns. The root workspace stays private and is never published. Every workspace uses the same repository-wide suite version, including packages that are not part of a given release, and the manifests read the last released version until release preparation bumps them.
 
-Standalone CI temporarily skips conformance tests that require the upstream Morphir fixture and MCK directories. Unit tests still run. The upstream integration work will remove this opt-out once a compatible pinned corpus is available to standalone clones.
+The Morphir Compatibility Kit is vendored into `packages/mck/kit`, so `mise run check:conformance` runs the full kit in a standalone clone with no upstream checkout. Two corpora are still not vendored: the naming and format-version conformance fixtures, which live only in `finos/morphir` at `docs/spec/ir/fixtures/`. `mise run test` therefore sets `MORPHIR_FIXTURES_OPTIONAL=1`, which makes those two corpora — and nothing else — optional when they are absent. That opt-out goes away once they are vendored too.
 
 ## Packages
 

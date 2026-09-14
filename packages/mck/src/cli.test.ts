@@ -66,6 +66,15 @@ describe("mck check", () => {
 		expect(r.code).toBe(0);
 		expect(JSON.parse(r.out)).toMatchObject({ cases: ["types-0001"], errors: [] });
 	});
+	// A directory that is not there is an operator mistake, not a crash: like
+	// `run` and `coverage`, `check` reports it as `error: <message>` and exits 1
+	// rather than letting the ENOENT escape as an unhandled rejection.
+	test("a missing directory is reported as an error, not a stack trace", () => {
+		const r = run(["check", path.join(temp(), "not-a-directory")]);
+		expect(r.code).toBe(1);
+		expect(r.err).toMatch(/^error: /m);
+		expect(r.err).not.toMatch(/\bat .*cli\.ts/);
+	});
 	test("unknown command is usage error", () => {
 		const r = run(["frobnicate"]);
 		expect(r.code).toBe(2);
