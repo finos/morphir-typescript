@@ -2,7 +2,7 @@
 // Tests for the mck CLI. Run with: bun test packages/mck/src/cli.test.ts
 import { afterEach, describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -129,5 +129,55 @@ describe("mck kit", () => {
 		expect(r.code).toBe(1);
 		expect(r.err).toMatch(/^error: /m);
 		expect(r.err).toContain("older than the pinned commit");
+	});
+});
+
+describe("mck run", () => {
+	test("over the embedded kit, prints a summary and its exit code tracks exitCodeFor", () => {
+		const r = run(["run"]);
+		expect(r.out).toMatch(/\d+ pass, \d+ fail, 0 kit-error, \d+ skipped/);
+		// Two pre-existing gaps unrelated to the driver currently keep this above
+		// zero fail (see task-5-report.md): a stale website/static/ir/examples/v4
+		// fixture predating the IR v4 stabilization, and document-tree
+		// manifest-file node kinds that arrive with plan 2c. Once those are fixed
+		// this reads 0 fail and exits 0; until then the exit code must still
+		// follow exitCodeFor's math, which this asserts against the printed count.
+		const fail = Number(/(\d+) fail/.exec(r.out)?.[1] ?? "-1");
+		expect(r.code).toBe(fail > 0 ? 1 : 0);
+	});
+	test("--only restricts the report to matching case ids", () => {
+		const reportFile = path.join(temp(), "report.json");
+		const r = run(["run", "--only", "^types-0001$", "--report", reportFile]);
+		expect(r.code).toBe(0);
+		const report = JSON.parse(readFileSync(reportFile, "utf8")) as { records: { caseId: string }[] };
+		expect(report.records.length).toBeGreaterThan(0);
+		for (const rec of report.records) expect(rec.caseId).toBe("types-0001");
+	});
+	test("--strict fails when any fence is skipped (yaml fences are skipped in-process)", () => {
+		const r = run(["run", "--strict"]);
+		expect(r.code).toBe(1);
+	});
+	test("--kit against a directory with a kit error exits 1 and reports a kit-error", () => {
+		const kitDir = path.join(temp(), "spec", "ir", "mck");
+		mkdirSync(kitDir, { recursive: true });
+		writeFileSync(path.join(kitDir, "types.md"), "## types-1: bad\n");
+		const reportFile = path.join(temp(), "report.json");
+		const r = run(["run", "--kit", kitDir, "--report", reportFile]);
+		expect(r.code).toBe(1);
+		const report = JSON.parse(readFileSync(reportFile, "utf8")) as { records: { result: string }[] };
+		expect(report.records.some((rec) => rec.result === "kit-error")).toBe(true);
+	});
+	test("--adapter is a usage error until the process testee lands", () => {
+		const r = run(["run", "--adapter", "some-exe"]);
+		expect(r.code).toBe(2);
+		expect(r.err).toMatch(/--adapter arrives with the process testee/);
+	});
+});
+
+describe("mck --version", () => {
+	test("prints the driver's package version", () => {
+		const r = run(["--version"]);
+		expect(r.code).toBe(0);
+		expect(r.out.trim()).toMatch(/^\d+\.\d+\.\d+/);
 	});
 });

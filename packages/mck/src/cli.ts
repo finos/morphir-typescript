@@ -4,18 +4,30 @@
 //   mck check <dir> [--json]
 //   mck kit sync <repository-root> [--force]
 //   mck kit status [--remote]
+//   mck run [--kit <dir>] [--repo-root <dir>] [--adapter <exe> [--adapter-arg <arg>]...] [--report <file>] [--strict] [--only <regex>] [--timeout <ms>]
+//   mck --version
 //
 // Plan 1 shipped `check`. Plan 2 adds `kit sync` (vendor the parent
 // repository's kit into packages/mck/kit) and `kit status` (prove the
-// vendored copy still matches kit.lock.json).
+// vendored copy still matches kit.lock.json). Plan 2b adds `run`, the driver
+// itself, over the in-process TypeScript binding; `--adapter` (an
+// out-of-process binding) arrives with the process testee in a later task.
 import { execFileSync } from "node:child_process";
 import { readdirSync, statSync } from "node:fs";
 import path from "node:path";
-import { loadKit } from "./kit/load.ts";
+import { runKit as driveKit, exitCodeFor } from "./driver/run.ts";
+import { driverVersion, kitVersion } from "./driver/version.ts";
+import { embeddedKitFiles } from "./kit/embedded-source.ts";
+import { loadKit, loadKitFromFiles } from "./kit/load.ts";
 import { kitStatus, readLock, syncKit } from "./kit/sync.ts";
+import { formatSummary, writeReport } from "./report.ts";
+import { inProcessTestee } from "./testee/in-process.ts";
 
-const USAGE = "usage: mck check <dir> [--json]\n       mck kit sync <repository-root> [--force]\n       mck kit status [--remote]";
+const USAGE =
+	"usage: mck check <dir> [--json]\n       mck kit sync <repository-root> [--force]\n       mck kit status [--remote]\n       mck run [--kit <dir>] [--repo-root <dir>] [--adapter <exe> [--adapter-arg <arg>]...] [--report <file>] [--strict] [--only <regex>] [--timeout <ms>]\n       mck --version";
 const KIT_USAGE = "usage: mck kit sync <repository-root> [--force]\n       mck kit status [--remote]";
+const RUN_USAGE =
+	"usage: mck run [--kit <dir>] [--repo-root <dir>] [--adapter <exe> [--adapter-arg <arg>]...] [--report <file>] [--strict] [--only <regex>] [--timeout <ms>]";
 
 function packageRoot(): string {
 	return process.env.MCK_PACKAGE_ROOT ?? path.resolve(import.meta.dirname, "..");
@@ -96,7 +108,7 @@ function runKitStatus(rest: readonly string[]): number {
 	return status.ok ? 0 : 1;
 }
 
-async function runKit(rest: readonly string[]): Promise<number> {
+async function runKitCommand(rest: readonly string[]): Promise<number> {
 	const [sub, ...rest2] = rest;
 	try {
 		if (sub === "sync") return await runKitSync(rest2);
@@ -109,10 +121,90 @@ async function runKit(rest: readonly string[]): Promise<number> {
 	return 2;
 }
 
+// When `--kit` names a checkout's spec/ir/mck, the repository root three
+// levels up is the natural default for resolving `text` fences that name
+// other repository files (e.g. website/static/ir/examples/...).
+function inferredRoot(kitDirectory: string): string | undefined {
+	const normalized = kitDirectory.split(path.sep).join("/");
+	return normalized.endsWith("spec/ir/mck") ? path.resolve(kitDirectory, "..", "..", "..") : undefined;
+}
+
+interface RunArgs {
+	readonly kit?: string;
+	readonly repoRoot?: string;
+	readonly adapter?: string;
+	readonly report?: string;
+	readonly strict: boolean;
+	readonly only?: RegExp;
+}
+
+function parseRunArgs(rest: readonly string[]): RunArgs | null {
+	let kit: string | undefined;
+	let repoRoot: string | undefined;
+	let adapter: string | undefined;
+	let report: string | undefined;
+	let strict = false;
+	let only: RegExp | undefined;
+	for (let i = 0; i < rest.length; i++) {
+		const arg = rest[i];
+		if (arg === "--kit") kit = rest[++i];
+		else if (arg === "--repo-root") repoRoot = rest[++i];
+		else if (arg === "--adapter") adapter = rest[++i];
+		else if (arg === "--adapter-arg")
+			i += 1; // consumed; wired to the process testee in Task 6
+		else if (arg === "--report") report = rest[++i];
+		else if (arg === "--strict") strict = true;
+		else if (arg === "--only") only = new RegExp(rest[++i] ?? "");
+		else if (arg === "--timeout")
+			i += 1; // accepted; only meaningful once an out-of-process adapter exists
+		else return null;
+	}
+	return { kit, repoRoot, adapter, report, strict, only };
+}
+
+async function runRun(rest: readonly string[]): Promise<number> {
+	const args = parseRunArgs(rest);
+	if (args === null) {
+		console.error(RUN_USAGE);
+		return 2;
+	}
+	if (args.adapter !== undefined) {
+		console.error("--adapter arrives with the process testee");
+		return 2;
+	}
+	const kit =
+		args.kit === undefined
+			? await loadKitFromFiles(embeddedKitFiles())
+			: await loadKit(path.resolve(args.kit), args.repoRoot === undefined ? inferredRoot(path.resolve(args.kit)) : path.resolve(args.repoRoot));
+	const kv = args.kit === undefined ? kitVersion(null) : kitVersion(path.resolve(args.kit));
+	const testee = inProcessTestee();
+	const report = await driveKit(kit, testee, { strict: args.strict, only: args.only, driverVersion: driverVersion(), kitVersion: kv });
+	if (args.report !== undefined) writeReport(report, path.resolve(args.report));
+	console.log(formatSummary(report));
+	for (const r of report.records) {
+		if (r.result === "pass") continue;
+		const pathSuffix = r.path === undefined ? "" : ` [${r.path}]`;
+		console.log(`${r.result} ${r.caseId} fence ${r.fenceIndex}${pathSuffix}: ${r.message ?? ""}`);
+	}
+	return exitCodeFor(report, args.strict);
+}
+
 async function main(argv: readonly string[]): Promise<number> {
 	const [command, ...rest] = argv;
+	if (command === "--version") {
+		console.log(driverVersion());
+		return 0;
+	}
 	if (command === "check") return runCheck(rest);
-	if (command === "kit") return runKit(rest);
+	if (command === "kit") return runKitCommand(rest);
+	if (command === "run") {
+		try {
+			return await runRun(rest);
+		} catch (error) {
+			console.error(`error: ${(error as Error).message}`);
+			return 1;
+		}
+	}
 	console.error(USAGE);
 	return 2;
 }
