@@ -27,15 +27,17 @@ Run that command before opening or updating a pull request. When adding or chang
 
 ## Publishing
 
-Releases use one suite version and one signed `vVERSION` tag for every workspace. The initial `0.0.1` release publishes only `@finos/morphir-ir`. `@finos/morphir-mck` is now a public package and `mise run check:package` builds and verifies its tarball too, but the release workflow does not upload or publish it yet. The release validator is the authority for accepted tags, manifest versions, package visibility, and changelog state. Signed tags are an operator requirement. The workflow validates exact tag syntax and `main` ancestry but does not cryptographically verify tag signatures.
+Releases use one suite version and one signed `vVERSION` tag for every workspace. One tag publishes both packages: `@finos/morphir-ir` first, then `@finos/morphir-mck`, which depends on it. The initial `0.0.1` release published only `@finos/morphir-ir`; `@finos/morphir-mck` is public from suite version `0.0.2`. The release validator is the authority for accepted tags, manifest versions, package visibility, and changelog state. Signed tags are an operator requirement. The workflow validates exact tag syntax and `main` ancestry but does not cryptographically verify tag signatures.
+
+A release also attaches compiled binaries. `mise run release:binaries` compiles `mck` and `mck-adapter-typescript` with `bun build --compile` for five targets — Linux x64 and arm64, macOS x64 and arm64, and Windows x64 — giving ten single-file executables named `mck-VERSION-OS-ARCH` and `mck-adapter-typescript-VERSION-OS-ARCH`, with `.exe` on Windows. Each binary embeds the vendored kit, so it runs `mck run` with no checkout, no `node_modules`, and no Node installation. Bun publishes no Windows arm64 build; Windows on ARM runs the x64 binary under emulation. GitHub Actions artifacts are zipped, which drops the Unix executable bit, so a downloaded binary needs `chmod +x` on Linux and macOS.
 
 The publishing workflow contract separates artifact creation from publication:
 
-1. A credential-free artifact job validates the tag, runs the local CI mirror, and builds the exact npm tarball.
-2. A publish job downloads that artifact without checking out or rebuilding the repository. It publishes the exact tarball to npm with provenance.
-3. A GitHub Release job uses the changelog entry as its release notes and attaches the same tarball.
+1. A credential-free artifact job validates the tag, runs the local CI mirror, builds the two exact npm tarballs, and compiles the ten binaries. It checksums all twelve files into one `SHA256SUMS`.
+2. A publish job downloads that artifact without checking out or rebuilding the repository. It verifies the twelve-file set against `SHA256SUMS` and publishes each exact tarball to npm with provenance, ir before mck. Republishing an identical, already-published version is a success, not a failure.
+3. A GitHub Release job uses the changelog entry as its release notes and attaches the same twelve files plus `SHA256SUMS`.
 
-The publish job receives the FINOS organization secret `ORG_MORPHIR_NPM_TOKEN`. The npm token must be authorized to publish public packages in the `@finos` scope. No other job receives it.
+The publish job receives the FINOS organization secret `ORG_MORPHIR_NPM_TOKEN`. The npm token must be authorized to publish public packages in the `@finos` scope, for both `@finos/morphir-ir` and `@finos/morphir-mck`. No other job receives it.
 
 The initial `0.0.1` release is already prepared in this change. Do not run release preparation for `0.0.1` again. For a future release, set the next suite version and run:
 
@@ -52,4 +54,4 @@ git tag -s v0.0.1 -m "Release 0.0.1"
 git push origin v0.0.1
 ```
 
-npm versions are immutable. If npm publication fails before npm accepts the package, rerun the failed publish job. If npm accepted the package but GitHub Release creation failed, confirm the published version and rerun only the GitHub Release job. Never create a replacement tarball for an existing version.
+npm versions are immutable. If npm publication fails before npm accepts the package, rerun the failed publish job; it skips any package the registry already holds with the same integrity, so a rerun that publishes only `@finos/morphir-mck` is expected after an `@finos/morphir-ir` publication already succeeded. If npm accepted the packages but GitHub Release creation failed, confirm the published versions and rerun only the GitHub Release job. Never create a replacement tarball for an existing version.

@@ -68,6 +68,7 @@ jobs:
         run: |
           set -euo pipefail
           mise run release:artifact -- .dev/out/release
+          mise run release:binaries -- .dev/out/release
           mise run release:notes -- "${GITHUB_REF_NAME#v}" .dev/out/release/release-notes.md
 
       - name: Checksum release artifact
@@ -76,16 +77,31 @@ jobs:
           set -euo pipefail
           version="$RELEASE_VERSION"
           directory=".dev/out/release"
-          tarball=".dev/out/release/finos-morphir-ir-${version}.tgz"
-          test -f "$tarball"
-          mapfile -t tarballs < <(find "$directory" -maxdepth 1 -type f -name '*.tgz' -printf '%f\n')
-          if [[ "${#tarballs[@]}" -ne 1 || "${tarballs[0]}" != "$(basename "$tarball")" ]]; then
-            echo "Release output must contain exactly the expected npm tarball." >&2
+          artifacts=(
+            "finos-morphir-ir-${version}.tgz"
+            "finos-morphir-mck-${version}.tgz"
+            "mck-${version}-linux-x64"
+            "mck-adapter-typescript-${version}-linux-x64"
+            "mck-${version}-linux-arm64"
+            "mck-adapter-typescript-${version}-linux-arm64"
+            "mck-${version}-darwin-x64"
+            "mck-adapter-typescript-${version}-darwin-x64"
+            "mck-${version}-darwin-arm64"
+            "mck-adapter-typescript-${version}-darwin-arm64"
+            "mck-${version}-windows-x64.exe"
+            "mck-adapter-typescript-${version}-windows-x64.exe"
+          )
+          mapfile -t checksummed < <(printf '%s\n' "${artifacts[@]}" | LC_ALL=C sort)
+          mapfile -t files < <(find "$directory" -maxdepth 1 -type f ! -name release-notes.md -printf '%f\n' | LC_ALL=C sort)
+          if [[ "${files[*]}" != "${checksummed[*]}" ]]; then
+            echo "Release output must contain exactly the expected npm tarballs and binaries." >&2
+            printf 'expected: %s\n' "${checksummed[*]}" >&2
+            printf 'found: %s\n' "${files[*]}" >&2
             exit 1
           fi
           (
             cd "$directory"
-            sha256sum "$(basename "$tarball")" > SHA256SUMS
+            sha256sum "${checksummed[@]}" > SHA256SUMS
           )
 
       - name: Upload release artifact
@@ -94,6 +110,9 @@ jobs:
           name: morphir-ir-release
           path: |
             .dev/out/release/finos-morphir-ir-${{ env.RELEASE_VERSION }}.tgz
+            .dev/out/release/finos-morphir-mck-${{ env.RELEASE_VERSION }}.tgz
+            .dev/out/release/mck-${{ env.RELEASE_VERSION }}-*
+            .dev/out/release/mck-adapter-typescript-${{ env.RELEASE_VERSION }}-*
             .dev/out/release/release-notes.md
             .dev/out/release/SHA256SUMS
           if-no-files-found: error
@@ -102,7 +121,7 @@ jobs:
           include-hidden-files: true
 
   publish:
-    name: Publish @finos/morphir-ir
+    name: Publish npm packages
     needs: artifact
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -135,49 +154,66 @@ jobs:
           fi
           version="${GITHUB_REF_NAME#v}"
           directory=".dev/out/release"
-          expected_name="finos-morphir-ir-${version}.tgz"
-          tarball="${directory}/${expected_name}"
+          artifacts=(
+            "finos-morphir-ir-${version}.tgz"
+            "finos-morphir-mck-${version}.tgz"
+            "mck-${version}-linux-x64"
+            "mck-adapter-typescript-${version}-linux-x64"
+            "mck-${version}-linux-arm64"
+            "mck-adapter-typescript-${version}-linux-arm64"
+            "mck-${version}-darwin-x64"
+            "mck-adapter-typescript-${version}-darwin-x64"
+            "mck-${version}-darwin-arm64"
+            "mck-adapter-typescript-${version}-darwin-arm64"
+            "mck-${version}-windows-x64.exe"
+            "mck-adapter-typescript-${version}-windows-x64.exe"
+          )
+          mapfile -t checksummed < <(printf '%s\n' "${artifacts[@]}" | LC_ALL=C sort)
+          mapfile -t expected < <(printf '%s\n' "${artifacts[@]}" SHA256SUMS release-notes.md | LC_ALL=C sort)
           mapfile -t files < <(find "$directory" -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort)
-          if [[ "${#files[@]}" -ne 3 || "${files[0]}" != "SHA256SUMS" || "${files[1]}" != "$expected_name" || "${files[2]}" != "release-notes.md" ]]; then
+          if [[ "${files[*]}" != "${expected[*]}" ]]; then
             echo "Downloaded release artifact has unexpected files." >&2
+            printf 'expected: %s\n' "${expected[*]}" >&2
+            printf 'found: %s\n' "${files[*]}" >&2
             exit 1
           fi
           (
             cd "$directory"
-            test "$(wc -l < SHA256SUMS)" -eq 1
-            checksum_line="$(cat SHA256SUMS)"
-            checksum_hash="${checksum_line%% *}"
-            checksum_name="${checksum_line#*  }"
-            [[ "$checksum_hash" =~ ^[0-9a-f]{64}$ ]]
-            [[ "$checksum_name" == "$expected_name" ]]
-            [[ "$checksum_line" == "$checksum_hash  $checksum_name" ]]
+            test "$(wc -l < SHA256SUMS)" -eq "${#checksummed[@]}"
+            mapfile -t checksum_names < <(cut -d ' ' -f 3- SHA256SUMS)
+            if [[ "${checksum_names[*]}" != "${checksummed[*]}" ]]; then
+              echo "SHA256SUMS does not cover exactly the expected files." >&2
+              exit 1
+            fi
+            while IFS= read -r checksum_line; do
+              checksum_hash="${checksum_line%% *}"
+              checksum_name="${checksum_line#*  }"
+              [[ "$checksum_hash" =~ ^[0-9a-f]{64}$ ]]
+              [[ "$checksum_line" == "$checksum_hash  $checksum_name" ]]
+            done < SHA256SUMS
             sha256sum --check --strict SHA256SUMS
           )
-          test -f "$tarball"
+          for artifact in "${artifacts[@]}"; do
+            test -f "${directory}/${artifact}"
+          done
 
-      - name: Publish @finos/morphir-ir
+      # The publish job never checks out the repository, so its Node helpers are
+      # written here instead of read from the tree. They are separate from the
+      # publish step because actionlint 1.7.12 deadlocks on Windows when it
+      # feeds a `run:` script longer than the 4 KiB pipe buffer to shellcheck,
+      # which would break the local `mise run ci` mirror.
+      - name: Write publish helpers
         shell: bash
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
-          tarball=".dev/out/release/finos-morphir-ir-${version}.tgz"
-          package_name="@finos/morphir-ir"
-
-          local_integrity="$(
-            node - "$tarball" <<'NODE'
+          cat > "$RUNNER_TEMP/tarball-integrity.cjs" <<'NODE'
           const { createHash } = require("node:crypto");
           const { readFileSync } = require("node:fs");
           const tarball = process.argv[2];
           const digest = createHash("sha512").update(readFileSync(tarball)).digest("base64");
           process.stdout.write(`sha512-${digest}`);
           NODE
-          )"
-
-          published_integrity() {
-            local package_version="$1"
-            local integrity_json
-            integrity_json="$(npm view "${package_name}@${package_version}" dist.integrity --json --registry=https://registry.npmjs.org 2>/dev/null)" || return 1
-            node - "$integrity_json" <<'NODE'
+          cat > "$RUNNER_TEMP/published-integrity.cjs" <<'NODE'
           const input = process.argv[2];
           let integrity;
           try {
@@ -188,26 +224,7 @@ jobs:
           if (typeof integrity !== "string" || !integrity.startsWith("sha512-")) process.exit(1);
           process.stdout.write(integrity);
           NODE
-          }
-
-          latest_error="$(mktemp)"
-          if latest_json="$(npm view "$package_name" dist-tags.latest --json --registry=https://registry.npmjs.org 2>"$latest_error")"; then
-            latest_present=true
-          else
-            latest_status=$?
-            if grep -Eq '(^|[[:space:]])E404([[:space:]]|$)' "$latest_error"; then
-              latest_present=false
-            else
-              rm -f "$latest_error"
-              echo "Could not confirm the latest published package version." >&2
-              exit "$latest_status"
-            fi
-          fi
-          rm -f "$latest_error"
-
-          if [[ "$latest_present" == true ]]; then
-            comparison="$(
-              node - "$version" "$latest_json" <<'NODE'
+          cat > "$RUNNER_TEMP/compare-versions.cjs" <<'NODE'
           const [targetInput, latestJson] = process.argv.slice(2);
           const stableVersion = /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
           function parseVersion(input, description) {
@@ -238,47 +255,90 @@ jobs:
           }
           process.stdout.write("equal");
           NODE
-            )"
 
-            if [[ "$comparison" == "older" ]]; then
-              echo "Target version is older than npm's latest version." >&2
-              exit 1
-            fi
-            if [[ "$comparison" == "equal" ]]; then
-              remote_integrity="$(published_integrity "$version")" || {
-                echo "Could not verify the existing npm package integrity." >&2
-                exit 1
-              }
-              if [[ "$remote_integrity" == "$local_integrity" ]]; then
-                echo "The identical package version is already published."
-                exit 0
+      - name: Publish npm packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+
+          published_integrity() {
+            local package_name="$1"
+            local package_version="$2"
+            local integrity_json
+            integrity_json="$(npm view "${package_name}@${package_version}" dist.integrity --json --registry=https://registry.npmjs.org 2>/dev/null)" || return 1
+            node "$RUNNER_TEMP/published-integrity.cjs" "$integrity_json"
+          }
+
+          # @finos/morphir-mck depends on @finos/morphir-ir, so ir publishes
+          # first: a failure there stops the tag before mck can reference a
+          # version the registry does not have.
+          for package_name in "@finos/morphir-ir" "@finos/morphir-mck"; do
+            tarball=".dev/out/release/finos-${package_name#@finos/}-${version}.tgz"
+            local_integrity="$(node "$RUNNER_TEMP/tarball-integrity.cjs" "$tarball")"
+
+            latest_error="$(mktemp)"
+            if latest_json="$(npm view "$package_name" dist-tags.latest --json --registry=https://registry.npmjs.org 2>"$latest_error")"; then
+              latest_present=true
+            else
+              latest_status=$?
+              if grep -Eq '(^|[[:space:]])E404([[:space:]]|$)' "$latest_error"; then
+                latest_present=false
+              else
+                rm -f "$latest_error"
+                echo "Could not confirm the latest published version of ${package_name}." >&2
+                exit "$latest_status"
               fi
-              echo "The published package integrity does not match this artifact." >&2
-              exit 1
             fi
-          fi
+            rm -f "$latest_error"
 
-          set +e
-          npm publish "$tarball" --access public --provenance
-          publish_status=$?
-          set -e
-          if [[ "$publish_status" -eq 0 ]]; then
-            exit 0
-          fi
+            if [[ "$latest_present" == true ]]; then
+              comparison="$(node "$RUNNER_TEMP/compare-versions.cjs" "$version" "$latest_json")"
 
-          echo "npm publish returned an error; checking whether the registry accepted the package." >&2
-          for attempt in 1 2 3 4 5; do
-            remote_integrity="$(published_integrity "$version")" || remote_integrity=""
-            if [[ "$remote_integrity" == "$local_integrity" ]]; then
-              echo "npm contains the package with the expected integrity."
-              exit 0
+              if [[ "$comparison" == "older" ]]; then
+                echo "Target version is older than npm's latest version of ${package_name}." >&2
+                exit 1
+              fi
+              if [[ "$comparison" == "equal" ]]; then
+                remote_integrity="$(published_integrity "$package_name" "$version")" || {
+                  echo "Could not verify the existing npm package integrity for ${package_name}." >&2
+                  exit 1
+                }
+                if [[ "$remote_integrity" == "$local_integrity" ]]; then
+                  echo "The identical ${package_name} version is already published."
+                  continue
+                fi
+                echo "The published ${package_name} integrity does not match this artifact." >&2
+                exit 1
+              fi
             fi
-            if [[ "$attempt" -lt 5 ]]; then
-              sleep "$((attempt * 2))"
+
+            set +e
+            npm publish "$tarball" --access public --provenance
+            publish_status=$?
+            set -e
+            if [[ "$publish_status" -eq 0 ]]; then
+              continue
             fi
+
+            echo "npm publish returned an error; checking whether the registry accepted ${package_name}." >&2
+            confirmed=false
+            for attempt in 1 2 3 4 5; do
+              remote_integrity="$(published_integrity "$package_name" "$version")" || remote_integrity=""
+              if [[ "$remote_integrity" == "$local_integrity" ]]; then
+                confirmed=true
+                break
+              fi
+              if [[ "$attempt" -lt 5 ]]; then
+                sleep "$((attempt * 2))"
+              fi
+            done
+            if [[ "$confirmed" != true ]]; then
+              echo "npm did not confirm ${package_name} with the expected integrity." >&2
+              exit "$publish_status"
+            fi
+            echo "npm contains ${package_name} with the expected integrity."
           done
-          echo "npm did not confirm the package with the expected integrity." >&2
-          exit "$publish_status"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.ORG_MORPHIR_NPM_TOKEN }}
 
@@ -306,33 +366,58 @@ jobs:
           fi
           version="${GITHUB_REF_NAME#v}"
           directory=".dev/out/release"
-          expected_name="finos-morphir-ir-${version}.tgz"
-          tarball="${directory}/${expected_name}"
+          artifacts=(
+            "finos-morphir-ir-${version}.tgz"
+            "finos-morphir-mck-${version}.tgz"
+            "mck-${version}-linux-x64"
+            "mck-adapter-typescript-${version}-linux-x64"
+            "mck-${version}-linux-arm64"
+            "mck-adapter-typescript-${version}-linux-arm64"
+            "mck-${version}-darwin-x64"
+            "mck-adapter-typescript-${version}-darwin-x64"
+            "mck-${version}-darwin-arm64"
+            "mck-adapter-typescript-${version}-darwin-arm64"
+            "mck-${version}-windows-x64.exe"
+            "mck-adapter-typescript-${version}-windows-x64.exe"
+          )
+          mapfile -t checksummed < <(printf '%s\n' "${artifacts[@]}" | LC_ALL=C sort)
+          mapfile -t expected < <(printf '%s\n' "${artifacts[@]}" SHA256SUMS release-notes.md | LC_ALL=C sort)
           mapfile -t files < <(find "$directory" -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort)
-          if [[ "${#files[@]}" -ne 3 || "${files[0]}" != "SHA256SUMS" || "${files[1]}" != "$expected_name" || "${files[2]}" != "release-notes.md" ]]; then
+          if [[ "${files[*]}" != "${expected[*]}" ]]; then
             echo "Downloaded release artifact has unexpected files." >&2
+            printf 'expected: %s\n' "${expected[*]}" >&2
+            printf 'found: %s\n' "${files[*]}" >&2
             exit 1
           fi
           (
             cd "$directory"
-            test "$(wc -l < SHA256SUMS)" -eq 1
-            checksum_line="$(cat SHA256SUMS)"
-            checksum_hash="${checksum_line%% *}"
-            checksum_name="${checksum_line#*  }"
-            [[ "$checksum_hash" =~ ^[0-9a-f]{64}$ ]]
-            [[ "$checksum_name" == "$expected_name" ]]
-            [[ "$checksum_line" == "$checksum_hash  $checksum_name" ]]
+            test "$(wc -l < SHA256SUMS)" -eq "${#checksummed[@]}"
+            mapfile -t checksum_names < <(cut -d ' ' -f 3- SHA256SUMS)
+            if [[ "${checksum_names[*]}" != "${checksummed[*]}" ]]; then
+              echo "SHA256SUMS does not cover exactly the expected files." >&2
+              exit 1
+            fi
+            while IFS= read -r checksum_line; do
+              checksum_hash="${checksum_line%% *}"
+              checksum_name="${checksum_line#*  }"
+              [[ "$checksum_hash" =~ ^[0-9a-f]{64}$ ]]
+              [[ "$checksum_line" == "$checksum_hash  $checksum_name" ]]
+            done < SHA256SUMS
             sha256sum --check --strict SHA256SUMS
           )
-          test -f "$tarball"
+          for artifact in "${artifacts[@]}"; do
+            test -f "${directory}/${artifact}"
+          done
 
       - name: Create or update GitHub Release
         shell: bash
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
-          tarball=".dev/out/release/finos-morphir-ir-${version}.tgz"
           tag="$GITHUB_REF_NAME"
+          # Everything the artifact carries except the release notes, which are
+          # the release body rather than an asset.
+          mapfile -t uploads < <(find .dev/out/release -maxdepth 1 -type f ! -name release-notes.md -printf '%p\n' | LC_ALL=C sort)
+          test "${#uploads[@]}" -eq 13
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release edit "$tag" \
               --repo "$GITHUB_REPOSITORY" \
@@ -345,7 +430,7 @@ jobs:
               --notes-file .dev/out/release/release-notes.md \
               --title "$tag"
           fi
-          gh release upload "$tag" "$tarball" \
+          gh release upload "$tag" "${uploads[@]}" \
             --repo "$GITHUB_REPOSITORY" \
             --clobber
         env:

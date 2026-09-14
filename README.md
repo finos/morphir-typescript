@@ -93,6 +93,7 @@ Use mise tasks for repository automation:
 | `mise run release:prepare -- VERSION` | Update the suite version and finalize the Keep a Changelog release entry. |
 | `mise run release:validate -- TAG` | Validate a `vVERSION` tag against the suite manifests and changelog. |
 | `mise run release:artifact -- OUTPUT_DIRECTORY` | Build and verify both publishable tarballs in the requested directory. |
+| `mise run release:binaries -- OUTPUT_DIRECTORY` | Compile `mck` and `mck-adapter-typescript` to single-file binaries for every release target. Set `MCK_BINARY_TARGETS=host` to compile only this machine's target. |
 
 To apply formatting and safe lint fixes, run:
 

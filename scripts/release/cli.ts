@@ -3,6 +3,7 @@
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { buildBinaries } from "./binaries.ts";
 import { extractReleaseNotes } from "./changelog.ts";
 import { buildIrArtifact } from "./package-ir.ts";
 import { buildMckArtifact } from "./package-mck.ts";
@@ -15,6 +16,7 @@ const USAGE = [
 	"  release validate TAG",
 	"  release notes VERSION OUTPUT",
 	"  release artifact OUTPUT_DIRECTORY",
+	"  release binaries OUTPUT_DIRECTORY",
 ].join("\n");
 
 export interface ReleaseCliContext {
@@ -23,6 +25,7 @@ export interface ReleaseCliContext {
 	readonly stdout?: (line: string) => void;
 	readonly buildArtifact?: typeof buildIrArtifact;
 	readonly buildMckArtifact?: typeof buildMckArtifact;
+	readonly buildBinaries?: typeof buildBinaries;
 }
 
 function usageError(message?: string): Error {
@@ -83,6 +86,12 @@ export async function runReleaseCli(args: readonly string[], context: ReleaseCli
 		stdout(ir.tarball);
 		const mck = await (context.buildMckArtifact ?? buildMckArtifact)(root, outputDirectory, ir.tarball);
 		stdout(mck.tarball);
+		return;
+	}
+	if (command === "binaries") {
+		if (commandArgs.length !== 1) throw usageError();
+		const outputDirectory = path.resolve(root, commandArgs[0] as string);
+		for (const binary of await (context.buildBinaries ?? buildBinaries)(root, outputDirectory)) stdout(binary);
 		return;
 	}
 	throw usageError(`unknown release command: ${command}`);
