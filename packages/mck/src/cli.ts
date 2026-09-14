@@ -5,6 +5,7 @@
 //   mck kit sync <repository-root> [--force]
 //   mck kit status [--remote]
 //   mck run [--kit <dir>] [--repo-root <dir>] [--adapter <exe> [--adapter-arg <arg>]...] [--report <file>] [--strict] [--only <regex>] [--timeout <ms>]
+//   mck coverage [--kit <dir>] [--repo-root <dir>]
 //   mck --version
 //
 // Plan 1 shipped `check`. Plan 2 adds `kit sync` (vendor the parent
@@ -12,24 +13,28 @@
 // vendored copy still matches kit.lock.json). Plan 2b adds `run`, the driver
 // itself, over the in-process TypeScript binding by default, or over
 // `--adapter <exe>` (a child process speaking the JSON-lines protocol) when
-// given.
+// given; and `coverage` (spec S7), which reports every v4 vocabulary entry
+// (a variant or a member spelling) that no kit case exercises.
 import { execFileSync } from "node:child_process";
 import { readdirSync, statSync } from "node:fs";
 import path from "node:path";
+import { VOCABULARY } from "../../ir/src/versions/v4/index.ts";
+import { coverageGaps, formatGap } from "./coverage/coverage.ts";
 import { runKit as driveKit, exitCodeFor } from "./driver/run.ts";
 import { driverVersion, kitVersion } from "./driver/version.ts";
 import { embeddedKitFiles } from "./kit/embedded-source.ts";
 import { loadKit, loadKitFromFiles } from "./kit/load.ts";
 import { kitStatus, readLock, syncKit } from "./kit/sync.ts";
 import { formatSummary, writeReport } from "./report.ts";
-import { inProcessTestee } from "./testee/in-process.ts";
+import { inProcessTestee, resolveNode } from "./testee/in-process.ts";
 import { processTestee } from "./testee/process.ts";
 
 const USAGE =
-	"usage: mck check <dir> [--json]\n       mck kit sync <repository-root> [--force]\n       mck kit status [--remote]\n       mck run [--kit <dir>] [--repo-root <dir>] [--adapter <exe> [--adapter-arg <arg>]...] [--report <file>] [--strict] [--only <regex>] [--timeout <ms>]\n       mck --version";
+	"usage: mck check <dir> [--json]\n       mck kit sync <repository-root> [--force]\n       mck kit status [--remote]\n       mck run [--kit <dir>] [--repo-root <dir>] [--adapter <exe> [--adapter-arg <arg>]...] [--report <file>] [--strict] [--only <regex>] [--timeout <ms>]\n       mck coverage [--kit <dir>] [--repo-root <dir>]\n       mck --version";
 const KIT_USAGE = "usage: mck kit sync <repository-root> [--force]\n       mck kit status [--remote]";
 const RUN_USAGE =
 	"usage: mck run [--kit <dir>] [--repo-root <dir>] [--adapter <exe> [--adapter-arg <arg>]...] [--report <file>] [--strict] [--only <regex>] [--timeout <ms>]";
+const COVERAGE_USAGE = "usage: mck coverage [--kit <dir>] [--repo-root <dir>]";
 
 function packageRoot(): string {
 	return process.env.MCK_PACKAGE_ROOT ?? path.resolve(import.meta.dirname, "..");
@@ -129,6 +134,55 @@ async function runKitCommand(rest: readonly string[]): Promise<number> {
 function inferredRoot(kitDirectory: string): string | undefined {
 	const normalized = kitDirectory.split(path.sep).join("/");
 	return normalized.endsWith("spec/ir/mck") ? path.resolve(kitDirectory, "..", "..", "..") : undefined;
+}
+
+// The [--kit <dir>] [--repo-root <dir>] pair is shared by `run` and
+// `coverage`; both resolve the same way (embedded kit by default, a checkout
+// otherwise, with the repository root inferred from a spec/ir/mck path).
+interface KitArgs {
+	readonly kit?: string;
+	readonly repoRoot?: string;
+}
+
+type ParsedKitArgs = { readonly ok: true; readonly args: KitArgs } | { readonly ok: false };
+
+function parseKitArgs(rest: readonly string[]): ParsedKitArgs {
+	let kit: string | undefined;
+	let repoRoot: string | undefined;
+	for (let i = 0; i < rest.length; i++) {
+		const arg = rest[i];
+		if (arg === "--kit" || arg === "--repo-root") {
+			const value = rest[++i];
+			if (value === undefined) return { ok: false };
+			if (arg === "--kit") kit = value;
+			else repoRoot = value;
+		} else {
+			return { ok: false };
+		}
+	}
+	return { ok: true, args: { kit, repoRoot } };
+}
+
+async function loadKitFor(args: KitArgs): ReturnType<typeof loadKit> {
+	return args.kit === undefined
+		? loadKitFromFiles(embeddedKitFiles())
+		: loadKit(path.resolve(args.kit), args.repoRoot === undefined ? inferredRoot(path.resolve(args.kit)) : path.resolve(args.repoRoot));
+}
+
+async function runCoverage(rest: readonly string[]): Promise<number> {
+	const parsed = parseKitArgs(rest);
+	if (!parsed.ok) {
+		console.error(COVERAGE_USAGE);
+		return 2;
+	}
+	const kit = await loadKitFor(parsed.args);
+	const gaps = coverageGaps(kit, VOCABULARY, resolveNode);
+	if (gaps.length === 0) {
+		console.log("coverage: every vocabulary entry has a case");
+		return 0;
+	}
+	for (const g of gaps) console.log(formatGap(g));
+	return 1;
 }
 
 const DEFAULT_TIMEOUT_MS = 30000;
@@ -235,6 +289,14 @@ async function main(argv: readonly string[]): Promise<number> {
 	if (command === "run") {
 		try {
 			return await runRun(rest);
+		} catch (error) {
+			console.error(`error: ${(error as Error).message}`);
+			return 1;
+		}
+	}
+	if (command === "coverage") {
+		try {
+			return await runCoverage(rest);
 		} catch (error) {
 			console.error(`error: ${(error as Error).message}`);
 			return 1;

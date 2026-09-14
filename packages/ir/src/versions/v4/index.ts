@@ -43,6 +43,8 @@ import { readIRFile, SUPPORTED_VERSIONS } from "./read-distribution.ts";
 import { readFQName, readName, readPath } from "./read-names.ts";
 import { readType, readTypeDefinition, readTypeSpecification } from "./read-types.ts";
 import { readLiteral, readPattern, readValue, readValueDefinition, readValueSpecification } from "./read-values.ts";
+import type { VocabularyEntry, VocabularySpelling } from "./vocabulary.ts";
+import { VOCABULARY } from "./vocabulary.ts";
 import {
 	writeAccessControlledTypeDefinition,
 	writeAccessControlledValueDefinition,
@@ -357,3 +359,8 @@ export const json = {
 	readNodeChecked,
 	writeNode,
 };
+
+// ------------------------------------------------------------- vocabulary
+
+export type { VocabularyEntry, VocabularySpelling };
+export { VOCABULARY };

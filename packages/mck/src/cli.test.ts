@@ -221,6 +221,27 @@ describe("mck run", () => {
 	});
 });
 
+describe("mck coverage", () => {
+	test("a kit missing a variant's case reports the gap and exits 1", () => {
+		const kitDir = path.join(temp(), "spec", "ir", "mck");
+		mkdirSync(kitDir, { recursive: true });
+		writeFileSync(path.join(kitDir, "types.md"), '## types-0001: t {node=Type}\n```json canonical\n{ "Reference": ["a:b#c"] }\n```\n');
+		const r = run(["coverage", "--kit", kitDir]);
+		expect(r.code).toBe(1);
+		expect(r.out).toMatch(/^Type\/Tuple has no case$/m);
+	});
+	test("an unknown flag is a usage error", () => {
+		const r = run(["coverage", "--frobnicate"]);
+		expect(r.code).toBe(2);
+		expect(r.err).toMatch(/^usage: mck coverage /m);
+	});
+	test("a flag missing its operand at the end of argv is a usage error", () => {
+		const r = run(["coverage", "--kit"]);
+		expect(r.code).toBe(2);
+		expect(r.err).toMatch(/^usage: mck coverage /m);
+	});
+});
+
 describe("mck --version", () => {
 	test("prints the driver's package version", () => {
 		const r = run(["--version"]);
