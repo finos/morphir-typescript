@@ -2,7 +2,7 @@
 	"$schema": "http://json-schema.org/draft-07/schema#",
 	"$id": "https://morphir.finos.org/spec/ir/mck/protocol.schema.json",
 	"title": "Morphir Compatibility Kit adapter protocol",
-	"description": "Contract version 1 of the JSON-lines adapter protocol between the mck driver and a testee adapter. Normative: spec S6.",
+	"description": "Contract version 1 of the JSON-lines adapter protocol between the mck driver and a testee adapter. Normative: spec S6. Every message rejects unknown fields (additionalProperties: false throughout); the contract extends only through contractVersion, never through an added-but-ignored key.",
 	"definitions": {
 		"Profile": { "type": "string", "enum": ["json", "yaml"] },
 		"Layout": { "type": "string", "enum": ["single", "tree"] },
@@ -55,7 +55,10 @@
 						"contractVersion": { "const": 1 },
 						"binding": { "type": "string" },
 						"language": { "type": "string" },
-						"versions": { "type": "array", "items": { "type": "integer", "minimum": 1 } },
+						"versions": {
+							"type": "array",
+							"items": { "type": "integer", "minimum": 1, "description": "A positive integer IR version this binding supports." }
+						},
 						"profiles": { "type": "array", "items": { "$ref": "#/definitions/Profile" } },
 						"layouts": { "type": "array", "items": { "$ref": "#/definitions/Layout" } },
 						"paths": { "type": "array", "items": { "$ref": "#/definitions/PathMode" } }
