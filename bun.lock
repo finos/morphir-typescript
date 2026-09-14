@@ -4,7 +4,6 @@
   "workspaces": {
     "": {
       "name": "morphir-typescript",
-      "version": "0.0.1",
       "devDependencies": {
         "@biomejs/biome": "2.5.12",
         "@types/bun": "1.4.1",
@@ -25,6 +24,9 @@
       "version": "0.0.1",
       "bin": {
         "mck": "./src/cli.ts",
+      },
+      "dependencies": {
+        "@finos/morphir-ir": "workspace:*",
       },
     },
   },
