@@ -25,8 +25,6 @@ Run that command before opening or updating a pull request. When adding or chang
 3. Run an individual task such as `mise run check:lint`, `mise run check:typecheck`, `mise run test`, `mise run check:package`, or `mise run check:workflows` to isolate a failure.
 4. Confirm the workflow checker with `mise exec -- actionlint -version` when diagnosing tool installation.
 
-Standalone CI temporarily sets `MORPHIR_FIXTURES_OPTIONAL=1` in the test task because the authoritative upstream fixtures and MCK corpus are not acquired yet. The handoff comment in `.config/mise/tasks/test.ts` defines the conditions for removing this opt-out.
-
 ## Publishing
 
 Releases use one suite version and one signed `vVERSION` tag for every workspace. The initial `0.0.1` release publishes only `@finos/morphir-ir`; `@finos/morphir-mck` stays private. The release validator is the authority for accepted tags, manifest versions, package visibility, and changelog state. Signed tags are an operator requirement. The workflow validates exact tag syntax and `main` ancestry but does not cryptographically verify tag signatures.

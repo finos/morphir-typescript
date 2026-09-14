@@ -3,12 +3,8 @@
 // process. YAML and text fences are skipped until the YAML profile lands (plan 2c).
 // Run with: bun test packages/ir/test/mck.test.ts   (MORPHIR_MCK_DIR overrides the kit path)
 import { describe, expect, test } from "bun:test";
-import { existsSync } from "node:fs";
-import path from "node:path";
-import { type KitCase, loadKit } from "@finos/morphir-mck";
+import { embeddedKitFiles, type KitCase, loadKit, loadKitFromFiles } from "@finos/morphir-mck";
 import { NODE_ALIASES, type NodeKind, nodeKindOf, readNodeChecked, stripNode, writeNode } from "../src/versions/v4/index.ts";
-
-const kitDir = process.env.MORPHIR_MCK_DIR ?? path.resolve(import.meta.dir, "../../../../../spec/ir/mck");
 
 // The kit names a node; this is the node kind that name reads as, including the
 // kit's own spellings that differ from the module's.
@@ -36,12 +32,7 @@ const NODES: ReadonlyMap<string, NodeKind> = new Map<string, NodeKind>([
 	...Object.entries(NODE_ALIASES),
 ]);
 
-// A missing kit means the whole runner silently reports nothing, so it is an
-// error here unless a caller has said it is running without the fixtures.
-if (!existsSync(kitDir) && process.env.MORPHIR_FIXTURES_OPTIONAL !== "1") {
-	throw new Error(`the Morphir Compatibility Kit not found at ${kitDir}; set MORPHIR_FIXTURES_OPTIONAL=1 to skip`);
-}
-const kit = existsSync(kitDir) ? await loadKit(kitDir) : null;
+const kit = process.env.MORPHIR_MCK_DIR ? await loadKit(process.env.MORPHIR_MCK_DIR) : await loadKitFromFiles(embeddedKitFiles());
 let checked = 0;
 let skipped = 0;
 
@@ -98,8 +89,7 @@ function runCase(c: KitCase, node: NodeKind): void {
 	}
 }
 
-describe.skipIf(kit === null)("Morphir Compatibility Kit (JSON fences)", () => {
-	if (kit === null) return;
+describe("Morphir Compatibility Kit (JSON fences)", () => {
 	test("the kit parses cleanly", () => {
 		expect(kit.errors).toEqual([]);
 	});
