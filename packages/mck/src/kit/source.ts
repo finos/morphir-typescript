@@ -35,10 +35,19 @@ function walk(directory: string, prefix: string, out: string[]): void {
 	}
 }
 
-// A relative path must stay inside its root: no absolute paths and no "..".
+// A relative path must stay inside its root: no absolute paths, no "..", and
+// no backslashes (repository-relative keys are POSIX; a backslash-separated
+// payload such as "..\\secret.txt" has no "/" segment equal to ".." and must
+// be rejected before it reaches path.join, which would otherwise treat it as
+// a single literal segment on POSIX but walk out of root on Windows). As a
+// second line of defense, the resolved path is required to stay under root
+// after resolution, in case some other segment shape sneaks past the checks
+// above.
 function safeJoin(root: string, relativePath: string): string | null {
-	if (path.isAbsolute(relativePath) || relativePath.split("/").includes("..")) return null;
-	return path.join(root, ...relativePath.split("/"));
+	if (path.isAbsolute(relativePath) || relativePath.includes("\\") || relativePath.split("/").includes("..")) return null;
+	const resolved = path.resolve(root, ...relativePath.split("/"));
+	if (resolved !== root && !resolved.startsWith(root + path.sep)) return null;
+	return resolved;
 }
 
 export function kitFilesFromDirectory(kitDirectory: string, repositoryRoot?: string): KitFiles {

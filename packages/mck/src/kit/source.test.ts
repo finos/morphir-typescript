@@ -39,6 +39,26 @@ describe("kitFilesFromDirectory", () => {
 		expect(kitFilesFromDirectory(kit).read("website/x.json")).toBeNull();
 		expect(kitFilesFromDirectory(kit).read("../../etc/passwd")).toBeNull();
 	});
+	test("rejects backslash-separated traversal payloads even though a root is given", () => {
+		const root = temp();
+		const kit = path.join(root, "spec", "ir", "mck");
+		mkdirSync(kit, { recursive: true });
+		// A file placed exactly where the traversal payloads would land if the
+		// backslash segment were naively joined instead of rejected: one level
+		// above root (".."), which is where "..\\secret.txt" resolves on
+		// Windows, and the same place "spec/ir/mck/..\\..\\secret.txt" resolves
+		// once its POSIX segments walk back up into the kit directory.
+		const secret = path.join(path.dirname(root), "secret.txt");
+		writeFileSync(secret, "top secret\n");
+		try {
+			const files = kitFilesFromDirectory(kit, root);
+			expect(files.read("..\\secret.txt")).toBeNull();
+			expect(files.read("spec/ir/mck/..\\..\\secret.txt")).toBeNull();
+			expect(files.display("..\\secret.txt")).toBe("..\\secret.txt");
+		} finally {
+			rmSync(secret, { force: true });
+		}
+	});
 });
 
 describe("loadKitFromFiles", () => {
