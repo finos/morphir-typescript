@@ -8,7 +8,7 @@ import { describe, expect, test } from "bun:test";
 import { newRoot } from "../../codec/json/cursor.ts";
 import { parseJson } from "../../codec/json/value.ts";
 import { Name } from "../../model/names.ts";
-import { json, type NodeValue, nodeKindOf, yaml } from "./index.ts";
+import { json, type NodeValue, nodeKindOf, stripNode, yaml } from "./index.ts";
 import { readModuleManifestFile } from "./read-tree-files.ts";
 
 const MANIFEST = '{ "formatVersion": 4, "distribution": "Library", "package": "my-org/my-project", "pathBudget": 4000 }';
@@ -33,6 +33,37 @@ def:
       typeParams: []
       typeExp: morphir/SDK:string#string
 `;
+
+// The kit's document-tree-0005 files, verbatim, and what they come back as
+// once the reserved $meta is dropped.
+const META_MANIFEST_YAML = `formatVersion: 4
+distribution: Library
+package: my-org/my-project
+pathBudget: 4000
+$meta:
+  generator: example
+`;
+const META_MANIFEST_WRITTEN = `formatVersion: 4
+distribution: Library
+package: my-org/my-project
+pathBudget: 4000
+`;
+const META_MODULE_YAML = `formatVersion: 4
+path: domain
+types: []
+values: []
+$meta:
+  generator: example
+`;
+const META_MODULE_WRITTEN = `formatVersion: 4
+path: domain
+types: []
+values: []
+`;
+
+// An expanded type expression that carries attributes, so stripNode has
+// something to clear: cleared, a Variable is written as its bare name.
+const ATTRIBUTED_VARIABLE = '{ "Variable": { "attributes": { "source": { "startLine": 1, "startColumn": 1, "endLine": 1, "endColumn": 2 } }, "name": "a" } }';
 
 const node = (r: ReturnType<typeof json.readNode>): NodeValue => {
 	if (!r.ok) throw new Error(`${r.error.code}: ${r.error.message}`);
@@ -80,6 +111,12 @@ describe("the distribution manifest file", () => {
 		);
 	});
 
+	test("the kit's document-tree-0005 manifest drops its $meta", () => {
+		const r = yaml.readNode("DistributionManifestFile", META_MANIFEST_YAML);
+		if (!r.ok) throw new Error(`${r.error.code}: ${r.error.message}`);
+		expect(yaml.writeNode(r.value)).toBe(META_MANIFEST_WRITTEN);
+	});
+
 	test("version, created and layout are read and discarded", () => {
 		const text =
 			'{ "formatVersion": 4, "distribution": "Library", "package": "p", "pathBudget": 4000, "version": "1.2.3", "created": "2026-01-01", "layout": "tree" }';
@@ -90,12 +127,18 @@ describe("the distribution manifest file", () => {
 
 	test("a pathBudget under 64 is invalid_type", () => {
 		const text = '{ "formatVersion": 4, "distribution": "Library", "package": "p", "pathBudget": 63 }';
-		expect(codeOf(json.readNode("DistributionManifestFile", text))).toBe("invalid_type");
+		expect(json.readNode("DistributionManifestFile", text)).toMatchObject({
+			ok: false,
+			error: { code: "invalid_type", cursor: "/pathBudget", message: "pathBudget must be an integer of at least 64" },
+		});
 	});
 
 	test("a non-integer pathBudget is invalid_type", () => {
 		const text = '{ "formatVersion": 4, "distribution": "Library", "package": "p", "pathBudget": 4000.5 }';
-		expect(codeOf(json.readNode("DistributionManifestFile", text))).toBe("invalid_type");
+		expect(json.readNode("DistributionManifestFile", text)).toMatchObject({
+			ok: false,
+			error: { code: "invalid_type", message: "pathBudget must be an integer of at least 64" },
+		});
 	});
 
 	test("an unknown distribution kind is invalid_distribution_shape", () => {
@@ -106,6 +149,11 @@ describe("the distribution manifest file", () => {
 	test("an unsupported format version is refused", () => {
 		const text = '{ "formatVersion": 3, "distribution": "Library", "package": "p", "pathBudget": 4000 }';
 		expect(json.readNode("DistributionManifestFile", text).ok).toBe(false);
+	});
+
+	test("an Application with no entry points writes no entryPoints member", () => {
+		const text = '{ "formatVersion": 4, "distribution": "Application", "package": "my-org/app", "pathBudget": 4000 }';
+		expect(json.writeNode(node(json.readNode("DistributionManifestFile", text)))).toBe(text);
 	});
 });
 
@@ -123,7 +171,10 @@ describe("the module manifest file", () => {
 
 	test('"path" and "module" together is unknown_member', () => {
 		const text = '{ "formatVersion": 4, "path": "domain", "module": "domain" }';
-		expect(codeOf(json.readNode("ModuleManifestFile", text))).toBe("unknown_member");
+		expect(json.readNode("ModuleManifestFile", text)).toMatchObject({
+			ok: false,
+			error: { code: "unknown_member", cursor: "/module", message: "module is the legacy spelling of path; write only one" },
+		});
 	});
 
 	test("neither is missing_member", () => {
@@ -158,6 +209,12 @@ describe("the module manifest file", () => {
 		expect(json.writeNode(node(json.readNode("ModuleManifestFile", text)))).toBe('{ "formatVersion": 4, "path": "domain", "types": [], "values": [] }');
 	});
 
+	test("the kit's document-tree-0005 module manifest drops its $meta", () => {
+		const r = yaml.readNode("ModuleManifestFile", META_MODULE_YAML);
+		if (!r.ok) throw new Error(`${r.error.code}: ${r.error.message}`);
+		expect(yaml.writeNode(r.value)).toBe(META_MODULE_WRITTEN);
+	});
+
 	test("fileNames maps a listed name to its escaped stem and round-trips", () => {
 		const text =
 			'{ "formatVersion": 4, "path": "domain", "types": ["customer-relationship-management-record"], "values": [], "fileNames": { "customer-relationship-management-record": "customer-relati__44a101f8" } }';
@@ -166,7 +223,10 @@ describe("the module manifest file", () => {
 
 	test("a fileNames key that is not listed under types or values is invalid_distribution_shape", () => {
 		const text = '{ "formatVersion": 4, "path": "domain", "types": ["user"], "values": [], "fileNames": { "other": "other" } }';
-		expect(codeOf(json.readNode("ModuleManifestFile", text))).toBe("invalid_distribution_shape");
+		expect(json.readNode("ModuleManifestFile", text)).toMatchObject({
+			ok: false,
+			error: { code: "invalid_distribution_shape", cursor: "/fileNames/other", message: "fileNames key not listed in types or values" },
+		});
 	});
 
 	test("a fileNames stem that is not an escaped stem is invalid_name", () => {
@@ -191,6 +251,27 @@ describe("the module manifest file", () => {
 		if (!r.ok) throw new Error(`${r.error.code}: ${r.error.message}`);
 		expect(r.value.types.style).toBe("specifications");
 		expect(json.writeNode({ node: "ModuleManifestFile", value: r.value })).toBe(text);
+	});
+
+	test('an access-controlled entry under expect: "specifications" is invalid_distribution_shape', () => {
+		const text =
+			'{ "formatVersion": 4, "path": "domain", "types": { "user": { "Public": { "TypeAliasDefinition": { "typeParams": [], "typeExp": "morphir/SDK:string#string" } } } }, "values": [] }';
+		const parsed = parseJson(text);
+		if (!parsed.ok) throw new Error(parsed.error.message);
+		expect(readModuleManifestFile(parsed.value, newRoot(), { expect: "specifications" })).toMatchObject({
+			ok: false,
+			error: { code: "invalid_distribution_shape", cursor: "/types/user", message: "expected a specification, found an access-controlled definition" },
+		});
+	});
+
+	test('an "access" spelled entry under expect: "specifications" is caught too', () => {
+		const text = '{ "formatVersion": 4, "path": "domain", "types": { "user": { "access": "Public", "OpaqueTypeSpecification": {} } }, "values": [] }';
+		const parsed = parseJson(text);
+		if (!parsed.ok) throw new Error(parsed.error.message);
+		expect(readModuleManifestFile(parsed.value, newRoot(), { expect: "specifications" })).toMatchObject({
+			ok: false,
+			error: { code: "invalid_distribution_shape", cursor: "/types/user" },
+		});
 	});
 
 	test("names style keeps the canonical spelling of every name", () => {
@@ -254,5 +335,87 @@ describe("the type and value definition files", () => {
 	test("def and spec together on a value file is invalid_distribution_shape", () => {
 		const text = '{ "formatVersion": 4, "name": "x", "def": { "Public": {} }, "spec": { "output": "morphir/SDK:basics#int" } }';
 		expect(codeOf(json.readNode("ValueDefinitionFile", text))).toBe("invalid_distribution_shape");
+	});
+
+	test("a spec-bodied value file has no variant of its own to report", () => {
+		const text = '{ "formatVersion": 4, "name": "get-user", "spec": { "output": "morphir/SDK:basics#int" } }';
+		expect(nodeKindOf(node(json.readNode("ValueDefinitionFile", text)))).toBe("ValueSpecification");
+	});
+});
+
+// A file that does not say which format it is in is missing the version, not
+// missing a member: all four kinds answer what readIRFile answers for a
+// single-file document.
+describe("a file with no formatVersion", () => {
+	const cases: readonly (readonly [string, string])[] = [
+		["DistributionManifestFile", '{ "distribution": "Library", "package": "p", "pathBudget": 4000 }'],
+		["ModuleManifestFile", '{ "path": "domain", "types": [], "values": [] }'],
+		["TypeDefinitionFile", '{ "name": "user", "spec": { "OpaqueTypeSpecification": {} } }'],
+		["ValueDefinitionFile", '{ "name": "get-user", "spec": { "output": "morphir/SDK:basics#int" } }'],
+	];
+	for (const [kind, text] of cases) {
+		test(`${kind} reports missing_format_version`, () => {
+			expect(codeOf(json.readNode(kind as "DistributionManifestFile", text))).toBe("missing_format_version");
+		});
+	}
+});
+
+describe("stripNode clears the attributes the tree files carry", () => {
+	const stripped = (kind: "ModuleManifestFile" | "TypeDefinitionFile" | "ValueDefinitionFile", text: string): string =>
+		json.writeNode(stripNode(node(json.readNode(kind, text))));
+
+	test("a definitions-style module manifest clears its type and value attributes", () => {
+		const text = `{ "formatVersion": 4, "path": "domain", "types": { "user": { "Public": { "TypeAliasDefinition": { "typeParams": [], "typeExp": ${ATTRIBUTED_VARIABLE} } } } }, "values": [] }`;
+		expect(stripped("ModuleManifestFile", text)).toBe(
+			'{ "formatVersion": 4, "path": "domain", "types": { "user": { "Public": { "TypeAliasDefinition": { "typeParams": [], "typeExp": "a" } } } }, "values": [] }',
+		);
+	});
+
+	test("a specifications-style module manifest clears them too", () => {
+		const text = `{ "formatVersion": 4, "path": "domain", "types": { "user": { "TypeAliasSpecification": { "typeParams": [], "typeExp": ${ATTRIBUTED_VARIABLE} } } }, "values": [] }`;
+		const parsed = parseJson(text);
+		if (!parsed.ok) throw new Error(parsed.error.message);
+		const r = readModuleManifestFile(parsed.value, newRoot(), { expect: "specifications" });
+		if (!r.ok) throw new Error(`${r.error.code}: ${r.error.message}`);
+		expect(json.writeNode(stripNode({ node: "ModuleManifestFile", value: r.value }))).toBe(
+			'{ "formatVersion": 4, "path": "domain", "types": { "user": { "TypeAliasSpecification": { "typeParams": [], "typeExp": "a" } } }, "values": [] }',
+		);
+	});
+
+	test("a names-style module manifest comes back unchanged", () => {
+		const v = node(json.readNode("ModuleManifestFile", MODULE));
+		expect(stripNode(v)).toEqual(v);
+		expect(json.writeNode(stripNode(v))).toBe(MODULE);
+	});
+
+	test("a def-bodied type file clears its type attributes", () => {
+		const text = `{ "formatVersion": 4, "name": "user", "def": { "Public": { "TypeAliasDefinition": { "typeParams": [], "typeExp": ${ATTRIBUTED_VARIABLE} } } } }`;
+		expect(stripped("TypeDefinitionFile", text)).toBe(
+			'{ "formatVersion": 4, "name": "user", "def": { "Public": { "TypeAliasDefinition": { "typeParams": [], "typeExp": "a" } } } }',
+		);
+	});
+
+	test("a spec-bodied type file clears its type attributes", () => {
+		const text = `{ "formatVersion": 4, "name": "user", "spec": { "TypeAliasSpecification": { "typeParams": [], "typeExp": ${ATTRIBUTED_VARIABLE} } } }`;
+		expect(stripped("TypeDefinitionFile", text)).toBe(
+			'{ "formatVersion": 4, "name": "user", "spec": { "TypeAliasSpecification": { "typeParams": [], "typeExp": "a" } } }',
+		);
+	});
+
+	test("a def-bodied value file clears its attributes", () => {
+		const text = `{ "formatVersion": 4, "name": "get-user", "def": { "Public": { "ExpressionBody": { "inputTypes": {}, "outputType": ${ATTRIBUTED_VARIABLE}, "body": { "Literal": { "IntegerLiteral": 42 } } } } } }`;
+		expect(stripped("ValueDefinitionFile", text)).toBe(
+			'{ "formatVersion": 4, "name": "get-user", "def": { "Public": { "ExpressionBody": { "inputTypes": {}, "outputType": "a", "body": { "Literal": { "IntegerLiteral": 42 } } } } } }',
+		);
+	});
+
+	test("a spec-bodied value file clears its attributes", () => {
+		const text = `{ "formatVersion": 4, "name": "get-user", "spec": { "output": ${ATTRIBUTED_VARIABLE} } }`;
+		expect(stripped("ValueDefinitionFile", text)).toBe('{ "formatVersion": 4, "name": "get-user", "spec": { "output": "a" } }');
+	});
+
+	test("a distribution manifest has nothing to clear", () => {
+		const v = node(json.readNode("DistributionManifestFile", MANIFEST));
+		expect(stripNode(v)).toBe(v);
 	});
 });

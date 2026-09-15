@@ -84,6 +84,9 @@ function rootWithoutMeta(ctx: Ctx, v: JsonValue): Result<JsonObject, Diagnostic>
 	return ok(o.value.members.has("$meta") ? jsonObject([...o.value.members].filter(([key]) => key !== "$meta")) : o.value);
 }
 
+// Read before the member check and listed as optional there, so a file with no
+// formatVersion answers missing_format_version — what readIRFile answers for a
+// single-file document — rather than a plain missing_member.
 function readFileFormatVersion(ctx: Ctx, o: JsonObject): Result<FormatVersion, Diagnostic> {
 	const recognized = readFormatVersionMember(ctx, o);
 	if (!recognized.ok) return recognized;
@@ -129,10 +132,10 @@ function readDiscardedString(ctx: Ctx, m: ReadonlyMap<string, JsonValue>, key: s
 export function readDistributionManifestFile(v: JsonValue, ctx: Ctx = newRoot()): Result<DistributionManifestFile, Diagnostic> {
 	const o = rootWithoutMeta(ctx, v);
 	if (!o.ok) return o;
-	const m = members(ctx, o.value, ["formatVersion", "distribution", "package", "pathBudget"], ["dependencies", "entryPoints", "version", "created", "layout"]);
-	if (!m.ok) return m;
 	const formatVersion = readFileFormatVersion(ctx, o.value);
 	if (!formatVersion.ok) return formatVersion;
+	const m = members(ctx, o.value, ["distribution", "package", "pathBudget"], ["formatVersion", "dependencies", "entryPoints", "version", "created", "layout"]);
+	if (!m.ok) return m;
 
 	const kind = expectString(at(ctx, "distribution"), m.value.get("distribution") as JsonValue);
 	if (!kind.ok) return kind;
@@ -195,6 +198,16 @@ function readManifestDoc(ctx: Ctx, m: ReadonlyMap<string, JsonValue>): Result<st
 
 export type ModuleEntryExpectation = "definitions" | "specifications";
 
+// The two shapes readAccessControlled recognizes: "access" beside the payload,
+// or the tag form under a lone Public/Private key. Used only to tell a
+// definition from a specification when the caller said which it expected.
+function isAccessControlled(v: JsonValue): boolean {
+	if (!isObject(v)) return false;
+	if (v.members.has("access")) return true;
+	const keys = [...v.members.keys()];
+	return keys.length === 1 && (keys[0] === "Public" || keys[0] === "Private");
+}
+
 // Which of the two object styles a `types` or `values` object is read as is
 // the caller's to say: the layout knows the distribution kind, and guessing
 // from the shape would make a Specs tree whose specification happens to look
@@ -218,7 +231,12 @@ function readModuleEntries<TDef, TSpec>(
 	}
 	if (!isObject(raw)) return fail(ctx, "invalid_type", `expected an array of names or an object of entries, found ${describeJson(raw)}`, raw);
 	if (expect === "specifications") {
-		const items: Result<readonly Named<TSpec>[], Diagnostic> = readNamedMap(ctx, raw, readSpec);
+		// A definition where a specification was expected is a mistake about what
+		// the tree holds, so it is reported as one here rather than reaching the
+		// specification reader and coming back as an unknown variant wrapper.
+		const guarded: Read<TSpec> = (c, x) =>
+			isAccessControlled(x) ? fail(c, "invalid_distribution_shape", "expected a specification, found an access-controlled definition", x) : readSpec(c, x);
+		const items: Result<readonly Named<TSpec>[], Diagnostic> = readNamedMap(ctx, raw, guarded);
 		return items.ok ? ok({ style: "specifications", items: items.value }) : items;
 	}
 	const items: Result<readonly Named<TDef>[], Diagnostic> = readNamedMap(ctx, raw, readDef);
@@ -261,10 +279,10 @@ export function readModuleManifestFile(
 	const expect: ModuleEntryExpectation = options.expect ?? "definitions";
 	const o = rootWithoutMeta(ctx, v);
 	if (!o.ok) return o;
-	const m = members(ctx, o.value, ["formatVersion"], ["path", "module", "access", "doc", "types", "values", "fileNames"]);
-	if (!m.ok) return m;
 	const formatVersion = readFileFormatVersion(ctx, o.value);
 	if (!formatVersion.ok) return formatVersion;
+	const m = members(ctx, o.value, [], ["formatVersion", "path", "module", "access", "doc", "types", "values", "fileNames"]);
+	if (!m.ok) return m;
 
 	// "module" is an accepted spelling of "path" rather than a legacy one in
 	// decision 0006's window, so it is not read through windowed() and never
@@ -349,10 +367,10 @@ function readNodeFilePreamble(
 ): Result<{ readonly o: JsonObject; readonly m: ReadonlyMap<string, JsonValue>; readonly formatVersion: FormatVersion; readonly name: Name }, Diagnostic> {
 	const o = rootWithoutMeta(ctx, v);
 	if (!o.ok) return o;
-	const m = members(ctx, o.value, ["formatVersion", "name"], ["def", "spec"]);
-	if (!m.ok) return m;
 	const formatVersion = readFileFormatVersion(ctx, o.value);
 	if (!formatVersion.ok) return formatVersion;
+	const m = members(ctx, o.value, ["name"], ["formatVersion", "def", "spec"]);
+	if (!m.ok) return m;
 	const name = readName(at(ctx, "name"), m.value.get("name") as JsonValue);
 	if (!name.ok) return name;
 	return ok({ o: o.value, m: m.value, formatVersion: formatVersion.value, name: name.value });

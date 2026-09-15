@@ -35,7 +35,10 @@ export function writeDistributionManifestFile(f: DistributionManifestFile): Json
 		["pathBudget", jsonNumber(String(f.pathBudget))],
 	];
 	if (f.dependencies.length > 0) entries.push(["dependencies", f.dependencies.map((p) => PackageName.canonical(p))]);
-	if (f.distribution === "Application") entries.push(["entryPoints", writeEntryPoints(f.entryPoints)]);
+	// Only an Application may carry entry points, and only then when it has any:
+	// an empty member would only repeat the default, the way an empty
+	// "dependencies" or "fileNames" would.
+	if (f.distribution === "Application" && f.entryPoints.length > 0) entries.push(["entryPoints", writeEntryPoints(f.entryPoints)]);
 	return jsonObject(entries);
 }
 
