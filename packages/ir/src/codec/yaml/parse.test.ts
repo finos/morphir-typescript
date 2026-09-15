@@ -16,6 +16,11 @@ const value = (text: string) => {
 	if (!r.ok) throw new Error(`${r.error.code}: ${r.error.message}`);
 	return r.value;
 };
+const j = (text: string) => {
+	const r = parseJson(text);
+	if (!r.ok) throw new Error(r.error.message);
+	return r.value;
+};
 
 describe("parseYaml scalars", () => {
 	test("plain scalars resolve like YAML 1.2 core minus the profile's exclusions", () => {
@@ -41,6 +46,10 @@ describe("parseYaml scalars", () => {
 		expect(value("5.")).toEqual({ kind: "number", text: "5.0" });
 		expect(value("+1")).toEqual({ kind: "number", text: "1" });
 	});
+	test("a lexeme JSON already accepts passes through unchanged, exponent case included", () => {
+		expect(value("1.5E3")).toEqual({ kind: "number", text: "1.5E3" });
+		expect(value("42")).toEqual({ kind: "number", text: "42" });
+	});
 	test("octal, hex and non-finite numbers are rejected", () => {
 		expect(fail("0o17")).toMatchObject({ code: "invalid_literal", stage: "syntax" });
 		expect(fail("0x1F")).toMatchObject({ code: "invalid_literal" });
@@ -48,17 +57,26 @@ describe("parseYaml scalars", () => {
 		expect(fail("-.inf").code).toBe("invalid_literal");
 		expect(fail(".nan").code).toBe("invalid_literal");
 	});
+	test("leading zeros are rejected", () => {
+		expect(fail("017")).toMatchObject({ code: "invalid_literal", message: "leading zeros are not part of the profile" });
+		expect(fail("007").code).toBe("invalid_literal");
+		expect(fail("-00").code).toBe("invalid_literal");
+		expect(fail("00.5")).toMatchObject({ code: "invalid_literal", message: "leading zeros are not part of the profile" });
+		expect(value("0")).toEqual({ kind: "number", text: "0" });
+		expect(value("0.5")).toEqual({ kind: "number", text: "0.5" });
+		expect(value("-0")).toEqual({ kind: "number", text: "-0" });
+		expect(value("0e3")).toEqual({ kind: "number", text: "0e3" });
+	});
 });
 
 describe("parseYaml structures", () => {
 	test("mappings keep member order and sequences keep item order; equal to parseJson", () => {
 		const y = value("formatVersion: 4\ndistribution:\n  Library:\n    packageName: example\n    dependencies: {}\n    def:\n      modules: {}\n");
-		const j = parseJson('{ "formatVersion": 4, "distribution": { "Library": { "packageName": "example", "dependencies": {}, "def": { "modules": {} } } } }');
-		expect(j.ok && y).toEqual(j.ok ? j.value : null);
+		expect(y).toEqual(j('{ "formatVersion": 4, "distribution": { "Library": { "packageName": "example", "dependencies": {}, "def": { "modules": {} } } } }'));
 	});
 	test("flow collections", () => {
-		expect(value('Reference: ["morphir/SDK:list#list", a]')).toEqual(value('{ "Reference": ["morphir/SDK:list#list", "a"] }'));
-		expect(value("types: [user, user-ID]\nvalues: []\n")).toEqual(value('{ "types": ["user", "user-ID"], "values": [] }'));
+		expect(value('Reference: ["morphir/SDK:list#list", a]')).toEqual(j('{ "Reference": ["morphir/SDK:list#list", "a"] }'));
+		expect(value("types: [user, user-ID]\nvalues: []\n")).toEqual(j('{ "types": ["user", "user-ID"], "values": [] }'));
 	});
 	test("comments are ignored", () => {
 		expect(value("# leading\na: 1 # trailing\n")).toEqual(value("a: 1"));
@@ -83,6 +101,12 @@ describe("parseYaml rejections", () => {
 	test("non-string keys", () => {
 		expect(fail("1: a\n")).toMatchObject({ code: "invalid_type", message: "mapping keys must be strings", cursor: "/" });
 		expect(fail("? [a]\n: b\n").code).toBe("invalid_type");
+	});
+	test("an alias used as a mapping key is rejected as an unsupported feature, not a non-string key", () => {
+		// The explicit-key form lets the alias key be visited before its anchor
+		// is defined later in the same document, so this exercises the key path
+		// rather than the anchor-at-definition rejection covered above.
+		expect(fail("? *x\n: 1\na: &x k\n")).toMatchObject({ code: "unsupported_yaml_feature", message: "anchors and aliases are not part of the profile" });
 	});
 	test("parser errors carry a location", () => {
 		const e = fail("a: [1, 2\n");

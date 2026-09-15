@@ -30,6 +30,8 @@ const INT = /^[-+]?[0-9]+$/;
 const FLOAT = /^[-+]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?$/;
 const NON_FINITE = /^[-+]?\.(inf|Inf|INF|nan|NaN|NAN)$/;
 const OCTAL_OR_HEX = /^0[ox][0-9a-fA-F]+$/;
+const LEADING_ZERO = /^[-+]?0[0-9]/;
+const JSON_NUMBER = /^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$/;
 const NULLS = new Set(["null", "Null", "NULL", "~", ""]);
 const TRUES = new Set(["true", "True", "TRUE"]);
 const FALSES = new Set(["false", "False", "FALSE"]);
@@ -51,8 +53,11 @@ function pointer(path: readonly string[]): string {
 
 // A YAML float that JSON cannot spell (".5", "5.", "+1") is rewritten to the
 // shortest JSON lexeme with the same value; the IR literal readers only ever see
-// JSON lexemes, and the rewrite changes no value.
+// JSON lexemes, and the rewrite changes no value. A lexeme JSON already accepts
+// (e.g. "1.5E3") passes through untouched, so its spelling — including the
+// exponent marker's case — is preserved rather than normalized away.
 function jsonLexeme(text: string): string {
+	if (JSON_NUMBER.test(text)) return text;
 	let t = text.startsWith("+") ? text.slice(1) : text;
 	const sign = t.startsWith("-") ? "-" : "";
 	if (sign) t = t.slice(1);
@@ -69,8 +74,14 @@ function resolvePlain(text: string, path: readonly string[], offset: number | nu
 	if (FALSES.has(text)) return false;
 	if (NON_FINITE.test(text)) throw new Rejection("invalid_literal", pointer(path), offset, "non-finite numbers are not part of the profile");
 	if (OCTAL_OR_HEX.test(text)) throw new Rejection("invalid_literal", pointer(path), offset, `"${text}" is octal or hexadecimal; write decimal`);
-	if (INT.test(text)) return jsonNumber(text.startsWith("+") ? text.slice(1) : text);
-	if (FLOAT.test(text)) return jsonNumber(jsonLexeme(text));
+	if (INT.test(text)) {
+		if (LEADING_ZERO.test(text)) throw new Rejection("invalid_literal", pointer(path), offset, "leading zeros are not part of the profile");
+		return jsonNumber(text.startsWith("+") ? text.slice(1) : text);
+	}
+	if (FLOAT.test(text)) {
+		if (LEADING_ZERO.test(text)) throw new Rejection("invalid_literal", pointer(path), offset, "leading zeros are not part of the profile");
+		return jsonNumber(jsonLexeme(text));
+	}
 	return text;
 }
 
@@ -99,6 +110,7 @@ function convertScalar(node: Scalar, path: readonly string[]): JsonValue {
 
 function keyText(pair: Pair<Node, Node>, path: readonly string[]): { text: string; offset: number | null } {
 	const k = pair.key;
+	if (isAlias(k)) throw new Rejection("unsupported_yaml_feature", pointer(path), k.range?.[0] ?? null, "anchors and aliases are not part of the profile");
 	if (!isScalar(k) || k.type === undefined)
 		throw new Rejection("invalid_type", pointer(path), (k as Node | null)?.range?.[0] ?? null, "mapping keys must be strings");
 	rejectProps(k, path);
