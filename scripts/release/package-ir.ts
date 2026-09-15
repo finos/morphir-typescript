@@ -111,6 +111,10 @@ function parseManifest(source: string): JsonRecord {
 	return parsed;
 }
 
+// Kept in step with tsconfig.build.json's exclude: a source file the build
+// leaves out has no declaration in the archive to expect.
+const NOT_PUBLISHED = (name: string): boolean => name.endsWith(".test.ts") || name.endsWith(".test-helper.ts");
+
 async function expectedArchiveFiles(packageRoot: string): Promise<ReadonlySet<string>> {
 	const expected = new Set<string>(REQUIRED_FILES);
 	const sourceRoot = path.join(packageRoot, "src");
@@ -118,7 +122,7 @@ async function expectedArchiveFiles(packageRoot: string): Promise<ReadonlySet<st
 		for (const entry of await readdir(directory, { withFileTypes: true })) {
 			const absolute = path.join(directory, entry.name);
 			if (entry.isDirectory()) await visit(absolute);
-			else if (entry.isFile() && entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) {
+			else if (entry.isFile() && entry.name.endsWith(".ts") && !NOT_PUBLISHED(entry.name)) {
 				const relative = path.relative(sourceRoot, absolute).split(path.sep).join("/").replace(/\.ts$/, ".d.ts");
 				expected.add(`package/dist/${relative}`);
 				expected.add(`package/dist/${relative}.map`);

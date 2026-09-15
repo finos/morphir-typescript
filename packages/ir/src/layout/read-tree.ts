@@ -31,7 +31,7 @@ import type { ValueDefinition, ValueSpecification } from "../model/values.ts";
 import type { TA, VA } from "../versions/v4/attributes.ts";
 import type { Checked } from "../versions/v4/index.ts";
 import { readDistributionManifestFile, readModuleManifestFile, readTypeDefinitionFile, readValueDefinitionFile } from "../versions/v4/read-tree-files.ts";
-import { classify, type LogicalPath, MANIFEST } from "./paths.ts";
+import { classify, type LogicalPath, MANIFEST, moduleManifestPath, nodeFilePath } from "./paths.ts";
 
 /** A distribution spread over files, keyed by logical path (no extension). */
 export type DocumentTree = ReadonlyMap<LogicalPath, string>;
@@ -42,6 +42,22 @@ type TypeSpec = Documented<TypeSpecification<TA, VA>>;
 type ValueSpec = Documented<ValueSpecification<TA, VA>>;
 type Manifest = ModuleManifestFile<TA, VA>;
 type Load<T> = (name: Name, stem: string) => Result<T, Diagnostic>;
+
+/** One module directory: where its files are, and where its own manifest is. */
+interface Where {
+	readonly root: "pkg" | "deps";
+	readonly dir: string;
+	readonly manifestPath: LogicalPath;
+}
+
+function whereIn(root: "pkg" | "deps", dir: string): Where {
+	return { root, dir, manifestPath: moduleManifestPath(root, dir) };
+}
+
+/** Whether a logical path is one a distribution owns, whatever shape it has. */
+function isUnderPackageRoot(path: LogicalPath): boolean {
+	return path.startsWith("pkg/") || path.startsWith("deps/");
+}
 
 // A diagnostic about the tree itself rather than about the inside of one file:
 // the cursor is the logical path, with the file's own pointer after "#".
@@ -106,35 +122,18 @@ function stemOf(m: Manifest, name: Name): string {
 	return Name.fileStem(name);
 }
 
-// A names-style listing is read file by file; the inline styles are already the
-// entries themselves. Which inline style a manifest was read in was decided by
-// the distribution kind, so the other one here means the tree disagrees with
-// what its own manifest says it holds.
-function listed<TDef, TSpec>(
-	manifestPath: LogicalPath,
-	entries: ModuleEntries<TDef, TSpec>,
-	m: Manifest,
-	load: Load<TDef>,
-): Result<readonly Named<TDef>[], Diagnostic> {
-	if (entries.style === "definitions") return ok(entries.items);
-	if (entries.style === "specifications") return shape(manifestPath, "/", "expected a definition file");
-	return eachName(entries.names, m, load);
-}
-
-function listedSpecs<TDef, TSpec>(
-	manifestPath: LogicalPath,
-	entries: ModuleEntries<TDef, TSpec>,
-	m: Manifest,
-	load: Load<TSpec>,
-): Result<readonly Named<TSpec>[], Diagnostic> {
-	if (entries.style === "specifications") return ok(entries.items);
-	if (entries.style === "definitions") return shape(manifestPath, "/", "expected a specification file");
-	return eachName(entries.names, m, load);
-}
-
-function eachName<T>(names: readonly Name[], m: Manifest, load: Load<T>): Result<readonly Named<T>[], Diagnostic> {
+// A names-style listing is read file by file; an inline listing is already the
+// entries themselves. A manifest read with `expect: "definitions"` can only
+// come back in the names style or the definitions style, and one read with
+// `expect: "specifications"` only in the names style or the specifications
+// style, so the entries a caller finds inline are the ones it asked for — the
+// cast says what the `expect` argument already decided, and there is no third
+// case to guard against. A file that carries the wrong one of `def` and `spec`
+// is a different mistake, caught where the file is read.
+function entriesOf<TDef, TSpec, T>(entries: ModuleEntries<TDef, TSpec>, m: Manifest, load: Load<T>): Result<readonly Named<T>[], Diagnostic> {
+	if (entries.style !== "names") return ok(entries.items as readonly Named<unknown>[] as readonly Named<T>[]);
 	const out: Named<T>[] = [];
-	for (const name of names) {
+	for (const name of entries.names) {
 		const value = load(name, stemOf(m, name));
 		if (!value.ok) return value;
 		out.push({ name, value: value.value });
@@ -169,14 +168,14 @@ export function readTree(files: DocumentTree, profile: ProfileCodec, ctx: Ctx = 
 	// at it. A manifest that lists a name with no file, or a file whose own name
 	// is not the one that found it, would silently rename a definition.
 	function nodeFile<T extends { readonly name: Name }>(
-		dir: string,
-		manifestPath: LogicalPath,
+		where: Where,
 		kind: "type" | "value",
 		read: (v: JsonValue, c: Ctx) => Result<T, Diagnostic>,
 		name: Name,
 		stem: string,
 	): Result<{ readonly path: LogicalPath; readonly file: T }, Diagnostic> {
-		const path = `${dir}/${stem}.${kind}`;
+		const manifestPath = where.manifestPath;
+		const path = nodeFilePath(where.root, where.dir, stem, kind);
 		if (!files.has(path)) {
 			return err(diagnostic("missing_member", "semantic", path, `${manifestPath} lists "${Name.canonical(name)}" but there is no ${path}`));
 		}
@@ -188,33 +187,33 @@ export function readTree(files: DocumentTree, profile: ProfileCodec, ctx: Ctx = 
 		return ok({ path, file: file.value });
 	}
 
-	function typeDefLoader(dir: string, manifestPath: LogicalPath): Load<TypeDef> {
+	function typeDefLoader(where: Where): Load<TypeDef> {
 		return (name, stem) => {
-			const f = nodeFile<TypeDefinitionFile<TA, VA>>(dir, manifestPath, "type", readTypeDefinitionFile, name, stem);
+			const f = nodeFile<TypeDefinitionFile<TA, VA>>(where, "type", readTypeDefinitionFile, name, stem);
 			if (!f.ok) return f;
 			return f.value.file.body.kind === "def" ? ok(f.value.file.body.value) : shape(f.value.path, "/", "expected a definition file");
 		};
 	}
 
-	function valueDefLoader(dir: string, manifestPath: LogicalPath): Load<ValueDef> {
+	function valueDefLoader(where: Where): Load<ValueDef> {
 		return (name, stem) => {
-			const f = nodeFile<ValueDefinitionFile<TA, VA>>(dir, manifestPath, "value", readValueDefinitionFile, name, stem);
+			const f = nodeFile<ValueDefinitionFile<TA, VA>>(where, "value", readValueDefinitionFile, name, stem);
 			if (!f.ok) return f;
 			return f.value.file.body.kind === "def" ? ok(f.value.file.body.value) : shape(f.value.path, "/", "expected a definition file");
 		};
 	}
 
-	function typeSpecLoader(dir: string, manifestPath: LogicalPath): Load<TypeSpec> {
+	function typeSpecLoader(where: Where): Load<TypeSpec> {
 		return (name, stem) => {
-			const f = nodeFile<TypeDefinitionFile<TA, VA>>(dir, manifestPath, "type", readTypeDefinitionFile, name, stem);
+			const f = nodeFile<TypeDefinitionFile<TA, VA>>(where, "type", readTypeDefinitionFile, name, stem);
 			if (!f.ok) return f;
 			return f.value.file.body.kind === "spec" ? ok(f.value.file.body.value) : shape(f.value.path, "/", "expected a specification file");
 		};
 	}
 
-	function valueSpecLoader(dir: string, manifestPath: LogicalPath): Load<ValueSpec> {
+	function valueSpecLoader(where: Where): Load<ValueSpec> {
 		return (name, stem) => {
-			const f = nodeFile<ValueDefinitionFile<TA, VA>>(dir, manifestPath, "value", readValueDefinitionFile, name, stem);
+			const f = nodeFile<ValueDefinitionFile<TA, VA>>(where, "value", readValueDefinitionFile, name, stem);
 			if (!f.ok) return f;
 			return f.value.file.body.kind === "spec" ? ok(f.value.file.body.value) : shape(f.value.path, "/", "expected a specification file");
 		};
@@ -223,25 +222,24 @@ export function readTree(files: DocumentTree, profile: ProfileCodec, ctx: Ctx = 
 	// A module manifest, checked against the directory it was found in. The
 	// directory is the authority on the module's path: a manifest that disagrees
 	// would put the same module in two places at once.
-	function readModuleManifest(p: PackageRoot, dir: string, expect: "definitions" | "specifications"): Result<Manifest, Diagnostic> {
-		const manifestPath = `${p.root}/${dir}/module`;
-		const m = readFile(manifestPath, (v, c) => readModuleManifestFile(v, c, { expect }));
+	function readModuleManifest(where: Where, p: PackageRoot, expect: "definitions" | "specifications"): Result<Manifest, Diagnostic> {
+		const m = readFile(where.manifestPath, (v, c) => readModuleManifestFile(v, c, { expect }));
 		if (!m.ok) return m;
-		const relative = dir.slice(p.prefix.length + 1);
+		const relative = where.dir.slice(p.prefix.length + 1);
 		const spelled = Path.escaped(m.value.path.path);
-		if (spelled !== relative) return shape(manifestPath, "/path", `module path "${spelled}" does not match its directory "${relative}"`);
+		if (spelled !== relative) return shape(where.manifestPath, "/path", `module path "${spelled}" does not match its directory "${relative}"`);
 		return m;
 	}
 
 	function definitionPackage(packages: readonly PackageRoot[], p: PackageRoot): Result<PackageDefinition<TA, VA>, Diagnostic> {
 		const modules: NamedModule<AccessControlled<ModuleDefinition<TA, VA>>>[] = [];
 		for (const dir of moduleDirs(files, packages, p)) {
-			const manifestPath = `${p.root}/${dir}/module`;
-			const m = readModuleManifest(p, dir, "definitions");
+			const where = whereIn(p.root, dir);
+			const m = readModuleManifest(where, p, "definitions");
 			if (!m.ok) return m;
-			const types = listed(manifestPath, m.value.types, m.value, typeDefLoader(`${p.root}/${dir}`, manifestPath));
+			const types = entriesOf(m.value.types, m.value, typeDefLoader(where));
 			if (!types.ok) return types;
-			const values = listed(manifestPath, m.value.values, m.value, valueDefLoader(`${p.root}/${dir}`, manifestPath));
+			const values = entriesOf(m.value.values, m.value, valueDefLoader(where));
 			if (!values.ok) return values;
 			modules.push({ name: m.value.path, value: { access: m.value.access, value: { doc: m.value.doc, types: types.value, values: values.value } } });
 		}
@@ -251,12 +249,12 @@ export function readTree(files: DocumentTree, profile: ProfileCodec, ctx: Ctx = 
 	function specificationPackage(packages: readonly PackageRoot[], p: PackageRoot): Result<PackageSpecification<TA, VA>, Diagnostic> {
 		const modules: NamedModule<ModuleSpecification<TA, VA>>[] = [];
 		for (const dir of moduleDirs(files, packages, p)) {
-			const manifestPath = `${p.root}/${dir}/module`;
-			const m = readModuleManifest(p, dir, "specifications");
+			const where = whereIn(p.root, dir);
+			const m = readModuleManifest(where, p, "specifications");
 			if (!m.ok) return m;
-			const types = listedSpecs(manifestPath, m.value.types, m.value, typeSpecLoader(`${p.root}/${dir}`, manifestPath));
+			const types = entriesOf(m.value.types, m.value, typeSpecLoader(where));
 			if (!types.ok) return types;
-			const values = listedSpecs(manifestPath, m.value.values, m.value, valueSpecLoader(`${p.root}/${dir}`, manifestPath));
+			const values = entriesOf(m.value.values, m.value, valueSpecLoader(where));
 			if (!values.ok) return values;
 			// A tree has nowhere to keep module annotations, so a module read out
 			// of one has none (ruling S7.3a); the writer refuses one that has any.
@@ -321,10 +319,11 @@ export function readTree(files: DocumentTree, profile: ProfileCodec, ctx: Ctx = 
 	if (!distribution.ok) return distribution;
 
 	// Everything under `pkg/` or `deps/` belongs to a module; a file no module
-	// manifest claimed is either in the wrong package or was left behind, and
-	// either way the tree is not the distribution it says it is. Anything the
-	// grammar does not recognize is not ours and is ignored.
-	const stray = [...files.keys()].filter((p) => !consumed.has(p) && classify(p).kind !== "other").sort()[0];
+	// manifest claimed is in the wrong package, spelled in a way the grammar
+	// does not recognize, or simply left behind, and either way the tree is not
+	// the distribution it says it is (S7.2 step 4). Only files outside those two
+	// roots are ignored.
+	const stray = [...files.keys()].filter((p) => !consumed.has(p) && isUnderPackageRoot(p)).sort()[0];
 	if (stray !== undefined) return shape(stray, "/", "file belongs to no module");
 
 	warnings.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));

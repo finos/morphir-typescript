@@ -19,16 +19,14 @@
 // that cannot be read back.
 import type { ProfileCodec } from "../codec/profile.ts";
 import { type Diagnostic, diagnostic } from "../model/diagnostic.ts";
-import type { FormatVersion, IRFile, NamedPackage, PackageDefinition, PackageSpecification } from "../model/distribution.ts";
-import type { Access, AccessControlled, Documented, ModuleDefinition, ModuleSpecification, Named, NamedModule } from "../model/modules.ts";
-import { type ModuleName, type Name, type PackageName, Path } from "../model/names.ts";
+import type { FormatVersion, IRFile } from "../model/distribution.ts";
+import type { Access, AccessControlled, ModuleDefinition, ModuleSpecification, Named, NamedModule } from "../model/modules.ts";
+import type { ModuleName, PackageName } from "../model/names.ts";
 import { err, ok, type Result } from "../model/result.ts";
 import type { DistributionManifestFile, ModuleManifestFile, TypeFileBody, ValueFileBody } from "../model/tree-files.ts";
-import type { TypeDefinition, TypeSpecification } from "../model/types.ts";
-import type { ValueDefinition, ValueSpecification } from "../model/values.ts";
 import type { TA, VA } from "../versions/v4/attributes.ts";
 import { writeDistributionManifestFile, writeModuleManifestFile, writeTypeDefinitionFile, writeValueDefinitionFile } from "../versions/v4/write-tree-files.ts";
-import { type LogicalPath, MANIFEST } from "./paths.ts";
+import { type LogicalPath, MANIFEST, moduleDir, moduleDirPrefix, moduleManifestPath, nodeFilePath } from "./paths.ts";
 import type { DocumentTree } from "./read-tree.ts";
 import { stemFor } from "./stems.ts";
 
@@ -38,13 +36,9 @@ export interface TreePolicy {
 	readonly pathBudget: number;
 }
 
-type TypeDef = AccessControlled<Documented<TypeDefinition<TA>>>;
-type ValueDef = AccessControlled<Documented<ValueDefinition<TA, VA>>>;
-type TypeSpec = Documented<TypeSpecification<TA, VA>>;
-type ValueSpec = Documented<ValueSpecification<TA, VA>>;
-
-interface Stem {
-	readonly name: Name;
+/** One entry of a module, paired with the file stem the budget gave it. */
+interface Stem<T> {
+	readonly item: Named<T>;
 	readonly stem: string;
 	readonly truncated: boolean;
 }
@@ -63,11 +57,17 @@ function budgetError(physical: string, pathBudget: number): Result<never, Diagno
 // injective, so two untruncated stems never collide; two truncated ones can,
 // and silently overwriting one file with another is the one outcome worth
 // refusing.
-function stemsFor(items: readonly Named<unknown>[], dir: string, kind: "type" | "value", policy: TreePolicy): Result<readonly Stem[], Diagnostic> {
-	const prefix = `${dir}/`;
+function stemsFor<T>(
+	items: readonly Named<T>[],
+	root: "pkg" | "deps",
+	dir: string,
+	kind: "type" | "value",
+	policy: TreePolicy,
+): Result<readonly Stem<T>[], Diagnostic> {
+	const prefix = moduleDirPrefix(root, dir);
 	const suffix = `.${kind}${policy.profile.extension}`;
 	const seen = new Set<string>();
-	const out: Stem[] = [];
+	const out: Stem<T>[] = [];
 	for (const item of items) {
 		const r = stemFor(item.name, prefix, suffix, policy.pathBudget);
 		if (!r.ok) return r;
@@ -76,54 +76,52 @@ function stemsFor(items: readonly Named<unknown>[], dir: string, kind: "type" | 
 			return err(diagnostic("invalid_distribution_shape", "semantic", at, `two ${kind} names share the file stem "${r.value.stem}"`));
 		}
 		seen.add(r.value.stem);
-		out.push({ name: item.name, stem: r.value.stem, truncated: r.value.truncated });
+		out.push({ item, stem: r.value.stem, truncated: r.value.truncated });
 	}
 	return ok(out);
-}
-
-/** The escaped directory one module's files live in, under `pkg/` or `deps/`. */
-function moduleDir(root: "pkg" | "deps", pkg: PackageName, name: ModuleName): string {
-	return `${root}/${Path.escaped(pkg.path)}/${Path.escaped(name.path)}`;
 }
 
 // The module directory has to fit before anything inside it can: `module` is
 // the shortest leaf a module has, so if that is already over the budget no
 // choice of stem can rescue the module.
-function fits(dir: string, policy: TreePolicy): Result<null, Diagnostic> {
-	const physical = `${dir}/module${policy.profile.extension}`;
+function fits(root: "pkg" | "deps", dir: string, policy: TreePolicy): Result<null, Diagnostic> {
+	const physical = `${moduleManifestPath(root, dir)}${policy.profile.extension}`;
 	return physical.length > policy.pathBudget ? budgetError(physical, policy.pathBudget) : ok(null);
 }
 
 // The manifest is written after the stems are known, because `fileNames` is
 // exactly the list of names the budget had to cut.
-function writeModuleManifest(
+function writeModuleManifest<T, V>(
 	w: Writer,
+	root: "pkg" | "deps",
 	dir: string,
 	name: ModuleName,
 	access: Access,
 	doc: string | null,
-	types: readonly Stem[],
-	values: readonly Stem[],
+	types: readonly Stem<T>[],
+	values: readonly Stem<V>[],
 ): void {
-	const truncated = [...types, ...values].filter((s) => s.truncated).map((s) => [s.name, s.stem] as const);
+	const truncated = [...types, ...values].filter((s) => s.truncated).map((s) => [s.item.name, s.stem] as const);
 	const manifest: ModuleManifestFile<TA, VA> = {
 		formatVersion: w.formatVersion,
 		path: name,
 		access,
 		doc,
-		types: { style: "names", names: types.map((s) => s.name) },
-		values: { style: "names", names: values.map((s) => s.name) },
+		types: { style: "names", names: types.map((s) => s.item.name) },
+		values: { style: "names", names: values.map((s) => s.item.name) },
 		fileNames: truncated,
 	};
-	w.out.set(`${dir}/module`, w.policy.profile.write(writeModuleManifestFile(manifest)));
+	w.out.set(moduleManifestPath(root, dir), w.policy.profile.write(writeModuleManifestFile(manifest)));
 }
 
-function writeTypeFile(w: Writer, dir: string, stem: Stem, body: TypeFileBody<TA, VA>): void {
-	w.out.set(`${dir}/${stem.stem}.type`, w.policy.profile.write(writeTypeDefinitionFile({ formatVersion: w.formatVersion, name: stem.name, body })));
+function writeTypeFile<T>(w: Writer, root: "pkg" | "deps", dir: string, s: Stem<T>, body: TypeFileBody<TA, VA>): void {
+	const file = writeTypeDefinitionFile({ formatVersion: w.formatVersion, name: s.item.name, body });
+	w.out.set(nodeFilePath(root, dir, s.stem, "type"), w.policy.profile.write(file));
 }
 
-function writeValueFile(w: Writer, dir: string, stem: Stem, body: ValueFileBody<TA, VA>): void {
-	w.out.set(`${dir}/${stem.stem}.value`, w.policy.profile.write(writeValueDefinitionFile({ formatVersion: w.formatVersion, name: stem.name, body })));
+function writeValueFile<T>(w: Writer, root: "pkg" | "deps", dir: string, s: Stem<T>, body: ValueFileBody<TA, VA>): void {
+	const file = writeValueDefinitionFile({ formatVersion: w.formatVersion, name: s.item.name, body });
+	w.out.set(nodeFilePath(root, dir, s.stem, "value"), w.policy.profile.write(file));
 }
 
 function writeDefinitionPackage(
@@ -133,17 +131,17 @@ function writeDefinitionPackage(
 	modules: readonly NamedModule<AccessControlled<ModuleDefinition<TA, VA>>>[],
 ): Result<null, Diagnostic> {
 	for (const m of modules) {
-		const dir = moduleDir(root, pkg, m.name);
-		const room = fits(dir, w.policy);
+		const dir = moduleDir(pkg, m.name);
+		const room = fits(root, dir, w.policy);
 		if (!room.ok) return room;
 		const def = m.value.value;
-		const types = stemsFor(def.types, dir, "type", w.policy);
+		const types = stemsFor(def.types, root, dir, "type", w.policy);
 		if (!types.ok) return types;
-		const values = stemsFor(def.values, dir, "value", w.policy);
+		const values = stemsFor(def.values, root, dir, "value", w.policy);
 		if (!values.ok) return values;
-		writeModuleManifest(w, dir, m.name, m.value.access, def.doc, types.value, values.value);
-		for (const [i, stem] of types.value.entries()) writeTypeFile(w, dir, stem, { kind: "def", value: (def.types[i] as Named<TypeDef>).value });
-		for (const [i, stem] of values.value.entries()) writeValueFile(w, dir, stem, { kind: "def", value: (def.values[i] as Named<ValueDef>).value });
+		writeModuleManifest(w, root, dir, m.name, m.value.access, def.doc, types.value, values.value);
+		for (const s of types.value) writeTypeFile(w, root, dir, s, { kind: "def", value: s.item.value });
+		for (const s of values.value) writeValueFile(w, root, dir, s, { kind: "def", value: s.item.value });
 	}
 	return ok(null);
 }
@@ -155,24 +153,26 @@ function writeSpecificationPackage(
 	modules: readonly NamedModule<ModuleSpecification<TA, VA>>[],
 ): Result<null, Diagnostic> {
 	for (const m of modules) {
-		const dir = moduleDir(root, pkg, m.name);
+		const dir = moduleDir(pkg, m.name);
 		// A module manifest has no place for annotations, so a specification that
 		// carries any cannot be written as a tree at all (ruling S7.3a).
 		if (m.value.annotations.length > 0) {
-			return err(diagnostic("invalid_distribution_shape", "semantic", `${dir}/module`, "module annotations cannot be written to a document tree"));
+			return err(
+				diagnostic("invalid_distribution_shape", "semantic", moduleManifestPath(root, dir), "module annotations cannot be written to a document tree"),
+			);
 		}
-		const room = fits(dir, w.policy);
+		const room = fits(root, dir, w.policy);
 		if (!room.ok) return room;
 		const spec = m.value;
-		const types = stemsFor(spec.types, dir, "type", w.policy);
+		const types = stemsFor(spec.types, root, dir, "type", w.policy);
 		if (!types.ok) return types;
-		const values = stemsFor(spec.values, dir, "value", w.policy);
+		const values = stemsFor(spec.values, root, dir, "value", w.policy);
 		if (!values.ok) return values;
 		// A module specification has no access of its own: what a specification
 		// publishes is public by construction.
-		writeModuleManifest(w, dir, m.name, "Public", spec.doc, types.value, values.value);
-		for (const [i, stem] of types.value.entries()) writeTypeFile(w, dir, stem, { kind: "spec", value: (spec.types[i] as Named<TypeSpec>).value });
-		for (const [i, stem] of values.value.entries()) writeValueFile(w, dir, stem, { kind: "spec", value: (spec.values[i] as Named<ValueSpec>).value });
+		writeModuleManifest(w, root, dir, m.name, "Public", spec.doc, types.value, values.value);
+		for (const s of types.value) writeTypeFile(w, root, dir, s, { kind: "spec", value: s.item.value });
+		for (const s of values.value) writeValueFile(w, root, dir, s, { kind: "spec", value: s.item.value });
 	}
 	return ok(null);
 }
@@ -203,12 +203,12 @@ export function writeTree(file: IRFile<TA, VA>, policy: TreePolicy): Result<Docu
 	// An application links its dependencies statically, so `deps/` holds package
 	// definitions there and package specifications everywhere else (S7.3a).
 	if (d.kind === "Application") {
-		for (const dep of d.dependencies satisfies readonly NamedPackage<PackageDefinition<TA, VA>>[]) {
+		for (const dep of d.dependencies) {
 			const r = writeDefinitionPackage(w, "deps", dep.name, dep.value.modules);
 			if (!r.ok) return r;
 		}
 	} else {
-		for (const dep of d.dependencies satisfies readonly NamedPackage<PackageSpecification<TA, VA>>[]) {
+		for (const dep of d.dependencies) {
 			const r = writeSpecificationPackage(w, "deps", dep.name, dep.value.modules);
 			if (!r.ok) return r;
 		}

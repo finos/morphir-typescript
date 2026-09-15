@@ -6,37 +6,13 @@
 // module says so, and the profile is the only thing that decides the text.
 // Run with: bun test packages/ir/src/layout/write-tree.test.ts
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { JSON_PROFILE } from "../codec/profile.ts";
 import { YAML_PROFILE } from "../codec/yaml/index.ts";
 import type { IRFile } from "../model/index.ts";
 import type { TA, VA } from "../versions/v4/attributes.ts";
 import { yaml } from "../versions/v4/index.ts";
+import { canonicalYaml, fileSet } from "./kit-fixtures.test-helper.ts";
 import { writeTree } from "./write-tree.ts";
-
-const KIT = path.resolve(import.meta.dir, "../../../mck/kit/spec/ir/mck/document-tree.md");
-const KIT_TEXT = readFileSync(KIT, "utf8");
-
-const FILE_FENCE = /^```yaml file path=(\S+) set=(\S+)\r?\n([\s\S]*?)^```$/gm;
-
-function fileSet(set: string): Map<string, string> {
-	const out = new Map<string, string>();
-	FILE_FENCE.lastIndex = 0;
-	for (const m of KIT_TEXT.matchAll(FILE_FENCE)) {
-		if (m[2] === set) out.set(m[1] as string, m[3] as string);
-	}
-	return out;
-}
-
-function canonicalYaml(id: string): string {
-	const start = KIT_TEXT.indexOf(`## ${id}:`);
-	const after = KIT_TEXT.indexOf("\n## ", start + 1);
-	const body = KIT_TEXT.slice(start, after === -1 ? KIT_TEXT.length : after);
-	const m = /^```yaml canonical\r?\n([\s\S]*?)^```$/m.exec(body);
-	if (m === null) throw new Error(`no yaml canonical fence in ${id}`);
-	return m[1] as string;
-}
 
 function distributionOf(id: string): IRFile<TA, VA> {
 	const r = yaml.read(canonicalYaml(id));

@@ -64,12 +64,36 @@ export function fromPhysical(name: string): LogicalPath | null {
 	return null;
 }
 
+/** The escaped directory one module's files live in, as `classify` spells it: without the root. */
+export function moduleDir(pkg: PackageName, mod: ModuleName): string {
+	return `${Path.escaped(pkg.path)}/${Path.escaped(mod.path)}`;
+}
+
+/**
+ * The `<root>/<dir>/` every file of one module directory starts with. The
+ * grammar of a logical path lives here and nowhere else, so a reader that
+ * classified a directory and a writer that escaped one build the same strings.
+ */
+export function moduleDirPrefix(root: "pkg" | "deps", dir: string): string {
+	return `${root}/${dir}/`;
+}
+
+/** The module manifest inside the directory `dir` under `root`. */
+export function moduleManifestPath(root: "pkg" | "deps", dir: string): LogicalPath {
+	return `${moduleDirPrefix(root, dir)}module`;
+}
+
+/** One type's or one value's own file inside the directory `dir` under `root`. */
+export function nodeFilePath(root: "pkg" | "deps", dir: string, stem: string, kind: "type" | "value"): LogicalPath {
+	return `${moduleDirPrefix(root, dir)}${stem}.${kind}`;
+}
+
 /** The logical path of a module's manifest, under `pkg/` or `deps/<pkg path>/…` (ruling S7.3a). */
 export function modulePath(root: "pkg" | "deps", pkg: PackageName, mod: ModuleName): LogicalPath {
-	return `${root}/${Path.escaped(pkg.path)}/${Path.escaped(mod.path)}/module`;
+	return moduleManifestPath(root, moduleDir(pkg, mod));
 }
 
 /** The logical path of one type's or one value's own file, when the tree keeps each in its own file. */
 export function definitionPath(root: "pkg" | "deps", pkg: PackageName, mod: ModuleName, stem: string, kind: "type" | "value"): LogicalPath {
-	return `${root}/${Path.escaped(pkg.path)}/${Path.escaped(mod.path)}/${stem}.${kind}`;
+	return nodeFilePath(root, moduleDir(pkg, mod), stem, kind);
 }
