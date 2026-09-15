@@ -117,6 +117,18 @@ test("parseCapabilities rejects a non-string nodes entry", () => {
 	expect(() => parseCapabilities({ ...capabilities, nodes: ["Type", 42] })).toThrow('"nodes" must be an array of strings');
 });
 
+test("parseCapabilities rejects an empty binding", () => {
+	const capabilities = capabilitiesWith({ binding: "" });
+	expect(() => parseCapabilities(body(capabilities))).toThrow('"binding" must be a non-empty string');
+	expect(schemaVerdict("Capabilities", capabilities)).not.toBe(true);
+});
+
+test("parseCapabilities rejects an empty language", () => {
+	const capabilities = capabilitiesWith({ language: "" });
+	expect(() => parseCapabilities(body(capabilities))).toThrow('"language" must be a non-empty string');
+	expect(schemaVerdict("Capabilities", capabilities)).not.toBe(true);
+});
+
 // --- parseDecodeResponse ---
 
 test("parseDecodeResponse accepts the example ok:true decode response", () => {
@@ -200,6 +212,29 @@ test("parseRequest accepts the example writeTree request", () => {
 
 test("parseRequest accepts the example exit request", () => {
 	expect(parseRequest(body(request(5)))).toEqual({ op: "exit" });
+});
+
+function writeTreeWith(policyPatch: Record<string, unknown>): Record<string, unknown> {
+	return { ...request(4), policy: { ...(request(4).policy as Record<string, unknown>), ...policyPatch } };
+}
+
+test("parseRequest rejects a writeTree request with pathBudget 0", () => {
+	const writeTreeRequest = writeTreeWith({ pathBudget: 0 });
+	expect(() => parseRequest(body(writeTreeRequest))).toThrow('"policy.pathBudget" must be an integer of at least 64');
+	expect(schemaVerdict("WriteTreeRequest", writeTreeRequest)).not.toBe(true);
+});
+
+test("parseRequest rejects a writeTree request with pathBudget 63", () => {
+	const writeTreeRequest = writeTreeWith({ pathBudget: 63 });
+	expect(() => parseRequest(body(writeTreeRequest))).toThrow('"policy.pathBudget" must be an integer of at least 64');
+	expect(schemaVerdict("WriteTreeRequest", writeTreeRequest)).not.toBe(true);
+});
+
+test("parseRequest accepts a writeTree request with pathBudget 64", () => {
+	const writeTreeRequest = writeTreeWith({ pathBudget: 64 });
+	const parsed = parseRequest(body(writeTreeRequest));
+	expect(parsed.op).toBe("writeTree");
+	expect(schemaVerdict("WriteTreeRequest", writeTreeRequest)).toBe(true);
 });
 
 test("parseRequest rejects a non-object", () => {
