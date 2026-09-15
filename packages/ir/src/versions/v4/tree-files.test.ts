@@ -133,6 +133,18 @@ describe("the distribution manifest file", () => {
 		});
 	});
 
+	// A manifest listing the same dependency twice would otherwise give
+	// readTree's owner() two package roots with the identical directory
+	// prefix; this is reported here, at the second occurrence, instead of
+	// reaching that far as a crash.
+	test("a duplicate dependency is reported at the second occurrence, not thrown", () => {
+		const text = '{ "formatVersion": 4, "distribution": "Library", "package": "p", "pathBudget": 4000, "dependencies": ["morphir/SDK", "morphir/SDK"] }';
+		expect(json.readNode("DistributionManifestFile", text)).toMatchObject({
+			ok: false,
+			error: { code: "duplicate_member", cursor: "/dependencies/1", message: 'duplicate dependency "morphir/SDK"' },
+		});
+	});
+
 	test("a non-integer pathBudget is invalid_type", () => {
 		const text = '{ "formatVersion": 4, "distribution": "Library", "package": "p", "pathBudget": 4000.5 }';
 		expect(json.readNode("DistributionManifestFile", text)).toMatchObject({

@@ -380,6 +380,25 @@ describe("readTree assembles deps/ into the distribution's dependencies", () => 
 		expect(e.message).toContain("belongs to no module");
 	});
 
+	// A manifest listing the same dependency twice would otherwise give
+	// owner() two package roots with the identical directory prefix; the
+	// manifest reader catches this before readTree ever builds a PackageRoot,
+	// so this is a reported diagnostic rather than a crash.
+	test("a manifest that lists a dependency twice is a diagnostic, not a crash", () => {
+		const duplicated = new Map(files);
+		duplicated.set(
+			"manifest",
+			"formatVersion: 4\ndistribution: Library\npackage: my-org/my-project\npathBudget: 4000\ndependencies: [morphir/SDK, morphir/SDK]\n",
+		);
+		let e: ReturnType<typeof errorOf> | undefined;
+		expect(() => {
+			e = errorOf(duplicated);
+		}).not.toThrow();
+		expect(e?.code).toBe("duplicate_member");
+		expect(e?.cursor).toBe("manifest#/dependencies/1");
+		expect(e?.message).toContain("morphir/SDK");
+	});
+
 	test("a specification where a Library dependency would need one is fine, a definition is not", () => {
 		const wrong = new Map(files);
 		wrong.set(
