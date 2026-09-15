@@ -20,8 +20,9 @@ export type DistributionKindName = "Library" | "Specs" | "Application";
 
 /**
  * The tree's root file. `pathBudget` is required (decision 0001); dependencies
- * live under `deps/<pkg path>/…` and are listed here by name, with no version
- * segment (ruling S7.3a).
+ * live under `deps/<pkg path>/@<version>/…` and are listed here by name. The
+ * version segment is always bare (`@`) because the v4 model carries no
+ * package version (ruling S7.3a, decision 0015).
  */
 export interface DistributionManifestFile {
 	readonly formatVersion: FormatVersion;

@@ -343,8 +343,8 @@ describe("readTree reads inline entries as well as listed names", () => {
 describe("readTree assembles deps/ into the distribution's dependencies", () => {
 	const files = new Map<string, string>([
 		["manifest", "formatVersion: 4\ndistribution: Library\npackage: my-org/my-project\npathBudget: 4000\ndependencies: [morphir/SDK]\n"],
-		["deps/morphir/_sdk/basics/module", "formatVersion: 4\npath: basics\ntypes: [int]\nvalues: []\n"],
-		["deps/morphir/_sdk/basics/int.type", "formatVersion: 4\nname: int\nspec:\n  OpaqueTypeSpecification: {}\n"],
+		["deps/morphir/_sdk/@/basics/module", "formatVersion: 4\npath: basics\ntypes: [int]\nvalues: []\n"],
+		["deps/morphir/_sdk/@/basics/int.type", "formatVersion: 4\nname: int\nspec:\n  OpaqueTypeSpecification: {}\n"],
 	]);
 
 	test("a dependency's specification files read into dependencies", () => {
@@ -374,7 +374,7 @@ describe("readTree assembles deps/ into the distribution's dependencies", () => 
 
 	test("a dependency file under a package the manifest does not list is unclaimed", () => {
 		const stray = new Map(files);
-		stray.set("deps/other/pkg/mod/module", "formatVersion: 4\npath: mod\ntypes: []\nvalues: []\n");
+		stray.set("deps/other/pkg/@/mod/module", "formatVersion: 4\npath: mod\ntypes: []\nvalues: []\n");
 		const e = errorOf(stray);
 		expect(e.code).toBe("invalid_distribution_shape");
 		expect(e.message).toContain("belongs to no module");
@@ -383,7 +383,7 @@ describe("readTree assembles deps/ into the distribution's dependencies", () => 
 	test("a specification where a Library dependency would need one is fine, a definition is not", () => {
 		const wrong = new Map(files);
 		wrong.set(
-			"deps/morphir/_sdk/basics/int.type",
+			"deps/morphir/_sdk/@/basics/int.type",
 			[
 				"formatVersion: 4",
 				"name: int",
@@ -397,8 +397,83 @@ describe("readTree assembles deps/ into the distribution's dependencies", () => 
 		);
 		const e = errorOf(wrong);
 		expect(e.code).toBe("invalid_distribution_shape");
-		expect(e.cursor).toBe("deps/morphir/_sdk/basics/int.type#/");
+		expect(e.cursor).toBe("deps/morphir/_sdk/@/basics/int.type#/");
 		expect(e.message).toContain("specification file");
+	});
+
+	// Decision 0015: the segment right after the package path in `deps/` marks
+	// where the package's version would go. The v4 model carries none, so a
+	// reader accepts only a bare `@` there and reports the other two shapes a
+	// dependency directory could otherwise take.
+	test("a version segment carrying an actual version is reported by name", () => {
+		const wrongVersion = new Map(files);
+		wrongVersion.delete("deps/morphir/_sdk/@/basics/module");
+		wrongVersion.delete("deps/morphir/_sdk/@/basics/int.type");
+		wrongVersion.set("deps/morphir/_sdk/@1.0.0/basics/module", "formatVersion: 4\npath: basics\ntypes: [int]\nvalues: []\n");
+		wrongVersion.set("deps/morphir/_sdk/@1.0.0/basics/int.type", "formatVersion: 4\nname: int\nspec:\n  OpaqueTypeSpecification: {}\n");
+		const e = errorOf(wrongVersion);
+		expect(e.code).toBe("invalid_distribution_shape");
+		expect(e.message).toContain("@1.0.0");
+		expect(e.message).toMatch(/version/i);
+	});
+
+	test("a dependency directory with no version segment at all is reported as missing one", () => {
+		const noSegment = new Map(files);
+		noSegment.delete("deps/morphir/_sdk/@/basics/module");
+		noSegment.delete("deps/morphir/_sdk/@/basics/int.type");
+		noSegment.set("deps/morphir/_sdk/basics/module", "formatVersion: 4\npath: basics\ntypes: [int]\nvalues: []\n");
+		noSegment.set("deps/morphir/_sdk/basics/int.type", "formatVersion: 4\nname: int\nspec:\n  OpaqueTypeSpecification: {}\n");
+		const e = errorOf(noSegment);
+		expect(e.code).toBe("invalid_distribution_shape");
+		expect(e.message).toContain("belongs to no module");
+		expect(e.message).toMatch(/version segment/i);
+	});
+});
+
+// ------------------------------------------------------- nested package paths
+
+// The round trip that motivated decision 0015: without a version segment,
+// dependency `a`'s module `b/c` and dependency `a/b`'s module `c` would both
+// want the directory `deps/a/b/c/…`, and the tree could not tell them apart.
+describe("dependencies whose package paths nest under one another", () => {
+	const NESTED_DOCUMENT = [
+		"formatVersion: 4",
+		"distribution:",
+		"  Library:",
+		"    packageName: example",
+		"    dependencies:",
+		"      a:",
+		"        modules:",
+		"          b/c:",
+		"            types: {}",
+		"            values: {}",
+		"      a/b:",
+		"        modules:",
+		"          c:",
+		"            types: {}",
+		"            values: {}",
+		"    def:",
+		"      modules: {}",
+		"",
+	].join("\n");
+
+	test("writeTree lays the two dependencies out under distinct directories", () => {
+		const file = expectIRFile(NESTED_DOCUMENT);
+		const written = writeTree(file, { profile: YAML_PROFILE, pathBudget: 4000 });
+		expect(written.ok).toBe(true);
+		if (!written.ok) return;
+		const keys = [...written.value.keys()];
+		expect(keys).toContain("deps/a/@/b/c/module");
+		expect(keys).toContain("deps/a/b/@/c/module");
+	});
+
+	test("the written tree reads back to the same distribution", () => {
+		const file = expectIRFile(NESTED_DOCUMENT);
+		const written = writeTree(file, { profile: YAML_PROFILE, pathBudget: 4000 });
+		expect(written.ok).toBe(true);
+		if (!written.ok) return;
+		const r = okOf(written.value);
+		expect(r.value).toEqual(file);
 	});
 });
 
@@ -428,9 +503,9 @@ const APPLICATION = new Map<string, string>([
 			"",
 		].join("\n"),
 	],
-	["deps/dep/pkg/mod/module", "formatVersion: 4\npath: mod\ntypes: [thing]\nvalues: []\n"],
+	["deps/dep/pkg/@/mod/module", "formatVersion: 4\npath: mod\ntypes: [thing]\nvalues: []\n"],
 	[
-		"deps/dep/pkg/mod/thing.type",
+		"deps/dep/pkg/@/mod/thing.type",
 		[
 			"formatVersion: 4",
 			"name: thing",
@@ -501,10 +576,25 @@ describe("an Application's deps/ holds package definitions", () => {
 
 	test("a specification file under an Application's deps/ is rejected", () => {
 		const wrong = new Map(APPLICATION);
-		wrong.set("deps/dep/pkg/mod/thing.type", "formatVersion: 4\nname: thing\nspec:\n  OpaqueTypeSpecification: {}\n");
+		wrong.set("deps/dep/pkg/@/mod/thing.type", "formatVersion: 4\nname: thing\nspec:\n  OpaqueTypeSpecification: {}\n");
 		const e = errorOf(wrong);
 		expect(e.code).toBe("invalid_distribution_shape");
-		expect(e.cursor).toBe("deps/dep/pkg/mod/thing.type#/");
+		expect(e.cursor).toBe("deps/dep/pkg/@/mod/thing.type#/");
 		expect(e.message).toContain("definition file");
+	});
+
+	// Requirement 4: the writer's own output paths for a dependency module are
+	// exactly `deps/<pkg>/@/<mod>/module` and its node files.
+	test("the writer's paths for one dependency module carry the version slot", () => {
+		const back = writeTree(expectIRFile(APPLICATION_DOCUMENT), { profile: YAML_PROFILE, pathBudget: 4000 });
+		expect(back.ok).toBe(true);
+		if (!back.ok) return;
+		expect([...back.value.keys()]).toEqual([
+			"manifest",
+			"pkg/example/main/module",
+			"pkg/example/main/run.value",
+			"deps/dep/pkg/@/mod/module",
+			"deps/dep/pkg/@/mod/thing.type",
+		]);
 	});
 });

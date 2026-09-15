@@ -25,6 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - `@finos/morphir-ir` now depends on `yaml`.
+- A document tree's `deps/<pkg path>/…` directories now carry an `@<version>` segment right after the package path, so a dependency's directory can never be a prefix of another's (decision 0015).
 
 ## [0.0.1] - 2026-09-05
 

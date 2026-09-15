@@ -8,7 +8,7 @@ import { describe, expect, test } from "bun:test";
 import { JSON_PROFILE } from "../codec/profile.ts";
 import { YAML_PROFILE } from "../codec/yaml/index.ts";
 import { ModuleName, Name, PackageName, Path } from "../model/names.ts";
-import { classify, definitionPath, fromPhysical, MANIFEST, modulePath, toPhysical } from "./paths.ts";
+import { classify, definitionPath, fromPhysical, MANIFEST, moduleDir, modulePath, packageDir, toPhysical, VERSION_SLOT } from "./paths.ts";
 
 function pkg(text: string): PackageName {
 	const r = PackageName.parse(text);
@@ -70,12 +70,36 @@ describe("modulePath / definitionPath", () => {
 	test("modulePath escapes initialisms", () => {
 		expect(modulePath("pkg", pkg("my-org"), mod("user-ID"))).toBe("pkg/my-org/user-_id/module");
 	});
-	test("modulePath under deps", () => {
-		expect(modulePath("deps", pkg("my-org"), mod("domain"))).toBe("deps/my-org/domain/module");
+	test("modulePath under deps carries the version slot after the package path", () => {
+		expect(modulePath("deps", pkg("my-org"), mod("domain"))).toBe("deps/my-org/@/domain/module");
 	});
 	test("definitionPath appends the stem and dotted kind", () => {
 		expect(definitionPath("pkg", pkg("my-org"), mod("domain"), "customer", "type")).toBe("pkg/my-org/domain/customer.type");
-		expect(definitionPath("deps", pkg("my-org"), mod("domain"), "customer", "value")).toBe("deps/my-org/domain/customer.value");
+		expect(definitionPath("deps", pkg("my-org"), mod("domain"), "customer", "value")).toBe("deps/my-org/@/domain/customer.value");
+	});
+});
+
+describe("packageDir / moduleDir and the version slot (decision 0015)", () => {
+	test("packageDir under pkg is just the escaped package path", () => {
+		expect(packageDir("pkg", pkg("my-org"))).toBe("my-org");
+	});
+	test("packageDir under deps appends the bare version slot", () => {
+		expect(packageDir("deps", pkg("my-org"))).toBe(`my-org/${VERSION_SLOT}`);
+	});
+	test("moduleDir under deps nests the module path after the version slot", () => {
+		expect(moduleDir("deps", pkg("my-org"), mod("domain"))).toBe("my-org/@/domain");
+	});
+	test("a package and a longer one that starts with its path never share a deps/ prefix", () => {
+		// `a`'s directory is `a/@`; `a/b`'s is `a/b/@`. Without the slot, a module
+		// `b/c` of `a` and a module `c` of `a/b` would both live under `a/b/...`
+		// and be indistinguishable; the slot makes the two directories disjoint.
+		const a = moduleDir("deps", pkg("a"), mod("b/c"));
+		const aB = moduleDir("deps", pkg("a/b"), mod("c"));
+		expect(a).toBe("a/@/b/c");
+		expect(aB).toBe("a/b/@/c");
+		expect(a).not.toBe(aB);
+		expect(a.startsWith(`${packageDir("deps", pkg("a/b"))}/`)).toBe(false);
+		expect(aB.startsWith(`${packageDir("deps", pkg("a"))}/`)).toBe(false);
 	});
 });
 

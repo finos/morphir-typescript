@@ -31,7 +31,7 @@ import type { ValueDefinition, ValueSpecification } from "../model/values.ts";
 import type { TA, VA } from "../versions/v4/attributes.ts";
 import type { Checked } from "../versions/v4/index.ts";
 import { readDistributionManifestFile, readModuleManifestFile, readTypeDefinitionFile, readValueDefinitionFile } from "../versions/v4/read-tree-files.ts";
-import { classify, type LogicalPath, MANIFEST, moduleManifestPath, nodeFilePath } from "./paths.ts";
+import { classify, type LogicalPath, MANIFEST, moduleManifestPath, nodeFilePath, packageDir, VERSION_SLOT } from "./paths.ts";
 
 /** A distribution spread over files, keyed by logical path (no extension). */
 export type DocumentTree = ReadonlyMap<LogicalPath, string>;
@@ -75,28 +75,53 @@ function recursor(path: LogicalPath, d: Diagnostic): Diagnostic {
 interface PackageRoot {
 	readonly root: "pkg" | "deps";
 	readonly name: PackageName;
-	/** The escaped package path the directories under `root` start with. */
+	/** The escaped package path itself, with no version slot. */
+	readonly pkgPath: string;
+	/** The escaped directory prefix every one of the package's module directories starts with. */
 	readonly prefix: string;
 }
 
 // The own package first, then the dependencies in the order the manifest listed
 // them: a directory tree does not order its dependencies, the manifest does.
 function packageRoots(manifest: DistributionManifestFile): readonly PackageRoot[] {
+	const ownPath = Path.escaped(manifest.packageName.path);
 	return [
-		{ root: "pkg", name: manifest.packageName, prefix: Path.escaped(manifest.packageName.path) },
-		...manifest.dependencies.map((name) => ({ root: "deps" as const, name, prefix: Path.escaped(name.path) })),
+		{ root: "pkg", name: manifest.packageName, pkgPath: ownPath, prefix: ownPath },
+		...manifest.dependencies.map((name) => ({ root: "deps" as const, name, pkgPath: Path.escaped(name.path), prefix: packageDir("deps", name) })),
 	];
 }
 
-// Which package a directory belongs to: the longest listed prefix under the
-// same root, so a dependency named `a/b` wins over one named `a` for `a/b/…`.
+// Which package a directory belongs to: the one listed package, under the same
+// root, whose directory prefix it starts with. Under `deps/` the prefix ends
+// in the version slot (`<escaped pkg>/@/`), so a package named `a` and one
+// named `a/b` can never both prefix the same directory (decision 0015) — at
+// most one package ever matches, and the filter below is a defensive check
+// that reports rather than silently picking if that invariant is ever wrong.
 function owner(packages: readonly PackageRoot[], root: "pkg" | "deps", dir: string): PackageRoot | null {
-	let best: PackageRoot | null = null;
-	for (const p of packages) {
-		if (p.root !== root || !dir.startsWith(`${p.prefix}/`)) continue;
-		if (best === null || p.prefix.length > best.prefix.length) best = p;
+	const matches = packages.filter((p) => p.root === root && dir.startsWith(`${p.prefix}/`));
+	if (matches.length > 1) {
+		throw new Error(`directory "${root}/${dir}" matches more than one package's prefix: ${matches.map((p) => p.prefix).join(", ")}`);
 	}
-	return best;
+	return matches[0] ?? null;
+}
+
+// The message for a `deps/` directory no package claimed. If its leading
+// segments match a listed dependency's package path, the directory is missing
+// or misspelling the version slot; otherwise it belongs to no listed package
+// at all, the way any unclaimed directory does.
+function strayMessage(path: LogicalPath, packages: readonly PackageRoot[]): string {
+	const generic = "file belongs to no module";
+	const c = classify(path);
+	if (c.kind === "other" || c.kind === "manifest" || c.root !== "deps") return generic;
+	for (const p of packages) {
+		if (p.root !== "deps") continue;
+		if (c.dir !== p.pkgPath && !c.dir.startsWith(`${p.pkgPath}/`)) continue;
+		const segment = c.dir.slice(p.pkgPath.length + 1).split("/")[0] ?? "";
+		if (segment.startsWith(VERSION_SLOT) && segment !== VERSION_SLOT) {
+			return `the dependency directory's version segment "${segment}" carries a version, but the v4 model has no package version to hold (decision 0015); expected a bare "${VERSION_SLOT}"`;
+		}
+	}
+	return `${generic}; a dependency directory expects a version segment ("${VERSION_SLOT}") after the package path`;
 }
 
 // The module directories of one package, in logical-path order. A directory is
@@ -324,7 +349,7 @@ export function readTree(files: DocumentTree, profile: ProfileCodec, ctx: Ctx = 
 	// the distribution it says it is (S7.2 step 4). Only files outside those two
 	// roots are ignored.
 	const stray = [...files.keys()].filter((p) => !consumed.has(p) && isUnderPackageRoot(p)).sort()[0];
-	if (stray !== undefined) return shape(stray, "/", "file belongs to no module");
+	if (stray !== undefined) return shape(stray, "/", strayMessage(stray, packages));
 
 	warnings.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 	const collected = warnings.map((w) => w.diagnostic);

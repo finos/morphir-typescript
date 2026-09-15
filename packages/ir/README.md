@@ -32,7 +32,7 @@ if (!result.ok) {
 }
 ```
 
-`@finos/morphir-ir/layout` lays a distribution out as a document tree — a map of logical paths to text — and reads one back; `@finos/morphir-ir/layout/node` is the same tree read from, or written to, a real directory:
+`@finos/morphir-ir/layout` lays a distribution out as a document tree — a map of logical paths to text — and reads one back; `@finos/morphir-ir/layout/node` is the same tree read from, or written to, a real directory. A dependency lives under `deps/<pkg path>/@<version>/…`, the bare `@` marking where a package version would go, since the v4 model carries none (decision 0015).
 
 ```ts
 import { YAML_PROFILE } from "@finos/morphir-ir/codec/yaml";
