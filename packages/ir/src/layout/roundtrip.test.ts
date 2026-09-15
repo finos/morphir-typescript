@@ -35,8 +35,9 @@ const PROFILES: readonly (readonly [string, ProfileCodec])[] = [
 ];
 
 describe("a distribution written as a tree and read back is the same distribution", () => {
-	// The kit's other two Distribution cases (document-tree-0004 and -0005) carry
-	// only a YAML canonical; they are exercised from their `file` sets below.
+	// document-tree-0004 and -0005 are the kit's other two Distribution cases;
+	// they carry only a YAML canonical, so they are exercised from their `file`
+	// sets below instead.
 	test("the corpus is every kit Distribution case with a JSON canonical, plus the complete example", () => {
 		expect(CASES.map((c) => c.id)).toEqual([
 			"distributions-0002",
@@ -44,6 +45,11 @@ describe("a distribution written as a tree and read back is the same distributio
 			"distributions-0005",
 			"distributions-0006",
 			"distributions-0007",
+			"document-tree-0006",
+			"document-tree-0007",
+			"document-tree-0008",
+			"versions-0004",
+			"versions-0005",
 			"complete-example",
 		]);
 	});

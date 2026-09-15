@@ -159,12 +159,16 @@ describe("checkKitRunReport", () => {
 		expect(() => checkKitRunReport(extra, "r.json")).toThrow("does not allow");
 	});
 
-	// The allowance holds the kit's known-bad fences until the resync corrects
-	// them; a case in it passes up to its count and no further.
-	test("accepts an allowed case up to its count", () => {
-		expect(() => checkKitRunReport(report([record("distributions-0004", "fail"), record("distributions-0004", "fail")]), "r.json")).not.toThrow();
+	// The allowance is empty now that the vendored kit runs clean, so it holds
+	// no case's failures back; repeated non-failing records for the same case
+	// still don't count against it.
+	test("repeated non-failing records for the same case never trip the allowance", () => {
+		expect(() => checkKitRunReport(report([record("distributions-0004", "pass"), record("distributions-0004", "pass")]), "r.json")).not.toThrow();
 		expect(() =>
-			checkKitRunReport(report([record("document-tree-0005", "fail"), record("document-tree-0005", "fail"), record("document-tree-0005", "fail")]), "r.json"),
+			checkKitRunReport(
+				report([record("document-tree-0005", "skipped"), record("document-tree-0005", "skipped"), record("document-tree-0005", "pass")]),
+				"r.json",
+			),
 		).not.toThrow();
 	});
 

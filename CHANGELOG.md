@@ -18,6 +18,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `@finos/morphir-mck`, published with the vendored kit, for checking a Morphir binding's conformance to the IR specification.
 - Compiled `mck` and `mck-adapter-typescript` binaries for direct download, alongside the npm packages.
 - A coverage rule and the `VOCABULARY` export from `@finos/morphir-ir/v4`, so a kit can be checked for a case covering every v4 vocabulary entry.
+- A YAML profile for the v4 model: `parseYaml` and `writeYaml` under `@finos/morphir-ir/codec/yaml`, the `YAML_PROFILE` profile, and a `yaml` codec registered on `@finos/morphir-ir/v4`. The reader accepts strict, spec-legal YAML over the `yaml` package and produces the same `JsonValue` tree as `parseJson`; the canonical writer is ours.
+- The document tree, under `@finos/morphir-ir/layout` and `@finos/morphir-ir/layout/node`: `readTree` and `writeTree` for the four tree-file node kinds, logical paths with no extension, and stem truncation by SHA-256 of the escaped stem for names past the filesystem limit.
+- YAML and document-tree capabilities in the `mck` driver, and the `mode=read` fence key for kit cases whose fences only the read half of a codec needs to reproduce.
+
+### Changed
+
+- `@finos/morphir-ir` now depends on `yaml`.
 
 ## [0.0.1] - 2026-09-05
 

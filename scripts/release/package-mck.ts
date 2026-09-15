@@ -196,11 +196,9 @@ async function copyTree(from: string, to: string): Promise<void> {
  * Runs the packed driver the way a user does: `--version`, an embedded-kit run,
  * and the same run over the packed adapter as a child process.
  *
- * The vendored kit still carries the known-bad fences listed under
- * ALLOWED_FAILING_CASES until the Task 9 resync corrects them, so `mck run`
- * exits 1. The exit code was never the verdict here: `checkKitRunReport`
- * adjudicates the report, and `expectKitRun` accepts 0 and 1 from the driver
- * and nothing else.
+ * The vendored kit runs clean, so `mck run` exits 0. `checkKitRunReport`
+ * still adjudicates the report against ALLOWED_FAILING_CASES, and
+ * `expectKitRun` still requires that exit code from the driver.
  */
 async function smokeTest(mckTarball: string, irTarball: string, compiler: string): Promise<void> {
 	const consumer = await mkdtemp(path.join(tmpdir(), "morphir-mck-consumer-"));
@@ -272,30 +270,11 @@ async function verifyDeclarations(tarball: string, files: readonly string[], cwd
 
 /**
  * The case ids the packed driver is allowed to fail on, and how many records
- * each may contribute. All six entries are fences the vendored kit spells
- * non-canonically, not faults in the binding, and each is listed for the
- * parent repository in the plan's task reports:
- *
- * - `distributions-0004`: `complete-example.yaml` quotes FQNames and writes
- *   scalar sequences in block style.
- * - `types-0010`, `values-0022`, `patterns-and-literals-0012`: an all-scalar
- *   `source` mapping under `attributes` spelled as a flow mapping, where every
- *   other all-scalar mapping in the kit is a block mapping.
- * - `document-tree-0003`: the heading says `node=TypeDefinitionFile` while the
- *   case's canonical fence is a whole distribution.
- * - `document-tree-0005`: the set carries `$meta` members a writer never emits,
- *   so its write half cannot reproduce it; the fences want `mode=read`.
- *
- * The kit resync empties this map again.
+ * each may contribute. Empty: the vendored kit runs clean. The mechanism
+ * stays so a future kit resync can carry a known-bad fence again without a
+ * code change.
  */
-const ALLOWED_FAILING_CASES: ReadonlyMap<string, number> = new Map([
-	["distributions-0004", 2],
-	["document-tree-0003", 2],
-	["document-tree-0005", 4],
-	["patterns-and-literals-0012", 2],
-	["types-0010", 2],
-	["values-0022", 2],
-]);
+const ALLOWED_FAILING_CASES: ReadonlyMap<string, number> = new Map();
 
 /** Holds the packed driver to its report: this binding, no kit errors, and only the known failures. */
 export function checkKitRunReport(report: unknown, label: string): void {
@@ -321,9 +300,7 @@ export function checkKitRunReport(report: unknown, label: string): void {
 
 async function expectKitRun(command: readonly string[], consumer: string, reportFile: string): Promise<void> {
 	const result = await executeCommand(command, consumer);
-	// Exit 1 is `mck run` saying some record failed, which the report check
-	// below adjudicates; any other non-zero exit is the driver itself failing.
-	if (result.exitCode !== 0 && result.exitCode !== 1) throw commandFailure(command, result);
+	if (result.exitCode !== 0) throw commandFailure(command, result);
 	checkKitRunReport(JSON.parse(await readFile(path.join(consumer, reportFile), "utf8")), reportFile);
 }
 

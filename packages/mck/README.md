@@ -22,6 +22,16 @@ mck run --adapter my-binding-adapter --adapter-arg --profile=json --report repor
 
 `mck run` exits 0 when every record passes, 1 when a record fails or the kit itself does not parse, and 2 on a usage error. `--strict` also fails the run on skipped records. `--kit <dir>` runs a checkout's `spec/ir/mck` instead of the embedded copy, and `--only <regex>` narrows the run to matching case ids.
 
+The driver checks JSON, YAML, and document-tree fences alike: a YAML fence round-trips through the binding's YAML codec the same way a JSON fence does, and a `file` set of fences checks the binding's document-tree reader and writer against a whole directory of files. A set marked `mode=read` only exercises the read half: for input a canonical writer never reproduces itself, such as a `$meta` member the kit carries for a read-only case. Run against the embedded kit, `mck run` currently reports:
+
+```text
+620 pass, 0 fail, 0 kit-error, 2 skipped
+skipped versions-0001 fence 0 [current]: version 3 not in capabilities
+skipped versions-0001 fence 0 [pinned]: version 3 not in capabilities
+```
+
+The two skips are the kit's version-3 fences, which the TypeScript binding's capabilities do not name.
+
 Report which vocabulary entries — variants and member spellings — no case exercises:
 
 ```sh

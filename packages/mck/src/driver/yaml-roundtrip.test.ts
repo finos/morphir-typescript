@@ -14,15 +14,6 @@ import type { KitCase, KitFence } from "../kit/case.ts";
 import { embeddedKitFiles } from "../kit/embedded-source.ts";
 import { loadKitFromFiles } from "../kit/load.ts";
 
-// Fences whose bytes disagree with the rest of the kit rather than with the
-// writer; each is listed verbatim, with its reason, under "Fences for the
-// parent" in
-// .superpowers/sdd/2026-09-15-yaml-profile-and-document-tree/task-2-report.md.
-// The three below spell an all-scalar `source` mapping under `attributes` as a
-// flow mapping, where every other all-scalar mapping in the kit — including
-// `DocumentLiteral`'s in patterns-and-literals-0006 — is a block mapping.
-const NON_CANONICAL_YAML: ReadonlySet<string> = new Set(["types-0010", "values-0022", "patterns-and-literals-0012"]);
-
 const kit = await loadKitFromFiles(embeddedKitFiles());
 const active = kit.cases.filter((c) => c.status === "active");
 
@@ -52,14 +43,14 @@ describe("the canonical YAML writer against every YAML fence of the embedded kit
 		for (const c of active) {
 			const y = yamlOf(c, "canonical");
 			const j = jsonOf(c, "canonical");
-			if (y === undefined || j === undefined || NON_CANONICAL_YAML.has(c.id)) continue;
+			if (y === undefined || j === undefined) continue;
 			expect(`${c.id}\n${writeYaml(json(j.body))}`).toBe(`${c.id}\n${y.body}`);
 			compared += 1;
 		}
 		console.log(`yaml canonical fences written from json: ${compared}`);
 		// Pinned, not bounded: the embedded kit is a fixed set of bytes, so this
 		// number moves only when a kit resync deliberately moves it.
-		expect(compared).toBe(74);
+		expect(compared).toBe(84);
 	});
 
 	test("the reader reads the YAML canonical fence to the JSON canonical fence's value", () => {
@@ -72,8 +63,9 @@ describe("the canonical YAML writer against every YAML fence of the embedded kit
 			compared += 1;
 		}
 		console.log(`yaml canonical fences read against json: ${compared}`);
-		// Three more than the writer's 74: the three excluded above.
-		expect(compared).toBe(77);
+		// Same set the writer compares above: every YAML canonical fence with a
+		// JSON twin now round-trips byte for byte.
+		expect(compared).toBe(84);
 	});
 
 	test("the writer is idempotent on every canonical YAML fence, including the document-tree files", () => {
@@ -82,27 +74,25 @@ describe("the canonical YAML writer against every YAML fence of the embedded kit
 			for (const f of c.fences) {
 				if (f.info.language !== "yaml") continue;
 				if (f.info.role !== "canonical" && f.info.role !== "file") continue;
-				if (NON_CANONICAL_YAML.has(c.id)) continue;
 				expect(`${c.id}:${f.index}\n${writeYaml(yaml(f.body))}`).toBe(`${c.id}:${f.index}\n${f.body}`);
 				checked += 1;
 			}
 		}
 		console.log(`yaml fences the writer reproduces byte for byte: ${checked}`);
-		// 77 canonical with a JSON twin, 3 without, 8 `file`, less the 3 excluded.
-		expect(checked).toBe(85);
+		// 84 canonical with a JSON twin, plus canonical fences without one and
+		// `file` fences.
+		expect(checked).toBe(102);
 	});
 
-	test("the kit's complete-example.yaml document reads to the same value as its JSON fence", () => {
-		// distributions-0004 names the document from a `text canonical` fence. Its
-		// bytes are not yet the canonical spelling — it quotes FQNames and writes
-		// scalar sequences in block style — so only the value is asserted here;
-		// the file is listed for the parent in the task report.
+	test("the writer reproduces the kit's complete-example.yaml document byte for byte", () => {
+		// distributions-0004 names the document from a `text canonical` fence.
 		const c = active.find((x) => x.id === "distributions-0004");
 		const j = c === undefined ? undefined : jsonOf(c, "canonical");
 		const document = kit.source.read("spec/ir/mck/documents/complete-example.yaml");
 		expect(j).toBeDefined();
 		expect(document).not.toBeNull();
 		expect(yaml(document ?? "")).toEqual(json(j?.body ?? ""));
+		expect(writeYaml(json(j?.body ?? ""))).toBe(document ?? "");
 	});
 
 	test("every accepted YAML fence parses and every rejected one answers without throwing", () => {
@@ -126,10 +116,9 @@ describe("the canonical YAML writer against every YAML fence of the embedded kit
 			}
 		}
 		console.log(`yaml accepted fences: ${accepted}; yaml rejected fences: ${rejected}`);
-		// The kit has no `yaml accepted` fence yet and exactly one `yaml rejected`
-		// (types-0003's bare sequence, which decodes as a Tuple rather than the
-		// Reference the case is about). Both move only with a kit resync.
+		// The kit has no `yaml accepted` fence yet. Both numbers move only with a
+		// kit resync.
 		expect(accepted).toBe(0);
-		expect(rejected).toBe(1);
+		expect(rejected).toBe(9);
 	});
 });

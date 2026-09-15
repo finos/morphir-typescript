@@ -160,42 +160,21 @@ describe("mck run", () => {
 	// Pinned, not bounded: the embedded kit is a fixed set of bytes, so this
 	// line moves only when a kit resync deliberately moves it.
 	//
-	// The 14 failures belong to six cases, every one of them a fence the kit
-	// spells non-canonically rather than a binding fault, each listed for the
-	// parent in the plan's task reports and fixed by the kit resync:
-	//
-	// - distributions-0004: complete-example.yaml quotes FQNames
-	// - patterns-and-literals-0012: a flow `source` mapping
-	// - types-0010: a flow `source` mapping
-	// - values-0022: a flow `source` mapping
-	// - document-tree-0003: `node=TypeDefinitionFile` on a case whose canonical
-	//   fence is a Distribution
-	// - document-tree-0005: `$meta` members no writer emits, which want
-	//   `mode=read`
-	//
 	// The two skips are versions-0001's version-3 fence, on both paths.
-	test("over the embedded kit, only the kit's known-bad fences fail", () => {
+	test("over the embedded kit, every fence passes and only version 3 is skipped", () => {
 		const r = run(["run"]);
-		expect(r.out).toMatch(/^542 pass, 14 fail, 0 kit-error, 2 skipped$/m);
-		expect(r.code).toBe(1);
+		expect(r.out).toMatch(/^620 pass, 0 fail, 0 kit-error, 2 skipped$/m);
+		expect(r.code).toBe(0);
 	});
-	test("the embedded kit's failures are confined to the six known-bad cases, and it skips only version 3", () => {
+	test("the embedded kit skips only version 3", () => {
 		const reportFile = path.join(temp(), "report.json");
 		run(["run", "--report", reportFile]);
 		const report = JSON.parse(readFileSync(reportFile, "utf8")) as { records: { caseId: string; result: string; message?: string }[] };
-		const failing = new Map<string, number>();
-		for (const rec of report.records) if (rec.result === "fail") failing.set(rec.caseId, (failing.get(rec.caseId) ?? 0) + 1);
+		const failing = report.records.filter((rec) => rec.result === "fail");
 		const skipped = report.records.filter((rec) => rec.result === "skipped");
+		expect(failing).toHaveLength(0);
 		expect(skipped).toHaveLength(2);
 		for (const rec of skipped) expect(rec.message).toBe("version 3 not in capabilities");
-		expect(Object.fromEntries([...failing].sort())).toEqual({
-			"distributions-0004": 2,
-			"document-tree-0003": 2,
-			"document-tree-0005": 4,
-			"patterns-and-literals-0012": 2,
-			"types-0010": 2,
-			"values-0022": 2,
-		});
 	});
 	test("--only restricts the report to matching case ids", () => {
 		const reportFile = path.join(temp(), "report.json");

@@ -23,7 +23,7 @@ export const COMPLETE_EXAMPLE = path.resolve(import.meta.dir, "../../../mck/kit/
 const DOCUMENT_TREE = path.join(KIT_CASES, "document-tree.md");
 const DOCUMENT_TREE_TEXT = readFileSync(DOCUMENT_TREE, "utf8");
 
-const FILE_FENCE = /^```yaml file path=(\S+) set=(\S+)\r?\n([\s\S]*?)^```$/gm;
+const FILE_FENCE = /^```yaml file path=(\S+) set=(\S+)(?: \S+)*\r?\n([\s\S]*?)^```$/gm;
 
 /** The `file` fences of one set of `document-tree.md`, as the map readTree takes. */
 export function fileSet(set: string): Map<string, string> {
