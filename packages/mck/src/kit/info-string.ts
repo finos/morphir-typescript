@@ -34,6 +34,20 @@ export function isInfoError(value: FenceInfo | InfoError): value is InfoError {
 	return "message" in value;
 }
 
+/** The set a `file` fence belongs to; fences that name none share the anonymous set. */
+export function setOf(info: FenceInfo): string {
+	return info.keys.set ?? "";
+}
+
+/**
+ * How a set is named in a message. The anonymous set has no name to show, and
+ * both the parser and the driver have to render it the same way or the same set
+ * reads as two in a report.
+ */
+export function setLabel(name: string): string {
+	return name === "" ? "(unnamed)" : name;
+}
+
 export function parseInfoString(info: string): FenceInfo | InfoError {
 	const tokens = info
 		.trim()

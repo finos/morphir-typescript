@@ -6,6 +6,7 @@
 // binding cannot do is a capabilities question, so a fence the binding
 // declared no support for is skipped, never failed.
 import type { KitCase, KitFence } from "../kit/case.ts";
+import { setLabel, setOf } from "../kit/info-string.ts";
 import type { Kit } from "../kit/load.ts";
 import { resolveTextFence } from "../kit/source.ts";
 import { emptyReport, type Report, type ReportProfile, type ReportRecord, type ReportRole } from "../report.ts";
@@ -79,7 +80,7 @@ function fileSetsOf(targets: readonly Target[]): readonly FileSet[] {
 	const byName = new Map<string, Target[]>();
 	for (const t of targets) {
 		if (t.role !== "file") continue;
-		const name = t.fence.info.keys.set ?? "";
+		const name = setOf(t.fence.info);
 		const list = byName.get(name);
 		if (list === undefined) byName.set(name, [t]);
 		else list.push(t);
@@ -129,9 +130,17 @@ export async function runKit(kit: Kit, testee: Testee, options: RunOptions): Pro
 	for (const c of kit.cases) {
 		if (options.only !== undefined && !options.only.test(c.id)) continue;
 		const version = c.version ?? CURRENT_VERSION;
-		const canonicals = new Map<ReportProfile, string>();
 		const targets = c.fences.map((f) => targetOf(kit, f));
-		for (const t of targets) if (t.role === "canonical" && t.body !== null) canonicals.set(t.profile, normalizeCanonical(t.body));
+		// The expectation every accepted fence and every file set of this case is
+		// held to, normalized for comparison; the body is kept unnormalized beside
+		// it because a tree write is fed the fence as the kit spells it.
+		const canonicals = new Map<ReportProfile, string>();
+		const canonicalBodies = new Map<ReportProfile, string>();
+		for (const t of targets) {
+			if (t.role !== "canonical" || t.body === null) continue;
+			canonicals.set(t.profile, normalizeCanonical(t.body));
+			canonicalBodies.set(t.profile, t.body);
+		}
 		const paths: readonly PathMode[] = caps?.paths ?? ["current"];
 		// Kept per path, not folded into `records`, until path agreement (below)
 		// has had its say: reconciliation must only ever touch what this case's
@@ -140,8 +149,6 @@ export async function runKit(kit: Kit, testee: Testee, options: RunOptions): Pro
 		// must never be swept into a fence-index comparison).
 		const byPath = new Map<PathMode, ReportRecord[]>();
 		const sets = fileSetsOf(targets);
-		const canonicalBodies = new Map<ReportProfile, string>();
-		for (const t of targets) if (t.role === "canonical" && t.body !== null) canonicalBodies.set(t.profile, t.body);
 		for (const path of paths) {
 			const perPath: ReportRecord[] = [];
 			for (const t of targets) {
@@ -223,7 +230,7 @@ export async function runKit(kit: Kit, testee: Testee, options: RunOptions): Pro
 }
 
 function label(set: FileSet): string {
-	return set.name === "" ? "(unnamed)" : set.name;
+	return setLabel(set.name);
 }
 
 function describeDiagnostic(d: { readonly code: string; readonly cursor?: string; readonly message?: string }): string {
@@ -336,10 +343,9 @@ function judgeTreeRead(set: FileSet, language: Profile, response: DecodeResponse
 			observedDiagnostic: response.diagnostic,
 			message: `set ${label(set)} failed to readTree: ${describeDiagnostic(response.diagnostic)}`,
 		};
-	// No `file` fence may carry `warning=` today; when one does, the set is held
-	// to it exactly as an `accepted` fence is.
-	const wanted = set.targets.map((t) => t.fence.info.keys.warning).find((w) => w !== undefined);
-	const warn = checkWarnings(wanted, response.warnings);
+	// The grammar gives `file` no `warning=` key, so a set is always held to
+	// "no warnings", the way a canonical fence is.
+	const warn = checkWarnings(undefined, response.warnings);
 	if (warn !== null) return { result: "fail", message: `set ${label(set)}: ${warn}` };
 	const got = response.canonical[language];
 	if (got === undefined) return { result: "fail", message: `set ${label(set)}: adapter returned no ${language} canonical` };

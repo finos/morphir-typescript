@@ -196,8 +196,11 @@ async function copyTree(from: string, to: string): Promise<void> {
  * Runs the packed driver the way a user does: `--version`, an embedded-kit run,
  * and the same run over the packed adapter as a child process.
  *
- * The vendored kit runs clean, so `mck run` exits 0; `checkKitRunReport` still
- * adjudicates the report rather than trusting the exit code.
+ * The vendored kit still carries the known-bad fences listed under
+ * ALLOWED_FAILING_CASES until the Task 9 resync corrects them, so `mck run`
+ * exits 1. The exit code was never the verdict here: `checkKitRunReport`
+ * adjudicates the report, and `expectKitRun` accepts 0 and 1 from the driver
+ * and nothing else.
  */
 async function smokeTest(mckTarball: string, irTarball: string, compiler: string): Promise<void> {
 	const consumer = await mkdtemp(path.join(tmpdir(), "morphir-mck-consumer-"));
@@ -269,8 +272,8 @@ async function verifyDeclarations(tarball: string, files: readonly string[], cwd
 
 /**
  * The case ids the packed driver is allowed to fail on, and how many records
- * each may contribute. Every entry is a fence the vendored kit spells
- * non-canonically, not a fault in the binding, and each is listed for the
+ * each may contribute. All six entries are fences the vendored kit spells
+ * non-canonically, not faults in the binding, and each is listed for the
  * parent repository in the plan's task reports:
  *
  * - `distributions-0004`: `complete-example.yaml` quotes FQNames and writes

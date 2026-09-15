@@ -749,4 +749,53 @@ describe("runKit: the tree comparison", () => {
 			expect(r).toMatchObject({ result: "kit-error", message: "no canonical yaml fence in document-tree-0001" });
 		}
 	});
+
+	test("k. a writeTree the testee refuses fails every record of the set with the diagnostic", async () => {
+		const kit = await treeKit(SET_FENCES);
+		const { testee } = treeTestee(TREE_CAPS, {
+			writeTree: () => ({ ok: false, diagnostic: { code: "invalid_distribution_shape", cursor: "/", message: "path budget 4000 cannot fit x" } }),
+		});
+		const report = await runKit(kit, testee, opts);
+		const files = report.records.filter((r) => r.role === "file");
+		expect(files).toHaveLength(2);
+		for (const r of files) {
+			expect(r.result).toBe("fail");
+			expect(r.message).toBe("set s failed to writeTree: invalid_distribution_shape at /: path budget 4000 cannot fit x");
+		}
+	});
+
+	test("l. a read failure and a write failure are both reported on the record that has both", async () => {
+		const kit = await treeKit(SET_FENCES);
+		const { testee } = treeTestee(TREE_CAPS, {
+			readTree: () => ({ ok: true, kind: "IRFile", canonical: { yaml: "distribution: Application" }, warnings: [] }),
+			writeTree: () => ({ ok: true, files: [{ path: "manifest", content: MANIFEST_BODY }] }),
+		});
+		const report = await runKit(kit, testee, opts);
+		const files = report.records.filter((r) => r.role === "file");
+		// The manifest read back wrong but was written correctly: the read message
+		// alone. The module failed both halves and carries both.
+		expect(files[0]?.message).toBe("set s read back differently: line 1 differs: expected distribution: Library got distribution: Application");
+		expect(files[1]?.message).toBe(
+			"set s read back differently: line 1 differs: expected distribution: Library got distribution: Application; writeTree did not produce pkg/a/b/m/module",
+		);
+		for (const r of files) expect(r.result).toBe("fail");
+	});
+
+	test("m. compare=attributes sends strip: false to both tree operations", async () => {
+		const kit = await kitFrom(
+			new Map([
+				[
+					`${KIT_PATH}/document-tree.md`,
+					["## document-tree-0001: d {node=IRFile compare=attributes}", "```yaml canonical", TREE_CANONICAL, "```", ...SET_FENCES, ""].join("\n"),
+				],
+			]),
+		);
+		const { testee, readCalls, writeCalls } = treeTestee(TREE_CAPS, { writeTree: echoSet });
+		await runKit(kit, testee, opts);
+		expect(readCalls[0]?.strip).toBeFalse();
+		// writeTree has no strip of its own: the policy is the whole request, and
+		// the canonical it is fed already carries the attributes.
+		expect(writeCalls).toHaveLength(1);
+		expect(writeCalls[0]?.policy).toEqual({ profile: "yaml", pathBudget: 4000 });
+	});
 });

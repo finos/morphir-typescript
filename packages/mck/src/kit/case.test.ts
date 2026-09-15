@@ -120,6 +120,31 @@ describe("parseKitFile", () => {
 		expect(parseKitFile("document-tree.md", uniform).errors).toEqual([]);
 	});
 
+	test("a set that repeats a logical path is an error, and the same path in another set is not", () => {
+		const head = ["## document-tree-0001: paths", "```yaml canonical", "a: 1", "```"];
+		const repeated = [...head, "```yaml file path=manifest set=s", "a: 1", "```", "```yaml file path=manifest set=s", "a: 2", "```"].join("\n");
+		expect(parseKitFile("document-tree.md", repeated).errors.map((e) => e.message)).toEqual(["set s repeats path manifest"]);
+
+		const twoSets = [...head, "```yaml file path=manifest set=s", "a: 1", "```", "```yaml file path=manifest set=t", "a: 2", "```"].join("\n");
+		expect(parseKitFile("document-tree.md", twoSets).errors).toEqual([]);
+	});
+
+	test("the anonymous set is named (unnamed) in a kit error, as the driver names it", () => {
+		const source = [
+			"## document-tree-0001: anonymous",
+			"```yaml canonical",
+			"a: 1",
+			"```",
+			"```yaml file path=manifest",
+			"a: 1",
+			"```",
+			"```yaml file path=manifest",
+			"a: 2",
+			"```",
+		].join("\n");
+		expect(parseKitFile("document-tree.md", source).errors.map((e) => e.message)).toEqual(["set (unnamed) repeats path manifest"]);
+	});
+
 	test("canonical count is per profile, not per language", () => {
 		const withDupe = ["## types-0001: dupe profile", "```json canonical", '{ "a": 1 }', "```", "```text canonical", "x.json", "```"].join("\n");
 		const { errors } = parseKitFile(file, withDupe);

@@ -160,21 +160,26 @@ describe("mck run", () => {
 	// Pinned, not bounded: the embedded kit is a fixed set of bytes, so this
 	// line moves only when a kit resync deliberately moves it.
 	//
-	// The 14 failures are five known-bad fences, every one of them a fence the
-	// kit spells non-canonically rather than a binding fault, each listed for
-	// the parent in the plan's task reports and fixed by the kit resync:
-	// distributions-0004's complete-example.yaml (quotes FQNames),
-	// types-0010 / values-0022 / patterns-and-literals-0012 (a flow `source`
-	// mapping), document-tree-0003 (`node=TypeDefinitionFile` on a case whose
-	// canonical fence is a Distribution), and document-tree-0005 (`$meta`
-	// members no writer emits, which want `mode=read`). The two skips are
-	// versions-0001's version-3 fence, on both paths.
+	// The 14 failures belong to six cases, every one of them a fence the kit
+	// spells non-canonically rather than a binding fault, each listed for the
+	// parent in the plan's task reports and fixed by the kit resync:
+	//
+	// - distributions-0004: complete-example.yaml quotes FQNames
+	// - patterns-and-literals-0012: a flow `source` mapping
+	// - types-0010: a flow `source` mapping
+	// - values-0022: a flow `source` mapping
+	// - document-tree-0003: `node=TypeDefinitionFile` on a case whose canonical
+	//   fence is a Distribution
+	// - document-tree-0005: `$meta` members no writer emits, which want
+	//   `mode=read`
+	//
+	// The two skips are versions-0001's version-3 fence, on both paths.
 	test("over the embedded kit, only the kit's known-bad fences fail", () => {
 		const r = run(["run"]);
 		expect(r.out).toMatch(/^542 pass, 14 fail, 0 kit-error, 2 skipped$/m);
 		expect(r.code).toBe(1);
 	});
-	test("the embedded kit's failures are confined to the five known-bad cases, and it skips only version 3", () => {
+	test("the embedded kit's failures are confined to the six known-bad cases, and it skips only version 3", () => {
 		const reportFile = path.join(temp(), "report.json");
 		run(["run", "--report", reportFile]);
 		const report = JSON.parse(readFileSync(reportFile, "utf8")) as { records: { caseId: string; result: string; message?: string }[] };
