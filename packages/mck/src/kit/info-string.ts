@@ -24,11 +24,28 @@ const KEYS: Readonly<Record<Role, ReadonlySet<string>>> = {
 	// that warning (decision 0006's compatibility window).
 	accepted: new Set(["warning"]),
 	rejected: new Set(["diagnostic", "expect"]),
-	file: new Set(["path", "set"]),
+	// mode=read: the set holds input a canonical writer never reproduces (a
+	// `$meta` member, say), so only the read half of the tree comparison runs
+	// for it. It is all-or-nothing per set, which `case.ts` enforces.
+	file: new Set(["path", "set", "mode"]),
 };
 
 export function isInfoError(value: FenceInfo | InfoError): value is InfoError {
 	return "message" in value;
+}
+
+/** The set a `file` fence belongs to; fences that name none share the anonymous set. */
+export function setOf(info: FenceInfo): string {
+	return info.keys.set ?? "";
+}
+
+/**
+ * How a set is named in a message. The anonymous set has no name to show, and
+ * both the parser and the driver have to render it the same way or the same set
+ * reads as two in a report.
+ */
+export function setLabel(name: string): string {
+	return name === "" ? "(unnamed)" : name;
 }
 
 export function parseInfoString(info: string): FenceInfo | InfoError {
@@ -59,7 +76,10 @@ export function parseInfoString(info: string): FenceInfo | InfoError {
 		const count = ("diagnostic" in keys ? 1 : 0) + ("expect" in keys ? 1 : 0);
 		if (count !== 1) return { message: "rejected needs exactly one of diagnostic or expect" };
 	}
-	if (typedRole === "file" && !("path" in keys)) return { message: "file needs path" };
+	if (typedRole === "file") {
+		if (!("path" in keys)) return { message: "file needs path" };
+		if ("mode" in keys && keys.mode !== "read") return { message: "mode must be read" };
+	}
 
 	return { language: language as Language, role: typedRole, keys };
 }

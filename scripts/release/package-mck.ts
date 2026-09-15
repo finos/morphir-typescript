@@ -29,6 +29,7 @@ import {
 	runCommand,
 	verifyExtractedFiles,
 } from "./package-common.ts";
+import { packYamlDependency } from "./package-ir.ts";
 import { parseStableVersion } from "./version.ts";
 
 const ENTRYPOINTS = ["index.ts", "cli.ts", "adapter.ts"] as const;
@@ -81,18 +82,21 @@ const EMBEDDED_KIT_MODULE = "embedded.ts";
 /**
  * The IR is imported by relative source path inside the repository. Both the
  * bundle and the emitted declarations must name the published package instead.
- * `VOCABULARY` and `VocabularyEntry` are re-exported from `/v4`.
+ * `VOCABULARY` and `VocabularyEntry` are re-exported from `/v4`; the document
+ * tree is published as `/layout`.
  */
 function irPackageSpecifier(specifier: string): string {
 	const normalized = specifier.split(path.sep).join("/");
 	if (normalized.endsWith("/ir/src/index.ts")) return "@finos/morphir-ir";
 	if (normalized.endsWith("/ir/src/versions/v4/index.ts") || normalized.endsWith("/ir/src/versions/v4/vocabulary.ts")) return "@finos/morphir-ir/v4";
+	if (normalized.endsWith("/ir/src/layout/index.ts")) return "@finos/morphir-ir/layout";
 	throw new Error(`@finos/morphir-mck imports an IR source that no published export covers: ${specifier}`);
 }
 
 const DECLARATION_REWRITES: readonly DeclarationRewrite[] = [
 	[/(["'])(?:\.\.\/)+ir\/src\/index\.ts\1/g, '"@finos/morphir-ir"'],
 	[/(["'])(?:\.\.\/)+ir\/src\/versions\/v4\/(?:index|vocabulary)\.ts\1/g, '"@finos/morphir-ir/v4"'],
+	[/(["'])(?:\.\.\/)+ir\/src\/layout\/index\.ts\1/g, '"@finos/morphir-ir/layout"'],
 ];
 
 function expectExact(value: unknown, expected: unknown, field: string): void {
@@ -193,25 +197,34 @@ async function copyTree(from: string, to: string): Promise<void> {
  * Runs the packed driver the way a user does: `--version`, an embedded-kit run,
  * and the same run over the packed adapter as a child process.
  *
- * The vendored kit runs clean, so `mck run` exits 0; `checkKitRunReport` still
- * adjudicates the report rather than trusting the exit code.
+ * The vendored kit runs clean, so `mck run` exits 0. `checkKitRunReport`
+ * still adjudicates the report against ALLOWED_FAILING_CASES, and
+ * `expectKitRun` still requires that exit code from the driver.
  */
-async function smokeTest(mckTarball: string, irTarball: string, compiler: string): Promise<void> {
+async function smokeTest(mckTarball: string, irTarball: string, compiler: string, root: string): Promise<void> {
 	const consumer = await mkdtemp(path.join(tmpdir(), "morphir-mck-consumer-"));
+	const yamlWork = await mkdtemp(path.join(tmpdir(), "morphir-mck-yaml-pack-"));
 	try {
 		// The packed manifest depends on `@finos/morphir-ir` by exact version, and
-		// `--offline` cannot resolve that name against a registry it must not
-		// reach. The override points the transitive dependency at the very
-		// tarball this run built, so the consumer installs the pair and nothing
-		// else.
+		// the IR in turn on `yaml`; `--offline` cannot resolve either name against
+		// a registry it must not reach (a fresh CI runner has no cached manifest
+		// for `yaml`). The overrides point both at local tarballs: the IR tarball
+		// this run built, and `yaml` packed from this workspace's own install.
+		const yamlTarball = await packYamlDependency(root, yamlWork);
 		const consumerManifest = {
 			name: "morphir-mck-artifact-consumer",
 			private: true,
 			type: "module",
-			overrides: { "@finos/morphir-ir": `file:${irTarball.split(path.sep).join("/")}` },
+			overrides: {
+				"@finos/morphir-ir": `file:${irTarball.split(path.sep).join("/")}`,
+				yaml: `file:${yamlTarball.split(path.sep).join("/")}`,
+			},
 		};
 		await Bun.write(path.join(consumer, "package.json"), `${JSON.stringify(consumerManifest)}\n`);
-		await runCommand([process.execPath, "add", "--offline", "--no-save", "--ignore-scripts", "--backend=copyfile", irTarball, mckTarball], consumer);
+		await runCommand(
+			[process.execPath, "add", "--offline", "--no-save", "--ignore-scripts", "--backend=copyfile", yamlTarball, irTarball, mckTarball],
+			consumer,
+		);
 		const cli = "node_modules/@finos/morphir-mck/dist/cli.js";
 		const adapter = "node_modules/@finos/morphir-mck/dist/adapter.js";
 
@@ -238,6 +251,7 @@ async function smokeTest(mckTarball: string, irTarball: string, compiler: string
 		await runCommand([compiler, "--noEmit", "--strict", "--target", "ES2022", "--module", "NodeNext", "--moduleResolution", "NodeNext", "index.ts"], consumer);
 	} finally {
 		await rm(consumer, { recursive: true, force: true });
+		await rm(yamlWork, { recursive: true, force: true });
 	}
 }
 
@@ -266,10 +280,9 @@ async function verifyDeclarations(tarball: string, files: readonly string[], cwd
 
 /**
  * The case ids the packed driver is allowed to fail on, and how many records
- * each may contribute. The vendored kit now runs clean, so this map is empty:
- * any failing record fails the packaging check. Kept as a map, rather than a
- * bare "no failures allowed" check, so a future known gap can be allowed
- * through deliberately, the way distributions-0004 once was.
+ * each may contribute. Empty: the vendored kit runs clean. The mechanism
+ * stays so a future kit resync can carry a known-bad fence again without a
+ * code change.
  */
 const ALLOWED_FAILING_CASES: ReadonlyMap<string, number> = new Map();
 
@@ -297,9 +310,7 @@ export function checkKitRunReport(report: unknown, label: string): void {
 
 async function expectKitRun(command: readonly string[], consumer: string, reportFile: string): Promise<void> {
 	const result = await executeCommand(command, consumer);
-	// Exit 1 is `mck run` saying some record failed, which the report check
-	// below adjudicates; any other non-zero exit is the driver itself failing.
-	if (result.exitCode !== 0 && result.exitCode !== 1) throw commandFailure(command, result);
+	if (result.exitCode !== 0) throw commandFailure(command, result);
 	checkKitRunReport(JSON.parse(await readFile(path.join(consumer, reportFile), "utf8")), reportFile);
 }
 
@@ -383,7 +394,7 @@ export async function buildMckArtifact(
 			const candidateFiles = await archiveFiles(validatePackageFiles, candidate, absoluteRoot, await expectedArchiveFiles(packageRoot));
 			await verifyExtractedFiles(candidate, candidateFiles, work);
 			await verifyDeclarations(candidate, candidateFiles, absoluteRoot);
-			await smokeTest(candidate, path.resolve(irTarball), path.join(absoluteRoot, "node_modules/.bin/tsc"));
+			await smokeTest(candidate, path.resolve(irTarball), path.join(absoluteRoot, "node_modules/.bin/tsc"), absoluteRoot);
 			return candidateFiles;
 		});
 		return { tarball, files };

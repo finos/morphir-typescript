@@ -38,7 +38,7 @@ export function writePackageSpecification(p: PackageSpecification<TA, VA>): Json
 
 // ----------------------------------------------------------- entry points
 
-function writeEntryPoints(entryPoints: readonly EntryPoint[]): JsonValue {
+export function writeEntryPoints(entryPoints: readonly EntryPoint[]): JsonValue {
 	return jsonObject(
 		entryPoints.map((e) => {
 			const entries: Entry[] = [

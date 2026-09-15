@@ -3,7 +3,7 @@
 // the data; everything else under it is prose. Every structural rule from the
 // kit's README is enforced here and reported as a KitError with a line, so
 // the check command can print `file:line: message`.
-import { type FenceInfo, isInfoError, parseInfoString } from "./info-string.ts";
+import { type FenceInfo, isInfoError, parseInfoString, setLabel, setOf } from "./info-string.ts";
 import { type Block, tokenize } from "./markdown.ts";
 
 export interface KitFence {
@@ -96,6 +96,27 @@ export function parseKitFile(file: string, source: string): ParsedFile {
 				canonicals.set(profile, count);
 				if (count === 2) fail(fence.line, `more than one canonical ${profile} fence in ${current.id}`);
 			}
+		}
+		// A set's own rules. `mode=read` is a property of the set, not of one file
+		// in it: the driver either runs the write half for the whole set or for
+		// none of it, so a set that says both is a kit error rather than a silent
+		// choice. A repeated path is a kit error too, because the tree a set
+		// denotes is a map from logical path to text: the second fence would
+		// silently win, and the writer could only ever reproduce one of them.
+		const modes = new Map<string, string | undefined>();
+		const paths = new Map<string, Set<string>>();
+		for (const fence of current.fences) {
+			if (fence.info.role !== "file") continue;
+			const set = setOf(fence.info);
+			const mode = fence.info.keys.mode;
+			if (!modes.has(set)) modes.set(set, mode);
+			else if (modes.get(set) !== mode) fail(fence.line, `set ${setLabel(set)} mixes mode=read and default fences`);
+
+			const logical = fence.info.keys.path ?? "";
+			const seenPaths = paths.get(set) ?? new Set<string>();
+			if (seenPaths.has(logical)) fail(fence.line, `set ${setLabel(set)} repeats path ${logical}`);
+			seenPaths.add(logical);
+			paths.set(set, seenPaths);
 		}
 		if (current.status === "pending") {
 			const bad = current.fences.find((f) => f.info.role !== "rejected");

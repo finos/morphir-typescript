@@ -7,7 +7,8 @@
 import { exec } from "../_lib.ts";
 
 const out = ".dev/out/conformance";
-await exec(["bun", "packages/mck/src/cli.ts", "run", "--report", `${out}/in-process.json`]);
-await exec(["bun", "packages/mck/src/cli.ts", "run", "--adapter", "bun", "--adapter-arg", "packages/mck/src/adapter.ts", "--report", `${out}/adapter.json`]);
+const cli = "packages/mck/src/cli.ts";
+await exec(["bun", cli, "run", "--report", `${out}/in-process.json`]);
+await exec(["bun", cli, "run", "--adapter", "bun", "--adapter-arg", "packages/mck/src/adapter.ts", "--report", `${out}/adapter.json`]);
 await exec(["bun", "scripts/conformance/compare-reports.ts", `${out}/in-process.json`, `${out}/adapter.json`]);
-await exec(["bun", "packages/mck/src/cli.ts", "coverage"]);
+await exec(["bun", cli, "coverage"]);

@@ -546,3 +546,276 @@ describe("runKit", () => {
 		expect(decodeCalls).toHaveLength(1);
 	});
 });
+
+// ------------------------------------------------- the tree comparison (S8)
+
+const TREE_CAPS: Capabilities = { ...FULL_CAPS, profiles: ["json", "yaml"], layouts: ["single", "tree"] };
+
+const MANIFEST_BODY = ["formatVersion: 4", "distribution: Library", "package: a/b", "pathBudget: 4000"].join("\n");
+const MODULE_BODY = ["formatVersion: 4", "path: m", "types: []", "values: []"].join("\n");
+const TREE_CANONICAL = "distribution: Library";
+
+/** A `document-tree` case with one canonical fence and the `file` fences given. */
+function treeKit(fences: readonly string[], canonical = ["```yaml canonical", TREE_CANONICAL, "```"]): Promise<Kit> {
+	return kitFrom(new Map([[`${KIT_PATH}/document-tree.md`, ["## document-tree-0001: d {node=IRFile}", ...canonical, ...fences, ""].join("\n")]]));
+}
+
+const SET_FENCES: readonly string[] = [
+	"```yaml file path=manifest set=s",
+	MANIFEST_BODY,
+	"```",
+	"```yaml file path=pkg/a/b/m/module set=s",
+	MODULE_BODY,
+	"```",
+];
+
+interface TreeScript {
+	readonly readTree?: (req: ReadTreeRequest) => DecodeResponse;
+	readonly writeTree?: (req: WriteTreeRequest) => WriteTreeResponse;
+}
+
+function treeTestee(capabilities: Capabilities, script: TreeScript): { testee: Testee; readCalls: ReadTreeRequest[]; writeCalls: WriteTreeRequest[] } {
+	const readCalls: ReadTreeRequest[] = [];
+	const writeCalls: WriteTreeRequest[] = [];
+	const testee: Testee = {
+		capabilities: async () => capabilities,
+		decode: async () => ({ ok: true, kind: "IRFile", canonical: { json: TREE_CANONICAL, yaml: TREE_CANONICAL }, warnings: [] }),
+		readTree: async (req) => {
+			readCalls.push(req);
+			return script.readTree?.(req) ?? { ok: true, kind: "IRFile", canonical: { yaml: TREE_CANONICAL }, warnings: [] };
+		},
+		writeTree: async (req) => {
+			writeCalls.push(req);
+			return script.writeTree?.(req) ?? { ok: true, files: [] };
+		},
+		close: async () => {},
+	};
+	return { testee, readCalls, writeCalls };
+}
+
+/** The set written back exactly as the fences spell it. */
+const WRITTEN_SET: readonly { path: string; content: string }[] = [
+	{ path: "manifest", content: MANIFEST_BODY },
+	{ path: "pkg/a/b/m/module", content: MODULE_BODY },
+];
+const echoSet = (): WriteTreeResponse => ({ ok: true, files: WRITTEN_SET });
+
+describe("runKit: the tree comparison", () => {
+	test("a. a set that reads to the canonical and writes back identically passes on every fence", async () => {
+		const kit = await treeKit(SET_FENCES);
+		const { testee, readCalls, writeCalls } = treeTestee(TREE_CAPS, { writeTree: echoSet });
+		const report = await runKit(kit, testee, opts);
+		const files = report.records.filter((r) => r.role === "file");
+		expect(files).toHaveLength(2);
+		for (const r of files) expect(r).toMatchObject({ result: "pass", profile: "tree", caseId: "document-tree-0001" });
+		// One readTree and one writeTree for the set, not one per fence.
+		expect(readCalls).toHaveLength(1);
+		expect(writeCalls).toHaveLength(1);
+		// The fence body, verbatim, under its logical path: the driver never
+		// reshapes what a fence says before handing it to the testee.
+		expect(readCalls[0]).toMatchObject({
+			profile: "yaml",
+			strip: true,
+			files: [
+				{ path: "manifest", content: `${MANIFEST_BODY}\n` },
+				{ path: "pkg/a/b/m/module", content: `${MODULE_BODY}\n` },
+			],
+		});
+		// The budget is read lexically from the manifest fence (S8).
+		expect(writeCalls[0]).toMatchObject({ policy: { profile: "yaml", pathBudget: 4000 }, input: `${TREE_CANONICAL}\n` });
+		// Records come back in fence order, canonical first.
+		expect(report.records.map((r) => r.fenceIndex)).toEqual([0, 1, 2]);
+	});
+
+	test("b. a read canonical that differs fails every fence of the set with the same message", async () => {
+		const kit = await treeKit(SET_FENCES);
+		const { testee } = treeTestee(TREE_CAPS, {
+			readTree: () => ({ ok: true, kind: "IRFile", canonical: { yaml: "distribution: Application" }, warnings: [] }),
+			writeTree: echoSet,
+		});
+		const report = await runKit(kit, testee, opts);
+		const files = report.records.filter((r) => r.role === "file");
+		expect(files).toHaveLength(2);
+		for (const r of files) {
+			expect(r.result).toBe("fail");
+			expect(r.message).toBe("set s read back differently: line 1 differs: expected distribution: Library got distribution: Application");
+		}
+	});
+
+	test("c. a written file the set does not have fails the manifest's record only", async () => {
+		const kit = await treeKit(SET_FENCES);
+		const { testee } = treeTestee(TREE_CAPS, {
+			writeTree: () => ({ ok: true, files: [...WRITTEN_SET, { path: "pkg/a/b/m/extra.type", content: "x" }] }),
+		});
+		const report = await runKit(kit, testee, opts);
+		const files = report.records.filter((r) => r.role === "file");
+		expect(files[0]).toMatchObject({ result: "fail", message: "writeTree produced pkg/a/b/m/extra.type, which the set does not have" });
+		expect(files[1]).toMatchObject({ result: "pass" });
+	});
+
+	test("d. a file the writer omits fails that fence's record only", async () => {
+		const kit = await treeKit(SET_FENCES);
+		const { testee } = treeTestee(TREE_CAPS, {
+			writeTree: () => ({ ok: true, files: [{ path: "manifest", content: MANIFEST_BODY }] }),
+		});
+		const report = await runKit(kit, testee, opts);
+		const files = report.records.filter((r) => r.role === "file");
+		expect(files[0]).toMatchObject({ result: "pass" });
+		expect(files[1]).toMatchObject({ result: "fail", message: "writeTree did not produce pkg/a/b/m/module" });
+	});
+
+	test("e. a set whose fences mix json and yaml is a kit-error", async () => {
+		const kit = await treeKit([
+			"```yaml file path=manifest set=s",
+			MANIFEST_BODY,
+			"```",
+			"```json file path=pkg/a/b/m/module set=s",
+			'{ "formatVersion": 4 }',
+			"```",
+		]);
+		const { testee, readCalls } = treeTestee(TREE_CAPS, {});
+		const report = await runKit(kit, testee, opts);
+		const files = report.records.filter((r) => r.role === "file");
+		expect(files).toHaveLength(2);
+		for (const r of files) expect(r).toMatchObject({ result: "kit-error", message: "mixed profiles in set s" });
+		expect(readCalls).toHaveLength(0);
+	});
+
+	test("f. a manifest with no readable pathBudget is a kit-error, and a missing manifest names the set", async () => {
+		const noBudget = await treeKit(["```yaml file path=manifest set=s", "formatVersion: 4", "```"]);
+		const { testee } = treeTestee(TREE_CAPS, {});
+		const report = await runKit(noBudget, testee, opts);
+		expect(report.records.filter((r) => r.role === "file")[0]).toMatchObject({
+			result: "kit-error",
+			message: "set s: manifest has no readable pathBudget",
+		});
+
+		const noManifest = await treeKit(["```yaml file path=pkg/a/b/m/module set=s", MODULE_BODY, "```"]);
+		const second = await runKit(noManifest, treeTestee(TREE_CAPS, {}).testee, opts);
+		expect(second.records.filter((r) => r.role === "file")[0]).toMatchObject({ result: "kit-error", message: "set s has no manifest" });
+	});
+
+	test("f2. an unresolved text file fence carries the fuller `set <name>: <message>`, the set's other fences the bare message", async () => {
+		const kit = await treeKit([
+			"```yaml file path=manifest set=s",
+			MANIFEST_BODY,
+			"```",
+			"```text file path=pkg/a/b/m/module set=s",
+			`${KIT_PATH}/documents/missing.yaml`,
+			"```",
+		]);
+		const { testee } = treeTestee(TREE_CAPS, {});
+		const report = await runKit(kit, testee, opts);
+		const files = report.records.filter((r) => r.role === "file");
+		expect(files).toHaveLength(2);
+		const bareMessage = `text fence names ${KIT_PATH}/documents/missing.yaml, which is not in the kit source (scripted)`;
+		const manifestRecord = files.find((r) => r.fenceIndex === 1);
+		const moduleRecord = files.find((r) => r.fenceIndex === 2);
+		expect(manifestRecord).toMatchObject({ result: "kit-error", message: bareMessage });
+		expect(moduleRecord).toMatchObject({ result: "kit-error", message: `set s: ${bareMessage}` });
+	});
+
+	test("g. a testee without the tree layout skips the set, and one without the profile skips it too", async () => {
+		const kit = await treeKit(SET_FENCES);
+		const single = await runKit(kit, treeTestee({ ...TREE_CAPS, layouts: ["single"] }, {}).testee, opts);
+		for (const r of single.records.filter((x) => x.role === "file")) {
+			expect(r).toMatchObject({ result: "skipped", profile: "tree", message: "layout tree not in capabilities" });
+		}
+		const jsonOnly = await runKit(kit, treeTestee({ ...TREE_CAPS, profiles: ["json"] }, {}).testee, opts);
+		for (const r of jsonOnly.records.filter((x) => x.role === "file")) {
+			expect(r).toMatchObject({ result: "skipped", profile: "tree", message: "profile yaml not in capabilities" });
+		}
+	});
+
+	test("h. a mode=read set runs only the read half", async () => {
+		const kit = await treeKit([
+			"```yaml file path=manifest set=s mode=read",
+			MANIFEST_BODY,
+			"```",
+			"```yaml file path=pkg/a/b/m/module set=s mode=read",
+			MODULE_BODY,
+			"```",
+		]);
+		// The writer would produce nothing at all; with the write half skipped the
+		// set still passes on its read.
+		const { testee, readCalls, writeCalls } = treeTestee(TREE_CAPS, { writeTree: () => ({ ok: true, files: [] }) });
+		const report = await runKit(kit, testee, opts);
+		const files = report.records.filter((r) => r.role === "file");
+		expect(files).toHaveLength(2);
+		for (const r of files) expect(r).toMatchObject({ result: "pass" });
+		expect(readCalls).toHaveLength(1);
+		expect(writeCalls).toHaveLength(0);
+	});
+
+	test("i. a readTree the testee refuses fails the set and carries the diagnostic", async () => {
+		const kit = await treeKit(SET_FENCES);
+		const { testee } = treeTestee(TREE_CAPS, {
+			readTree: () => ({ ok: false, diagnostic: { code: "missing_member", cursor: "manifest", message: 'missing file "manifest"' } }),
+			writeTree: echoSet,
+		});
+		const report = await runKit(kit, testee, opts);
+		for (const r of report.records.filter((x) => x.role === "file")) {
+			expect(r.result).toBe("fail");
+			expect(r.message).toContain('set s failed to readTree: missing_member at manifest: missing file "manifest"');
+			expect(r.observedDiagnostic).toMatchObject({ code: "missing_member" });
+		}
+	});
+
+	test("j. a case with a file set but no canonical of the set's profile is a kit-error", async () => {
+		const kit = await treeKit(SET_FENCES, ["```json canonical", '{"a":1}', "```"]);
+		const { testee } = treeTestee(TREE_CAPS, {});
+		const report = await runKit(kit, testee, opts);
+		for (const r of report.records.filter((x) => x.role === "file")) {
+			expect(r).toMatchObject({ result: "kit-error", message: "no canonical yaml fence in document-tree-0001" });
+		}
+	});
+
+	test("k. a writeTree the testee refuses fails every record of the set with the diagnostic", async () => {
+		const kit = await treeKit(SET_FENCES);
+		const { testee } = treeTestee(TREE_CAPS, {
+			writeTree: () => ({ ok: false, diagnostic: { code: "invalid_distribution_shape", cursor: "/", message: "path budget 4000 cannot fit x" } }),
+		});
+		const report = await runKit(kit, testee, opts);
+		const files = report.records.filter((r) => r.role === "file");
+		expect(files).toHaveLength(2);
+		for (const r of files) {
+			expect(r.result).toBe("fail");
+			expect(r.message).toBe("set s failed to writeTree: invalid_distribution_shape at /: path budget 4000 cannot fit x");
+		}
+	});
+
+	test("l. a read failure and a write failure are both reported on the record that has both", async () => {
+		const kit = await treeKit(SET_FENCES);
+		const { testee } = treeTestee(TREE_CAPS, {
+			readTree: () => ({ ok: true, kind: "IRFile", canonical: { yaml: "distribution: Application" }, warnings: [] }),
+			writeTree: () => ({ ok: true, files: [{ path: "manifest", content: MANIFEST_BODY }] }),
+		});
+		const report = await runKit(kit, testee, opts);
+		const files = report.records.filter((r) => r.role === "file");
+		// The manifest read back wrong but was written correctly: the read message
+		// alone. The module failed both halves and carries both.
+		expect(files[0]?.message).toBe("set s read back differently: line 1 differs: expected distribution: Library got distribution: Application");
+		expect(files[1]?.message).toBe(
+			"set s read back differently: line 1 differs: expected distribution: Library got distribution: Application; writeTree did not produce pkg/a/b/m/module",
+		);
+		for (const r of files) expect(r.result).toBe("fail");
+	});
+
+	test("m. compare=attributes sends strip: false to both tree operations", async () => {
+		const kit = await kitFrom(
+			new Map([
+				[
+					`${KIT_PATH}/document-tree.md`,
+					["## document-tree-0001: d {node=IRFile compare=attributes}", "```yaml canonical", TREE_CANONICAL, "```", ...SET_FENCES, ""].join("\n"),
+				],
+			]),
+		);
+		const { testee, readCalls, writeCalls } = treeTestee(TREE_CAPS, { writeTree: echoSet });
+		await runKit(kit, testee, opts);
+		expect(readCalls[0]?.strip).toBeFalse();
+		// writeTree has no strip of its own: the policy is the whole request, and
+		// the canonical it is fed already carries the attributes.
+		expect(writeCalls).toHaveLength(1);
+		expect(writeCalls[0]?.policy).toEqual({ profile: "yaml", pathBudget: 4000 });
+	});
+});

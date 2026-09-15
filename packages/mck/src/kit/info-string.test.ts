@@ -21,6 +21,13 @@ describe("parseInfoString", () => {
 			keys: { path: "manifest", set: "lib" },
 		});
 	});
+	test("file takes mode=read", () => {
+		expect(parseInfoString("yaml file path=manifest set=meta mode=read")).toEqual({
+			language: "yaml",
+			role: "file",
+			keys: { path: "manifest", set: "meta", mode: "read" },
+		});
+	});
 	test("a fence with no role is not a data fence", () => {
 		const result = parseInfoString("ts");
 		expect(isInfoError(result)).toBe(true);
@@ -31,6 +38,8 @@ describe("parseInfoString", () => {
 		["yaml rejected", /rejected needs exactly one of diagnostic or expect/],
 		["yaml rejected diagnostic=a expect=B", /rejected needs exactly one of diagnostic or expect/],
 		["yaml file", /file needs path/],
+		["yaml file path=manifest mode=write", /mode must be read/],
+		["yaml canonical mode=read", /unknown key "mode"/],
 		["toml canonical", /unknown language "toml"/],
 		["yaml maybe", /unknown role "maybe"/],
 		["yaml canonical diagnostic=x", /unknown key "diagnostic"/],

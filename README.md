@@ -63,6 +63,32 @@ console.log(json.write(result.value));
 
 The reader returns a typed result with structured diagnostics. The writer emits the canonical v4 JSON representation.
 
+### Read and write Morphir IR v4 YAML
+
+`@finos/morphir-ir/codec/yaml` reads and writes the same `JsonValue` tree as the JSON codec, over the `yaml` package:
+
+```ts
+import { parseYaml, writeYaml } from "./packages/ir/src/codec/yaml/index.ts";
+
+const result = parseYaml("formatVersion: 4\n");
+if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
+
+console.log(writeYaml(result.value));
+```
+
+The reader accepts strict, spec-legal YAML; no v4 reader learns about YAML itself, so the same decoders run over either codec. The writer is canonical and ours: it never calls the `yaml` package's stringifier.
+
+### Read and write the document tree
+
+`@finos/morphir-ir/layout` and `@finos/morphir-ir/layout/node` lay a distribution out as a tree of files — a manifest, module definitions, module specifications, and dependency copies — under logical paths that carry no extension until a profile picks one:
+
+```ts
+import { readTree, writeTree } from "./packages/ir/src/layout/index.ts";
+import { readTreeFromDirectory, writeTreeToDirectory } from "./packages/ir/src/layout/node.ts";
+```
+
+`./layout` works against an in-memory `DocumentTree`; `./layout/node` is the one entry point in the package that touches the filesystem, reading and writing that tree at a real directory. A stem too long for the filesystem is truncated and replaced with the first eight hex digits of the SHA-256 hash of its untruncated, escaped form, after `__`.
+
 ### Check an MCK directory
 
 The current MCK CLI validates the structure of a kit directory:
@@ -75,7 +101,7 @@ Add `--json` for machine-readable output.
 
 ### Check a binding's conformance with `mck`
 
-`mck` is the driver for the Morphir Compatibility Kit: it runs a binding's decoder and structural checker against every kit case and reports pass, fail, or skip per fence. Install it as the `mck` binary from `@finos/morphir-mck` (`npm install -g @finos/morphir-mck`, or `npx @finos/morphir-mck`), or download the standalone `mck` binary from a [release](https://github.com/finos/morphir-typescript/releases). `mck run` checks the in-process TypeScript binding against the kit vendored in the package; `mck run --adapter <exe> [--adapter-arg <arg>]...` runs the same kit against any binding that speaks the adapter's JSON-lines protocol (see `mck-adapter-typescript` for the reference implementation) as a child process; `mck coverage` reports every IR v4 vocabulary entry the kit does not yet exercise.
+`mck` is the driver for the Morphir Compatibility Kit: it runs a binding's decoder and structural checker against every kit case and reports pass, fail, or skip per fence, including JSON, YAML, and document-tree fences. Install it as the `mck` binary from `@finos/morphir-mck` (`npm install -g @finos/morphir-mck`, or `npx @finos/morphir-mck`), or download the standalone `mck` binary from a [release](https://github.com/finos/morphir-typescript/releases). `mck run` checks the in-process TypeScript binding against the kit vendored in the package; `mck run --adapter <exe> [--adapter-arg <arg>]...` runs the same kit against any binding that speaks the adapter's JSON-lines protocol (see `mck-adapter-typescript` for the reference implementation) as a child process; `mck coverage` reports every IR v4 vocabulary entry the kit does not yet exercise. Over the embedded kit, `mck run` reports `620 pass, 0 fail, 0 kit-error, 2 skipped` — the two skips are the kit's version-3 fences, which this binding's capabilities do not name.
 
 ## Development
 

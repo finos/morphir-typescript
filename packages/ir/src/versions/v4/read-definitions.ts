@@ -159,7 +159,7 @@ export function readModuleDefinition(ctx: Ctx, v: JsonValue): Result<ModuleDefin
 	return ok({ doc: doc.value, types: types.value, values: values.value });
 }
 
-function readDocumentedTypeSpecification(ctx: Ctx, v: JsonValue): Result<Documented<TypeSpecification<TA, VA>>, Diagnostic> {
+export function readDocumentedTypeSpecification(ctx: Ctx, v: JsonValue): Result<Documented<TypeSpecification<TA, VA>>, Diagnostic> {
 	return readDocumented(ctx, v, readTypeSpecification);
 }
 
@@ -169,7 +169,7 @@ function readDocumentedTypeSpecification(ctx: Ctx, v: JsonValue): Result<Documen
 // nested wrapper from the window of decision 0006 (kit definitions-0010) and
 // warns; anything else is the flat, canonical spelling. Both read to the same
 // Documented, and the writer emits the flat one with doc first.
-function readDocumentedValueSpecification(ctx: Ctx, v: JsonValue): Result<Documented<ValueSpecification<TA, VA>>, Diagnostic> {
+export function readDocumentedValueSpecification(ctx: Ctx, v: JsonValue): Result<Documented<ValueSpecification<TA, VA>>, Diagnostic> {
 	if (isObject(v)) {
 		const wrapped = v.members.get("value");
 		const nested = v.members.size === 1 || (v.members.size === 2 && v.members.has("doc"));

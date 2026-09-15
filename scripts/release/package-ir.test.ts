@@ -6,7 +6,15 @@ import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runReleaseCli } from "./cli.ts";
-import { buildIrArtifact, canonicalSourceMap, promoteVerifiedArtifact, publishManifest, runCommand, validatePackageFiles } from "./package-ir.ts";
+import {
+	buildIrArtifact,
+	canonicalSourceMap,
+	promoteVerifiedArtifact,
+	publishManifest,
+	runCommand,
+	validatePackageFiles,
+	yamlTarballName,
+} from "./package-ir.ts";
 import { parseStableVersion } from "./version.ts";
 
 const root = path.resolve(import.meta.dir, "../..");
@@ -18,6 +26,9 @@ const exportsMap = {
 	"./model": { types: "./dist/model/index.d.ts", import: "./dist/model/index.js" },
 	"./v4": { types: "./dist/versions/v4/index.d.ts", import: "./dist/versions/v4/index.js" },
 	"./codec/json": { types: "./dist/codec/json/value.d.ts", import: "./dist/codec/json/value.js" },
+	"./codec/yaml": { types: "./dist/codec/yaml/index.d.ts", import: "./dist/codec/yaml/index.js" },
+	"./layout": { types: "./dist/layout/index.d.ts", import: "./dist/layout/index.js" },
+	"./layout/node": { types: "./dist/layout/node.d.ts", import: "./dist/layout/node.js" },
 } as const;
 
 function sourceManifest(): Record<string, unknown> {
@@ -39,6 +50,7 @@ function sourceManifest(): Record<string, unknown> {
 		exports: structuredClone(exportsMap),
 		sideEffects: false,
 		publishConfig: { access: "public" },
+		dependencies: { yaml: "2.9.1" },
 		scripts: { typecheck: "tsc -p tsconfig.json" },
 		devDependencies: { "@finos/morphir-mck": "workspace:*" },
 	};
@@ -62,6 +74,7 @@ describe("publishManifest", () => {
 			exports: exportsMap,
 			sideEffects: false,
 			files: ["dist", "README.md", "LICENSE", "NOTICE"],
+			dependencies: { yaml: "2.9.1" },
 			publishConfig: { access: "public" },
 		});
 		expect(result).not.toHaveProperty("private");
@@ -89,6 +102,14 @@ describe("publishManifest", () => {
 		const wrongExports = sourceManifest();
 		wrongExports.exports = { ".": exportsMap["."] };
 		expect(() => publishManifest(wrongExports)).toThrow("exports");
+	});
+});
+
+describe("yamlTarballName", () => {
+	test("derives the packed yaml tarball name from the pinned dependency version, not a hard-coded literal", () => {
+		const source = sourceManifest();
+		const pinned = publishManifest(source).dependencies.yaml;
+		expect(yamlTarballName()).toBe(`yaml-${pinned}.tgz`);
 	});
 });
 
@@ -218,7 +239,7 @@ describe("@finos/morphir-ir artifact", () => {
 	let output: string;
 	let artifact: Awaited<ReturnType<typeof buildIrArtifact>>;
 
-	test("builds one clean tarball and smoke-tests all four installed exports", async () => {
+	test("builds one clean tarball and smoke-tests all seven installed exports", async () => {
 		output = await mkdtemp(path.join(tmpdir(), "morphir-ir-artifact-test-"));
 		artifact = await buildIrArtifact(root, output);
 
@@ -234,10 +255,16 @@ describe("@finos/morphir-ir artifact", () => {
 			"package/dist/model/index.js",
 			"package/dist/versions/v4/index.js",
 			"package/dist/codec/json/value.js",
+			"package/dist/codec/yaml/index.js",
+			"package/dist/layout/index.js",
+			"package/dist/layout/node.js",
 			"package/dist/index.d.ts",
 			"package/dist/model/index.d.ts",
 			"package/dist/versions/v4/index.d.ts",
 			"package/dist/codec/json/value.d.ts",
+			"package/dist/codec/yaml/index.d.ts",
+			"package/dist/layout/index.d.ts",
+			"package/dist/layout/node.d.ts",
 		]) {
 			expect(artifact.files).toContain(required);
 		}

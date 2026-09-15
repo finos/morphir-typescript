@@ -157,10 +157,24 @@ describe("mck kit", () => {
 });
 
 describe("mck run", () => {
-	test("over the embedded kit, every case passes", () => {
+	// Pinned, not bounded: the embedded kit is a fixed set of bytes, so this
+	// line moves only when a kit resync deliberately moves it.
+	//
+	// The two skips are versions-0001's version-3 fence, on both paths.
+	test("over the embedded kit, every fence passes and only version 3 is skipped", () => {
 		const r = run(["run"]);
-		expect(r.out).toMatch(/\d+ pass, 0 fail, 0 kit-error, \d+ skipped/);
+		expect(r.out).toMatch(/^620 pass, 0 fail, 0 kit-error, 2 skipped$/m);
 		expect(r.code).toBe(0);
+	});
+	test("the embedded kit skips only version 3", () => {
+		const reportFile = path.join(temp(), "report.json");
+		run(["run", "--report", reportFile]);
+		const report = JSON.parse(readFileSync(reportFile, "utf8")) as { records: { caseId: string; result: string; message?: string }[] };
+		const failing = report.records.filter((rec) => rec.result === "fail");
+		const skipped = report.records.filter((rec) => rec.result === "skipped");
+		expect(failing).toHaveLength(0);
+		expect(skipped).toHaveLength(2);
+		for (const rec of skipped) expect(rec.message).toBe("version 3 not in capabilities");
 	});
 	test("--only restricts the report to matching case ids", () => {
 		const reportFile = path.join(temp(), "report.json");
@@ -170,7 +184,7 @@ describe("mck run", () => {
 		expect(report.records.length).toBeGreaterThan(0);
 		for (const rec of report.records) expect(rec.caseId).toBe("types-0001");
 	});
-	test("--strict fails when any fence is skipped (yaml fences are skipped in-process)", () => {
+	test("--strict fails when any fence is skipped (version 3 is, in-process)", () => {
 		const r = run(["run", "--strict"]);
 		expect(r.code).toBe(1);
 	});

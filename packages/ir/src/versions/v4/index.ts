@@ -19,6 +19,8 @@
 // Checked<T> and one that does not keeps the plain reader.
 import { type Ctx, fail, newRoot } from "../../codec/json/cursor.ts";
 import { type JsonValue, parseJson, writeJson } from "../../codec/json/value.ts";
+import { JSON_PROFILE, type ProfileCodec } from "../../codec/profile.ts";
+import { parseYaml, writeYaml, YAML_PROFILE } from "../../codec/yaml/index.ts";
 import {
 	type AttributeMapper,
 	mapAttributes,
@@ -41,6 +43,7 @@ import { canonicalFormatVersion, compatibility, recognize } from "./format-versi
 import { readAccessControlledTypeDefinition, readAccessControlledValueDefinition, readModuleDefinition, readModuleSpecification } from "./read-definitions.ts";
 import { readIRFile, SUPPORTED_VERSIONS } from "./read-distribution.ts";
 import { readFQName, readName, readPath } from "./read-names.ts";
+import { readDistributionManifestFile, readModuleManifestFile, readTypeDefinitionFile, readValueDefinitionFile } from "./read-tree-files.ts";
 import { readType, readTypeDefinition, readTypeSpecification } from "./read-types.ts";
 import { readLiteral, readPattern, readValue, readValueDefinition, readValueSpecification } from "./read-values.ts";
 import type { VocabularyEntry, VocabularySpelling } from "./vocabulary.ts";
@@ -53,6 +56,7 @@ import {
 } from "./write-definitions.ts";
 import { writeIRFile } from "./write-distribution.ts";
 import { writeFQName, writeName, writePath } from "./write-names.ts";
+import { writeDistributionManifestFile, writeModuleManifestFile, writeTypeDefinitionFile, writeValueDefinitionFile } from "./write-tree-files.ts";
 import { writeType, writeTypeDefinition, writeTypeSpecification } from "./write-types.ts";
 import { writeLiteral, writePattern, writeValue, writeValueDefinition, writeValueSpecification } from "./write-values.ts";
 
@@ -74,6 +78,13 @@ export type PackageDefinition = model.PackageDefinition<TA, VA>;
 export type PackageSpecification = model.PackageSpecification<TA, VA>;
 export type Distribution = model.Distribution<TA, VA>;
 export type IRFile = model.IRFile<TA, VA>;
+
+// The document tree's four file kinds. A distribution written as a tree is the
+// same distribution; these are the slices it is written in.
+export type DistributionManifestFile = model.DistributionManifestFile;
+export type ModuleManifestFile = model.ModuleManifestFile<TA, VA>;
+export type TypeDefinitionFile = model.TypeDefinitionFile<TA, VA>;
+export type ValueDefinitionFile = model.ValueDefinitionFile<TA, VA>;
 
 type AccessControlledTypeDefinition = AccessControlled<Documented<TypeDefinition>>;
 type AccessControlledValueDefinition = AccessControlled<Documented<ValueDefinition>>;
@@ -100,7 +111,11 @@ export type NodeValue =
 	| { readonly node: "AccessControlledValueDefinition"; readonly value: AccessControlledValueDefinition }
 	| { readonly node: "ModuleDefinition"; readonly value: ModuleDefinition }
 	| { readonly node: "ModuleSpecification"; readonly value: ModuleSpecification }
-	| { readonly node: "IRFile"; readonly value: IRFile };
+	| { readonly node: "IRFile"; readonly value: IRFile }
+	| { readonly node: "DistributionManifestFile"; readonly value: DistributionManifestFile }
+	| { readonly node: "ModuleManifestFile"; readonly value: ModuleManifestFile }
+	| { readonly node: "TypeDefinitionFile"; readonly value: TypeDefinitionFile }
+	| { readonly node: "ValueDefinitionFile"; readonly value: ValueDefinitionFile };
 
 export type NodeKind = NodeValue["node"];
 
@@ -134,17 +149,26 @@ function nodeOf<K extends NodeKind, T>(node: K, r: Result<T, Diagnostic>): Resul
 	return r.ok ? ok({ node, value: r.value }) : r;
 }
 
-// The node entry point that keeps the warnings. Each call starts from its own
-// root context, so one node's legacy spellings never show up on the next.
-export function readNodeChecked(node: NodeKind, text: string): Result<Checked<NodeValue>, Diagnostic> {
-	const parsed = parseJson(text);
+// The node entry point that keeps the warnings, over whichever profile spells
+// the text. Each call starts from its own root context, so one node's legacy
+// spellings never show up on the next. The readers below this line never learn
+// which profile they were fed: both parse to the same JsonValue tree.
+export function readNodeCheckedWith(profile: ProfileCodec, node: NodeKind, text: string): Result<Checked<NodeValue>, Diagnostic> {
+	const parsed = profile.parse(text);
 	if (!parsed.ok) return parsed;
-	const v = parsed.value;
 	const ctx = newRoot();
-	const r = readNodeValue(node, ctx, v);
+	const r = readNodeValue(node, ctx, parsed.value);
 	// Copied, not aliased: ctx.warnings stays mutable for the readers, and the
 	// Checked a caller holds is the list as it stood when the read finished.
 	return r.ok ? ok({ value: r.value, warnings: [...ctx.warnings] }) : r;
+}
+
+export function writeNodeWith(profile: ProfileCodec, v: NodeValue): string {
+	return profile.write(writeNodeValue(v));
+}
+
+export function readNodeChecked(node: NodeKind, text: string): Result<Checked<NodeValue>, Diagnostic> {
+	return readNodeCheckedWith(JSON_PROFILE, node, text);
 }
 
 // Drops the warnings; the value and the diagnostics are unchanged.
@@ -194,6 +218,19 @@ function readNodeValue(node: NodeKind, ctx: Ctx, v: JsonValue): Result<NodeValue
 		// formatVersion beside the distribution itself.
 		case "IRFile":
 			return nodeOf("IRFile", readIRFile(v, ctx));
+		// The document tree's files. Each carries its own formatVersion, so each
+		// is a document in its own right and reads like one.
+		case "DistributionManifestFile":
+			return nodeOf("DistributionManifestFile", readDistributionManifestFile(v, ctx));
+		// No options: a module manifest read as a bare node has no layout to say
+		// which distribution kind it belongs to, so its entry objects are read as
+		// definitions.
+		case "ModuleManifestFile":
+			return nodeOf("ModuleManifestFile", readModuleManifestFile(v, ctx));
+		case "TypeDefinitionFile":
+			return nodeOf("TypeDefinitionFile", readTypeDefinitionFile(v, ctx));
+		case "ValueDefinitionFile":
+			return nodeOf("ValueDefinitionFile", readValueDefinitionFile(v, ctx));
 		default: {
 			const _: never = node;
 			return _;
@@ -237,6 +274,14 @@ function writeNodeValue(v: NodeValue): JsonValue {
 			return writeModuleSpecification(v.value);
 		case "IRFile":
 			return writeIRFile(v.value);
+		case "DistributionManifestFile":
+			return writeDistributionManifestFile(v.value);
+		case "ModuleManifestFile":
+			return writeModuleManifestFile(v.value);
+		case "TypeDefinitionFile":
+			return writeTypeDefinitionFile(v.value);
+		case "ValueDefinitionFile":
+			return writeValueDefinitionFile(v.value);
 		default: {
 			const _: never = v;
 			return _;
@@ -245,7 +290,7 @@ function writeNodeValue(v: NodeValue): JsonValue {
 }
 
 export function writeNode(v: NodeValue): string {
-	return writeJson(writeNodeValue(v));
+	return writeNodeWith(JSON_PROFILE, v);
 }
 
 // The name a fence means by `expect=`: the variant a node decoded to. Names,
@@ -260,6 +305,9 @@ export function nodeKindOf(v: NodeValue): string {
 		case "ValueSpecification":
 		case "ModuleDefinition":
 		case "ModuleSpecification":
+		// A manifest has no variants either: it is the file kind itself.
+		case "DistributionManifestFile":
+		case "ModuleManifestFile":
 			return v.node;
 		case "Type":
 		case "Literal":
@@ -274,6 +322,14 @@ export function nodeKindOf(v: NodeValue): string {
 			return v.value.value.value.kind;
 		case "IRFile":
 			return v.value.distribution.kind;
+		// A node file answers with what is inside it, the way a bare definition
+		// or specification node does.
+		case "TypeDefinitionFile":
+			return v.value.body.kind === "def" ? v.value.body.value.value.value.kind : v.value.body.value.value.kind;
+		// A value specification has no variants, so a spec file answers with the
+		// name of what it holds, the way a bare ValueSpecification node does.
+		case "ValueDefinitionFile":
+			return v.value.body.kind === "def" ? v.value.body.value.value.value.kind : "ValueSpecification";
 		default: {
 			const _: never = v;
 			return _;
@@ -290,6 +346,37 @@ const cleared: AttributeMapper<TA, VA, TA, VA> = {
 	onType: () => EMPTY_TYPE_ATTRIBUTES,
 	onValue: () => EMPTY_VALUE_ATTRIBUTES,
 };
+
+const strippedTypeDefinition = (d: AccessControlledTypeDefinition): AccessControlledTypeDefinition => ({
+	access: d.access,
+	value: { doc: d.value.doc, value: mapTypeDefinition(d.value.value, cleared.onType) },
+});
+const strippedValueDefinition = (d: AccessControlledValueDefinition): AccessControlledValueDefinition => ({
+	access: d.access,
+	value: { doc: d.value.doc, value: mapValueDefinition(d.value.value, cleared) },
+});
+const strippedTypeSpec = (s: Documented<TypeSpecification>): Documented<TypeSpecification> => ({ doc: s.doc, value: mapTypeSpecification(s.value, cleared) });
+const strippedValueSpec = (s: Documented<ValueSpecification>): Documented<ValueSpecification> => ({
+	doc: s.doc,
+	value: mapValueSpecification(s.value, cleared),
+});
+
+// A names-style listing carries no attributes, so it comes back as it went in;
+// the other two styles map through the same mappers the module cases use.
+function strippedEntries<TDef, TSpec>(
+	e: model.ModuleEntries<TDef, TSpec>,
+	def: (d: TDef) => TDef,
+	spec: (s: TSpec) => TSpec,
+): model.ModuleEntries<TDef, TSpec> {
+	switch (e.style) {
+		case "names":
+			return e;
+		case "definitions":
+			return { style: "definitions", items: e.items.map((x) => ({ name: x.name, value: def(x.value) })) };
+		case "specifications":
+			return { style: "specifications", items: e.items.map((x) => ({ name: x.name, value: spec(x.value) })) };
+	}
+}
 
 export function stripNode(v: NodeValue): NodeValue {
 	switch (v.node) {
@@ -316,21 +403,50 @@ export function stripNode(v: NodeValue): NodeValue {
 		case "ValueDefinition":
 			return { node: "ValueDefinition", value: mapValueDefinition(v.value, cleared) };
 		case "AccessControlledTypeDefinition":
-			return {
-				node: "AccessControlledTypeDefinition",
-				value: { access: v.value.access, value: { doc: v.value.value.doc, value: mapTypeDefinition(v.value.value.value, cleared.onType) } },
-			};
+			return { node: "AccessControlledTypeDefinition", value: strippedTypeDefinition(v.value) };
 		case "AccessControlledValueDefinition":
-			return {
-				node: "AccessControlledValueDefinition",
-				value: { access: v.value.access, value: { doc: v.value.value.doc, value: mapValueDefinition(v.value.value.value, cleared) } },
-			};
+			return { node: "AccessControlledValueDefinition", value: strippedValueDefinition(v.value) };
 		case "ModuleDefinition":
 			return { node: "ModuleDefinition", value: mapModuleDefinition(v.value, cleared) };
 		case "ModuleSpecification":
 			return { node: "ModuleSpecification", value: mapModuleSpecification(v.value, cleared) };
 		case "IRFile":
 			return { node: "IRFile", value: mapAttributes(v.value, cleared.onType, cleared.onValue) };
+		// A distribution manifest is names, a kind and a budget: nothing it holds
+		// carries attributes.
+		case "DistributionManifestFile":
+			return v;
+		case "ModuleManifestFile":
+			return {
+				node: "ModuleManifestFile",
+				value: {
+					...v.value,
+					types: strippedEntries(v.value.types, strippedTypeDefinition, strippedTypeSpec),
+					values: strippedEntries(v.value.values, strippedValueDefinition, strippedValueSpec),
+				},
+			};
+		case "TypeDefinitionFile":
+			return {
+				node: "TypeDefinitionFile",
+				value: {
+					...v.value,
+					body:
+						v.value.body.kind === "def"
+							? { kind: "def", value: strippedTypeDefinition(v.value.body.value) }
+							: { kind: "spec", value: strippedTypeSpec(v.value.body.value) },
+				},
+			};
+		case "ValueDefinitionFile":
+			return {
+				node: "ValueDefinitionFile",
+				value: {
+					...v.value,
+					body:
+						v.value.body.kind === "def"
+							? { kind: "def", value: strippedValueDefinition(v.value.body.value) }
+							: { kind: "spec", value: strippedValueSpec(v.value.body.value) },
+				},
+			};
 		default: {
 			const _: never = v;
 			return _;
@@ -359,6 +475,41 @@ export const json = {
 	readNodeChecked,
 	writeNode,
 };
+
+// The same surface in the other profile. The readers and writers are shared;
+// only the text layer differs, so a node written here and read back through
+// `json` is the same node.
+export const yaml = {
+	read(text: string): Result<IRFile, Diagnostic> {
+		const parsed = parseYaml(text);
+		return parsed.ok ? readIRFile(parsed.value) : parsed;
+	},
+	readChecked(text: string): Result<Checked<IRFile>, Diagnostic> {
+		const parsed = parseYaml(text);
+		if (!parsed.ok) return parsed;
+		const ctx = newRoot();
+		const r = readIRFile(parsed.value, ctx);
+		return r.ok ? ok({ value: r.value, warnings: [...ctx.warnings] }) : r;
+	},
+	write(file: IRFile): string {
+		return writeYaml(writeIRFile(file));
+	},
+	readNode(node: NodeKind, text: string): Result<NodeValue, Diagnostic> {
+		const r = readNodeCheckedWith(YAML_PROFILE, node, text);
+		return r.ok ? ok(r.value.value) : r;
+	},
+	readNodeChecked(node: NodeKind, text: string): Result<Checked<NodeValue>, Diagnostic> {
+		return readNodeCheckedWith(YAML_PROFILE, node, text);
+	},
+	writeNode(v: NodeValue): string {
+		return writeNodeWith(YAML_PROFILE, v);
+	},
+};
+
+// The profiles by name, for a caller that picks one at run time (the document
+// tree and the kit driver both do).
+export const profiles = { json: JSON_PROFILE, yaml: YAML_PROFILE } as const;
+export type { ProfileCodec, ProfileName } from "../../codec/profile.ts";
 
 // ------------------------------------------------------------- vocabulary
 
