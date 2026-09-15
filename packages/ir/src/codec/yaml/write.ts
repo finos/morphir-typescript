@@ -21,7 +21,7 @@
 //
 // A block scalar is never written: a string carrying a newline is double-quoted
 // with the break escaped.
-import { isNumber, isObject, type JsonValue } from "../json/value.ts";
+import { isNumber, isObject, type JsonObject, type JsonValue } from "../json/value.ts";
 
 const INDENT = "  ";
 const PLAIN_UNSAFE_START = new Set(["-", "?", ":", ",", "[", "]", "{", "}", "#", "&", "*", "!", "|", ">", "'", '"', "%", "@", "`", " "]);
@@ -87,44 +87,47 @@ function flow(v: JsonValue): string {
 	return scalar(v, true);
 }
 
-// The inline spelling of a value, or null when it needs a block.
-function inlineOf(v: JsonValue): string | null {
-	if (isObject(v)) return v.members.size === 0 ? "{}" : null;
-	if (Array.isArray(v)) return isFlowable(v) ? flow(v) : null;
-	return scalar(v, false);
+// How a value is spelled: on the line it starts on, or as the block that
+// follows it. Deciding both at once is what lets `block` take a collection —
+// a value that needs a block is one, and the type says so rather than a
+// branch that cannot be reached asserting it.
+type Spelling = { readonly inline: string } | { readonly block: JsonObject | readonly JsonValue[] };
+
+function spellingOf(v: JsonValue): Spelling {
+	if (isObject(v)) return v.members.size === 0 ? { inline: "{}" } : { block: v };
+	if (Array.isArray(v)) return isFlowable(v) ? { inline: flow(v) } : { block: v };
+	return { inline: scalar(v, false) };
 }
 
 // The lines of `value` as a collection at `indent`. Each line already carries
 // its indent; a block-sequence item places its first line after `- ` and keeps
-// the rest, which is exactly the one-level-deeper indent `- ` occupies.
-function block(value: JsonValue, indent: string): string[] {
+// the rest, which is exactly the one-level-deeper indent `- ` occupies. Only a
+// collection reaches here — every scalar has an inline spelling — and the
+// parameter says so.
+function block(value: JsonObject | readonly JsonValue[], indent: string): string[] {
+	const lines: string[] = [];
 	if (isObject(value)) {
-		const lines: string[] = [];
 		for (const [k, v] of value.members) {
 			const key = scalar(k, false);
-			const inline = inlineOf(v);
-			if (inline !== null) lines.push(`${indent}${key}: ${inline}`);
-			else lines.push(`${indent}${key}:`, ...block(v, `${indent}${INDENT}`));
+			const spelling = spellingOf(v);
+			if ("inline" in spelling) lines.push(`${indent}${key}: ${spelling.inline}`);
+			else lines.push(`${indent}${key}:`, ...block(spelling.block, `${indent}${INDENT}`));
 		}
 		return lines;
 	}
-	if (Array.isArray(value)) {
-		const lines: string[] = [];
-		for (const item of value) {
-			const inline = inlineOf(item);
-			if (inline !== null) lines.push(`${indent}- ${inline}`);
-			else {
-				const inner = block(item, `${indent}${INDENT}`);
-				lines.push(`${indent}- ${(inner[0] ?? "").trimStart()}`, ...inner.slice(1));
-			}
+	for (const item of value) {
+		const spelling = spellingOf(item);
+		if ("inline" in spelling) lines.push(`${indent}- ${spelling.inline}`);
+		else {
+			const inner = block(spelling.block, `${indent}${INDENT}`);
+			lines.push(`${indent}- ${(inner[0] ?? "").trimStart()}`, ...inner.slice(1));
 		}
-		return lines;
 	}
-	return [scalar(value, false)];
+	return lines;
 }
 
 export function writeYaml(value: JsonValue): string {
-	const inline = inlineOf(value);
-	const lines = inline !== null ? [inline] : block(value, "");
+	const spelling = spellingOf(value);
+	const lines = "inline" in spelling ? [spelling.inline] : block(spelling.block, "");
 	return `${lines.join("\n")}\n`;
 }

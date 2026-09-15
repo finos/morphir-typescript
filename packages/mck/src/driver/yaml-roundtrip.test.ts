@@ -9,8 +9,7 @@
 // JSON fence's value, and the writer is idempotent on the YAML fence itself.
 import { describe, expect, test } from "bun:test";
 import { parseJson } from "../../../ir/src/codec/json/value.ts";
-import { parseYaml } from "../../../ir/src/codec/yaml/parse.ts";
-import { writeYaml } from "../../../ir/src/codec/yaml/write.ts";
+import { parseYaml, writeYaml } from "../../../ir/src/codec/yaml/index.ts";
 import type { KitCase, KitFence } from "../kit/case.ts";
 import { embeddedKitFiles } from "../kit/embedded-source.ts";
 import { loadKitFromFiles } from "../kit/load.ts";
@@ -58,7 +57,9 @@ describe("the canonical YAML writer against every YAML fence of the embedded kit
 			compared += 1;
 		}
 		console.log(`yaml canonical fences written from json: ${compared}`);
-		expect(compared).toBeGreaterThan(40);
+		// Pinned, not bounded: the embedded kit is a fixed set of bytes, so this
+		// number moves only when a kit resync deliberately moves it.
+		expect(compared).toBe(74);
 	});
 
 	test("the reader reads the YAML canonical fence to the JSON canonical fence's value", () => {
@@ -71,7 +72,8 @@ describe("the canonical YAML writer against every YAML fence of the embedded kit
 			compared += 1;
 		}
 		console.log(`yaml canonical fences read against json: ${compared}`);
-		expect(compared).toBeGreaterThan(40);
+		// Three more than the writer's 74: the three excluded above.
+		expect(compared).toBe(77);
 	});
 
 	test("the writer is idempotent on every canonical YAML fence, including the document-tree files", () => {
@@ -86,7 +88,8 @@ describe("the canonical YAML writer against every YAML fence of the embedded kit
 			}
 		}
 		console.log(`yaml fences the writer reproduces byte for byte: ${checked}`);
-		expect(checked).toBeGreaterThan(50);
+		// 77 canonical with a JSON twin, 3 without, 8 `file`, less the 3 excluded.
+		expect(checked).toBe(85);
 	});
 
 	test("the kit's complete-example.yaml document reads to the same value as its JSON fence", () => {
@@ -115,12 +118,18 @@ describe("the canonical YAML writer against every YAML fence of the embedded kit
 				}
 				if (f.info.role === "rejected") {
 					// Whether the text is refused by the reader or by the node reader is
-					// the driver's business; here it only has to answer.
-					expect(typeof parseYaml(f.body).ok).toBe("boolean");
+					// the driver's business; here it only has to answer rather than
+					// throw, and the kit has to keep carrying the fence.
+					parseYaml(f.body);
 					rejected += 1;
 				}
 			}
 		}
 		console.log(`yaml accepted fences: ${accepted}; yaml rejected fences: ${rejected}`);
+		// The kit has no `yaml accepted` fence yet and exactly one `yaml rejected`
+		// (types-0003's bare sequence, which decodes as a Tuple rather than the
+		// Reference the case is about). Both move only with a kit resync.
+		expect(accepted).toBe(0);
+		expect(rejected).toBe(1);
 	});
 });
