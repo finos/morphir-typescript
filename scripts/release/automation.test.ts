@@ -6,6 +6,7 @@ import { constants } from "node:fs";
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fromMarkdown } from "mdast-util-from-markdown";
+import { binaryNames } from "./binaries.ts";
 
 const root = path.resolve(import.meta.dir, "../..");
 
@@ -39,6 +40,26 @@ interface ReleaseWorkflow {
 }
 
 const DOLLAR = String.fromCharCode(36);
+
+/**
+ * The exact files `mise run release:artifact` and `mise run release:binaries`
+ * write, named with the workflow's own `${version}` expansion. Every place the
+ * release workflow enumerates its output is pinned to this list, so changing
+ * what the artifact commands produce without changing the workflow fails here
+ * rather than on the next tag.
+ */
+const RELEASE_ARTIFACTS: readonly string[] = [
+	`finos-morphir-ir-${DOLLAR}{version}.tgz`,
+	`finos-morphir-mck-${DOLLAR}{version}.tgz`,
+	...binaryNames(`${DOLLAR}{version}`),
+];
+
+/** Reads the `artifacts=( ... )` Bash array a release workflow step declares. */
+function artifactArray(script: string): readonly string[] {
+	const block = script.match(/^[ \t]*artifacts=\(\n([\s\S]*?)\n[ \t]*\)$/m)?.[1];
+	if (block === undefined) throw new Error("workflow step does not declare an artifacts array");
+	return [...block.matchAll(/"([^"]+)"/g)].map((match) => match[1] as string);
+}
 
 async function commandOutput(command: readonly string[]): Promise<string> {
 	const child = Bun.spawn(command, { cwd: root, stdout: "pipe", stderr: "pipe" });
@@ -108,12 +129,14 @@ describe("release automation contract", () => {
 
 		expect(byName.get("check:package")?.depends).toEqual(["setup"]);
 		expect(byName.get("check:workflows")?.depends).toEqual([]);
+		expect(byName.get("check:conformance")?.depends).toEqual(["setup"]);
 		expect(byName.get("release:artifact")?.depends).toEqual(["setup"]);
-		for (const dependency of ["check:lint", "check:typecheck", "test", "check:package", "check:workflows"])
+		expect(byName.get("release:binaries")?.depends).toEqual(["setup"]);
+		for (const dependency of ["check:lint", "check:typecheck", "check:kit", "test", "check:package", "check:workflows", "check:conformance"])
 			expect(byName.get("ci")?.depends).toContain(dependency);
 
 		const sources = new Map<string, string>();
-		for (const name of ["check:package", "check:workflows", "release:artifact"]) {
+		for (const name of ["check:package", "check:workflows", "release:artifact", "release:binaries"]) {
 			const file = byName.get(name)?.file;
 			expect(file).toBeString();
 			await access(file as string, constants.X_OK);
@@ -127,6 +150,64 @@ describe("release automation contract", () => {
 		expect(taskInvocation(sources.get("release:artifact") as string)).toBe(
 			'await exec(["bun", "scripts/release/cli.ts", "artifact", ...process.argv.slice(2)]);',
 		);
+		expect(taskInvocation(sources.get("release:binaries") as string)).toBe(
+			'await exec(["bun", "scripts/release/cli.ts", "binaries", ...process.argv.slice(2)]);',
+		);
+
+		const conformanceFile = byName.get("check:conformance")?.file;
+		expect(conformanceFile).toBeString();
+		await access(conformanceFile as string, constants.X_OK);
+		const conformanceSource = await readFile(conformanceFile as string, "utf8");
+		expect(conformanceSource).toMatch(/^#!\/usr\/bin\/env bun\n\/\/ Copyright 2026 FINOS\n\/\/ SPDX-License-Identifier: Apache-2\.0\n/);
+		const conformanceInvocations = conformanceSource.match(/^await exec\(.+\);$/gm) ?? [];
+		expect(conformanceInvocations).toHaveLength(4);
+		expect(conformanceInvocations[0]).toContain('"run", "--report"');
+		expect(conformanceInvocations[1]).toContain('"--adapter", "bun"');
+		expect(conformanceInvocations[2]).toContain("scripts/conformance/compare-reports.ts");
+		expect(conformanceInvocations[3]).toContain('"coverage"');
+	});
+
+	// The naming and format-version conformance corpora live only in the parent
+	// finos/morphir repository, and their tests throw at load when the files are
+	// absent. Dropping MORPHIR_FIXTURES_OPTIONAL therefore turns a standalone
+	// checkout's suite red before a single test runs. Pin the variable, the
+	// comment that scopes it to those two corpora, and the README sentence that
+	// tells a standalone contributor the same thing.
+	// The task file is read by path rather than through `mise tasks --json`: a
+	// checkout nested inside the parent finos/morphir repository inherits that
+	// repository's own `test` task and mise renames this one out from under a
+	// lookup by name. The test above already pins `ci` to a `test` dependency.
+	test("keeps the fixture opt-out on the test task, scoped to the two parent-only corpora", async () => {
+		const file = path.join(root, ".config/mise/tasks/test.ts");
+		await access(file, constants.X_OK);
+		const source = await readFile(file, "utf8");
+		expect(source).toMatch(/^#!\/usr\/bin\/env bun\n\/\/ Copyright 2026 FINOS\n\/\/ SPDX-License-Identifier: Apache-2\.0\n/);
+		expect(source).toContain('//MISE depends=["setup"]');
+		expect(taskInvocation(source)).toBe('await exec(["bun", "run", "test"], { MORPHIR_FIXTURES_OPTIONAL: "1" });');
+		expect(source).toContain("docs/spec/ir/fixtures/{naming,format-version}-conformance.json");
+		expect(source).toContain("format-version.test.ts throw at load when they are absent");
+		expect(source).toContain("MCK kit is vendored under packages/mck/kit and needs no opt-out");
+
+		const status = markdownSection(await readFile(path.join(root, "README.md"), "utf8"), "Project status");
+		expect(status).toContain("vendored into packages/mck/kit");
+		expect(status).toContain("MORPHIR_FIXTURES_OPTIONAL=1");
+		expect(status).not.toContain("Standalone CI temporarily skips");
+	});
+
+	// actionlint 1.7.12 deadlocks on Windows when it feeds shellcheck a `run:`
+	// script longer than the 4 KiB pipe buffer: a 4008-byte script lints, a
+	// 4108-byte one hangs forever. That silently breaks `mise run ci` for
+	// Windows contributors, so every step in every workflow stays under it.
+	test("keeps every workflow run script under the 4 KiB actionlint limit", async () => {
+		for (const file of [".github/workflows/release.yml", ".github/workflows/ci.yml"]) {
+			const workflow = Bun.YAML.parse(await readFile(path.join(root, file), "utf8")) as { jobs: Record<string, WorkflowJob> };
+			const scripts = Object.entries(workflow.jobs).flatMap(([job, definition]) =>
+				definition.steps.flatMap((step) => (step.run === undefined ? [] : [[`${file} ${job} / ${step.name ?? "(unnamed)"}`, step.run] as const])),
+			);
+			expect(scripts.length).toBeGreaterThan(0);
+			const oversized = scripts.filter(([, script]) => script.length >= 4096).map(([where, script]) => `${where}: ${script.length} bytes`);
+			expect(oversized).toEqual([]);
+		}
 	});
 
 	test("keeps workflow orchestration as one local CI invocation", async () => {
@@ -155,6 +236,7 @@ describe("release automation contract", () => {
 			"mise run release:prepare",
 			"mise run release:validate",
 			"mise run release:artifact",
+			"mise run release:binaries",
 		])
 			expect(development).toContain(command);
 		expect(development).toContain("Bun.build");
@@ -166,12 +248,11 @@ describe("release automation contract", () => {
 		const publishing = markdownSection(guide, "Publishing");
 		for (const expected of [
 			"ORG_MORPHIR_NPM_TOKEN",
-			"initial 0.0.1 release is already prepared",
-			"VERSION=0.0.2",
+			"VERSION=X.Y.Z",
 			'mise run release:prepare -- "$VERSION"',
 			"mise run ci",
-			'git tag -s v0.0.1 -m "Release 0.0.1"',
-			"git push origin v0.0.1",
+			'git tag -s "v$VERSION" -m "Release $VERSION"',
+			'git push origin "v$VERSION"',
 			"Signed tags are an operator requirement",
 			"does not cryptographically verify tag signatures",
 			"provenance",
@@ -182,7 +263,21 @@ describe("release automation contract", () => {
 			expect(publishing).toContain(expected);
 		expect(publishing).not.toContain("mise run release:prepare -- 0.0.1");
 		expect(publishing).toMatch(/does not (?:commit|create commits), tag, or push/i);
-		expect(publishing).toContain("publishes only @finos/morphir-ir");
+		expect(publishing).toContain("One tag publishes both packages");
+		// 0.0.1 shipped ir only; the version mck first publishes at is whatever
+		// the next `release:prepare` assigns, so the docs must not name one.
+		expect(publishing).toContain("0.0.1 published only @finos/morphir-ir");
+		expect(publishing).toContain("@finos/morphir-mck publishes from the next suite release");
+		expect(publishing).not.toMatch(/(?:public|publishes) (?:from|at) suite version \d/);
+		for (const expected of [
+			"mck-VERSION-OS-ARCH",
+			"mck-adapter-typescript-VERSION-OS-ARCH",
+			"bun build --compile",
+			"chmod +x",
+			"mck kit status",
+			"mck kit sync",
+		])
+			expect(publishing).toContain(expected);
 	});
 
 	test("starts releases for version tags with least-privilege job boundaries", async () => {
@@ -235,7 +330,7 @@ describe("release automation contract", () => {
 		expect(guard).toContain('git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main');
 	});
 
-	test("builds and uploads one exact, checksummed artifact", async () => {
+	test("builds, compiles, and uploads one exact, checksummed artifact", async () => {
 		const { workflow } = await releaseWorkflow();
 		const artifact = workflow.jobs.artifact as WorkflowJob;
 		const commands = artifact.steps.flatMap((step) => (step.run === undefined ? [] : [step.run])).join("\n");
@@ -243,25 +338,53 @@ describe("release automation contract", () => {
 			'mise run release:validate -- "$GITHUB_REF_NAME"',
 			"mise run ci",
 			"mise run release:artifact -- .dev/out/release",
+			"mise run release:binaries -- .dev/out/release",
 			`mise run release:notes -- "${shellExpansion("GITHUB_REF_NAME#v")}" .dev/out/release/release-notes.md`,
 		])
 			expect(commands).toContain(command);
-		expect(commands).toContain(`tarball=".dev/out/release/finos-morphir-ir-${shellExpansion("version")}.tgz"`);
 		expect(commands).toContain("sha256sum");
+
+		const checksum = stepNamed(artifact, "Checksum release artifact").run ?? "";
+		expect(checksum).toContain('version="$RELEASE_VERSION"');
+		// The release notes are the release body, not a checksummed artifact.
+		expect(checksum).toContain("! -name release-notes.md");
+		expect(checksum).toContain(`sha256sum "${shellExpansion("checksummed[@]")}" > SHA256SUMS`);
 
 		const upload = stepNamed(artifact, "Upload release artifact");
 		expect(upload.with).toMatchObject({
 			name: "morphir-ir-release",
 			"if-no-files-found": "error",
 		});
+		const releaseVersion = githubExpression("env.RELEASE_VERSION");
 		expect(String(upload.with?.path).trim().split("\n")).toEqual([
-			`.dev/out/release/finos-morphir-ir-${githubExpression("env.RELEASE_VERSION")}.tgz`,
+			`.dev/out/release/finos-morphir-ir-${releaseVersion}.tgz`,
+			`.dev/out/release/finos-morphir-mck-${releaseVersion}.tgz`,
+			`.dev/out/release/mck-${releaseVersion}-*`,
+			`.dev/out/release/mck-adapter-typescript-${releaseVersion}-*`,
 			".dev/out/release/release-notes.md",
 			".dev/out/release/SHA256SUMS",
 		]);
 	});
 
-	test("publishes the downloaded tarball without repository access or rebuilds", async () => {
+	test("pins every enumerated release file set to what the artifact commands build", async () => {
+		const { workflow } = await releaseWorkflow();
+		expect(binaryNames("1.2.3")).toHaveLength(10);
+		expect(RELEASE_ARTIFACTS).toHaveLength(12);
+
+		const enumerating = [
+			stepNamed(workflow.jobs.artifact as WorkflowJob, "Checksum release artifact"),
+			stepNamed(workflow.jobs.publish as WorkflowJob, "Verify release artifact"),
+			stepNamed(workflow.jobs["github-release"] as WorkflowJob, "Verify release artifact"),
+		];
+		expect(enumerating).toHaveLength(3);
+		for (const step of enumerating) expect(artifactArray(step.run ?? "")).toEqual(RELEASE_ARTIFACTS as string[]);
+
+		// The GitHub Release attaches every checksummed file plus SHA256SUMS.
+		const upload = stepNamed(workflow.jobs["github-release"] as WorkflowJob, "Create or update GitHub Release").run ?? "";
+		expect(upload).toContain(`test "${shellExpansion("#uploads[@]")}" -eq ${RELEASE_ARTIFACTS.length + 1}`);
+	});
+
+	test("publishes both downloaded tarballs without repository access or rebuilds", async () => {
 		const { source, workflow } = await releaseWorkflow();
 		const publish = workflow.jobs.publish as WorkflowJob;
 		expect(publish.steps.some((step) => step.uses?.startsWith("actions/checkout@"))).toBeFalse();
@@ -277,17 +400,34 @@ describe("release automation contract", () => {
 		expect(verification).toContain("set -euo pipefail");
 		expect(verification).toContain("sha256sum --check --strict SHA256SUMS");
 		expect(verification).toContain(`finos-morphir-ir-${shellExpansion("version")}.tgz`);
+		expect(verification).toContain(`finos-morphir-mck-${shellExpansion("version")}.tgz`);
 
-		const publishStep = stepNamed(publish, "Publish @finos/morphir-ir");
+		const publishStep = stepNamed(publish, "Publish npm packages");
 		const publishScript = publishStep.run ?? "";
 		const latestIndex = publishScript.indexOf('npm view "$package_name" dist-tags.latest --json');
 		const publishIndex = publishScript.indexOf('npm publish "$tarball" --access public --provenance');
 		expect(latestIndex).toBeGreaterThanOrEqual(0);
 		expect(publishIndex).toBeGreaterThan(latestIndex);
-		expect(publishScript).toContain("BigInt");
+
+		// One publish body runs once per package, ir before mck, because mck
+		// depends on ir. Each package's outcome continues the loop; only a
+		// genuine failure exits the step.
+		expect(publishScript).toContain('for package_name in "@finos/morphir-ir" "@finos/morphir-mck"; do');
+		expect(publishScript.match(/npm publish "\$tarball"/g)).toHaveLength(1);
+		expect(publishScript).toContain(`tarball=".dev/out/release/finos-${shellExpansion("package_name#@finos/")}-${shellExpansion("version")}.tgz"`);
+		expect(publishScript).not.toContain("exit 0");
+		// The Node helpers live in their own step: the publish job has no
+		// checkout, and actionlint deadlocks on Windows over a 4 KiB `run:`.
+		const helpers = stepNamed(publish, "Write publish helpers").run ?? "";
+		for (const helper of ["tarball-integrity.cjs", "published-integrity.cjs", "compare-versions.cjs"]) {
+			expect(helpers).toContain(`cat > "$RUNNER_TEMP/${helper}" <<'NODE'`);
+			expect(publishScript).toContain(`node "$RUNNER_TEMP/${helper}"`);
+		}
+		expect(helpers).toContain("BigInt");
+		expect(helpers).toContain("createHash");
+		expect(helpers).toContain("sha512-");
+
 		expect(publishScript).toContain("E404");
-		expect(publishScript).toContain("createHash");
-		expect(publishScript).toContain("sha512-");
 		expect(publishScript).toContain('"$comparison" == "older"');
 		expect(publishScript).toContain('"$comparison" == "equal"');
 		expect(publishScript).toContain('"$remote_integrity" == "$local_integrity"');
@@ -299,8 +439,8 @@ describe("release automation contract", () => {
 
 	test("compares npm's latest stable version exactly with BigInt components", async () => {
 		const { workflow } = await releaseWorkflow();
-		const script = stepNamed(workflow.jobs.publish as WorkflowJob, "Publish @finos/morphir-ir").run ?? "";
-		const comparator = script.match(/node - "\$version" "\$latest_json" <<'NODE'\n([\s\S]*?)\nNODE/)?.[1];
+		const script = stepNamed(workflow.jobs.publish as WorkflowJob, "Write publish helpers").run ?? "";
+		const comparator = script.match(/cat > "\$RUNNER_TEMP\/compare-versions\.cjs" <<'NODE'\n([\s\S]*?)\nNODE/)?.[1];
 		expect(comparator).toBeString();
 
 		for (const [target, latest, expected] of [
@@ -332,7 +472,7 @@ describe("release automation contract", () => {
 		expect(releaseScript).toContain('gh release create "$tag"');
 		expect(releaseScript).toContain("--verify-tag");
 		expect(releaseScript.match(/--notes-file \.dev\/out\/release\/release-notes\.md/g)).toHaveLength(2);
-		expect(releaseScript).toContain('gh release upload "$tag" "$tarball"');
+		expect(releaseScript).toContain(`gh release upload "$tag" "${shellExpansion("uploads[@]")}"`);
 		expect(releaseScript).toContain("--clobber");
 		expect(create.env).toEqual({ GH_TOKEN: githubExpression("github.token") });
 	});

@@ -11,7 +11,7 @@ import { compareVersions, parseStableVersion, parseVersionTag, type StableVersio
 const MANIFESTS = [
 	{ path: "package.json", workspace: "", name: "morphir-typescript", private: true },
 	{ path: "packages/ir/package.json", workspace: "packages/ir", name: "@finos/morphir-ir", private: false },
-	{ path: "packages/mck/package.json", workspace: "packages/mck", name: "@finos/morphir-mck", private: true },
+	{ path: "packages/mck/package.json", workspace: "packages/mck", name: "@finos/morphir-mck", private: false },
 ] as const;
 
 const LOCK_PATH = "bun.lock";

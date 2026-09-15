@@ -3,8 +3,10 @@
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { buildBinaries } from "./binaries.ts";
 import { extractReleaseNotes } from "./changelog.ts";
 import { buildIrArtifact } from "./package-ir.ts";
+import { buildMckArtifact } from "./package-mck.ts";
 import { prepareSuiteRelease, validateSuiteRelease } from "./suite.ts";
 import { parseStableVersion } from "./version.ts";
 
@@ -14,6 +16,7 @@ const USAGE = [
 	"  release validate TAG",
 	"  release notes VERSION OUTPUT",
 	"  release artifact OUTPUT_DIRECTORY",
+	"  release binaries OUTPUT_DIRECTORY",
 ].join("\n");
 
 export interface ReleaseCliContext {
@@ -21,6 +24,8 @@ export interface ReleaseCliContext {
 	readonly now?: Date;
 	readonly stdout?: (line: string) => void;
 	readonly buildArtifact?: typeof buildIrArtifact;
+	readonly buildMckArtifact?: typeof buildMckArtifact;
+	readonly buildBinaries?: typeof buildBinaries;
 }
 
 function usageError(message?: string): Error {
@@ -74,8 +79,19 @@ export async function runReleaseCli(args: readonly string[], context: ReleaseCli
 	if (command === "artifact") {
 		if (commandArgs.length !== 1) throw usageError();
 		const outputDirectory = path.resolve(root, commandArgs[0] as string);
-		const artifact = await (context.buildArtifact ?? buildIrArtifact)(root, outputDirectory);
-		stdout(artifact.tarball);
+		// The mck package depends on the ir package, and its smoke test installs
+		// both tarballs into one consumer, so the ir artifact is built first and
+		// printed first.
+		const ir = await (context.buildArtifact ?? buildIrArtifact)(root, outputDirectory);
+		stdout(ir.tarball);
+		const mck = await (context.buildMckArtifact ?? buildMckArtifact)(root, outputDirectory, ir.tarball);
+		stdout(mck.tarball);
+		return;
+	}
+	if (command === "binaries") {
+		if (commandArgs.length !== 1) throw usageError();
+		const outputDirectory = path.resolve(root, commandArgs[0] as string);
+		for (const binary of await (context.buildBinaries ?? buildBinaries)(root, outputDirectory)) stdout(binary);
 		return;
 	}
 	throw usageError(`unknown release command: ${command}`);

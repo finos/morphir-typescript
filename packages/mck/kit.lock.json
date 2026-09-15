@@ -1,0 +1,7 @@
+{
+	"repository": "https://github.com/finos/morphir",
+	"path": "spec/ir/mck",
+	"commit": "c369d8cc2efa67b2cee9e0789abb94a9366fa31c",
+	"contentHash": "sha256-edaf7f722e16f7691eefcfdca9df1f8f5faf0fe16a61e7108b31a2f92b59fc20",
+	"syncedAt": "2026-09-14"
+}

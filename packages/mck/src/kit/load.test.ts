@@ -1,3 +1,5 @@
+// Copyright 2026 FINOS
+// SPDX-License-Identifier: Apache-2.0
 //
 // Tests for the kit directory loader. Run with: bun test packages/mck/src/kit/load.test.ts
 import { afterEach, describe, expect, test } from "bun:test";

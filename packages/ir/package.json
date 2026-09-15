@@ -39,8 +39,5 @@
 	},
 	"scripts": {
 		"typecheck": "tsc -p tsconfig.json"
-	},
-	"devDependencies": {
-		"@finos/morphir-mck": "workspace:*"
 	}
 }

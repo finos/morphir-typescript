@@ -12,6 +12,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- The `mck` driver and its adapter protocol (contract version 1) for running the Morphir Compatibility Kit against a binding, in-process or over a child-process adapter.
+- `@finos/morphir-mck`, published with the vendored kit, for checking a Morphir binding's conformance to the IR specification.
+- Compiled `mck` and `mck-adapter-typescript` binaries for direct download, alongside the npm packages.
+- A coverage rule and the `VOCABULARY` export from `@finos/morphir-ir/v4`, so a kit can be checked for a case covering every v4 vocabulary entry.
+
 ## [0.0.1] - 2026-09-05
 
 ### Added

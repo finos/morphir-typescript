@@ -9,16 +9,16 @@ Morphir captures business logic and domain models as language-independent data s
 
 ## Project status
 
-Publishing is prepared for the initial `@finos/morphir-ir` `0.0.1` npm release. `@finos/morphir-mck` remains private and will not be published. Every workspace uses the same repository-wide suite version, including packages that are not part of a given release. Initial release preparation moves the whole suite from `0.0.0` to `0.0.1`.
+`@finos/morphir-ir` is published to public npm at `0.0.1`. `@finos/morphir-mck` publishes with the next suite release, whichever version `mise run release:prepare` assigns. The root workspace stays private and is never published. Every workspace uses the same repository-wide suite version, including packages that are not part of a given release, and the manifests read the last released version until release preparation bumps them.
 
-Standalone CI temporarily skips conformance tests that require the upstream Morphir fixture and MCK directories. Unit tests still run. The upstream integration work will remove this opt-out once a compatible pinned corpus is available to standalone clones.
+The Morphir Compatibility Kit is vendored into `packages/mck/kit`, so `mise run check:conformance` runs the full kit in a standalone clone with no upstream checkout. Two corpora are still not vendored: the naming and format-version conformance fixtures, which live only in `finos/morphir` at `docs/spec/ir/fixtures/`. `mise run test` therefore sets `MORPHIR_FIXTURES_OPTIONAL=1`, which makes those two corpora — and nothing else — optional when they are absent. That opt-out goes away once they are vendored too.
 
 ## Packages
 
 | Package | Publication | Purpose |
 | --- | --- | --- |
-| `@finos/morphir-ir` | Prepared for public npm release at `0.0.1` | Generic Morphir IR semantic types, pinned v4 types, JSON readers and canonical writers, diagnostics, and attribute mapping. |
-| `@finos/morphir-mck` | Private workspace package | MCK Markdown case parser, kit loader, structural checker CLI, and report model. |
+| `@finos/morphir-ir` | Published to public npm at `0.0.1` | Generic Morphir IR semantic types, pinned v4 types, JSON readers and canonical writers, diagnostics, and attribute mapping. |
+| `@finos/morphir-mck` | Published with the next suite release | MCK Markdown case parser, kit loader, structural checker, the `mck` driver and its reference adapter, and the report model. Ships the vendored kit. |
 
 ## Morphir specifications
 
@@ -73,6 +73,10 @@ mise exec -- bun run packages/mck/src/cli.ts check /path/to/morphir/spec/ir/mck
 
 Add `--json` for machine-readable output.
 
+### Check a binding's conformance with `mck`
+
+`mck` is the driver for the Morphir Compatibility Kit: it runs a binding's decoder and structural checker against every kit case and reports pass, fail, or skip per fence. Install it as the `mck` binary from `@finos/morphir-mck` (`npm install -g @finos/morphir-mck`, or `npx @finos/morphir-mck`), or download the standalone `mck` binary from a [release](https://github.com/finos/morphir-typescript/releases). `mck run` checks the in-process TypeScript binding against the kit vendored in the package; `mck run --adapter <exe> [--adapter-arg <arg>]...` runs the same kit against any binding that speaks the adapter's JSON-lines protocol (see `mck-adapter-typescript` for the reference implementation) as a child process; `mck coverage` reports every IR v4 vocabulary entry the kit does not yet exercise.
+
 ## Development
 
 TypeScript is the implementation language. Bun supplies the runtime, package manager, task runtime, and default `bun:test` testing framework. The npm artifact uses `Bun.build` to compile unminified ESM and TypeScript to emit declarations. Node.js 20 only runs an installed-package compatibility check. Biome handles linting and formatting.
@@ -86,13 +90,16 @@ Use mise tasks for repository automation:
 | `mise run setup` | Install dependencies from the frozen Bun lockfile. |
 | `mise run check:lint` | Check Biome lint rules, formatting, and imports. |
 | `mise run check:typecheck` | Typecheck every workspace package. |
-| `mise run check:package` | Build and verify the `@finos/morphir-ir` tarball in `.dev/out/package-check`. |
+| `mise run check:package` | Build and verify the `@finos/morphir-ir` and `@finos/morphir-mck` tarballs in `.dev/out/package-check`. |
 | `mise run check:workflows` | Validate GitHub Actions workflows with the pinned actionlint version. |
+| `mise run check:kit` | Verify the vendored kit matches `kit.lock.json`. |
+| `mise run check:conformance` | Run the vendored kit in-process and through the adapter, compare the two reports, and check coverage. |
 | `mise run test` | Run the available Bun test suite. |
 | `mise run ci` | Run the same checks as GitHub Actions. |
 | `mise run release:prepare -- VERSION` | Update the suite version and finalize the Keep a Changelog release entry. |
 | `mise run release:validate -- TAG` | Validate a `vVERSION` tag against the suite manifests and changelog. |
-| `mise run release:artifact -- OUTPUT_DIRECTORY` | Build and verify the publishable tarball in the requested directory. |
+| `mise run release:artifact -- OUTPUT_DIRECTORY` | Build and verify both publishable tarballs in the requested directory. |
+| `mise run release:binaries -- OUTPUT_DIRECTORY` | Compile `mck` and `mck-adapter-typescript` to single-file binaries for every release target. Set `MCK_BINARY_TARGETS=host` to compile only this machine's target. |
 
 To apply formatting and safe lint fixes, run:
 

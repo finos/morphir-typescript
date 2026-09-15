@@ -1,8 +1,55 @@
 // Public surface of @finos/morphir-mck. Plan 1 exposes the case-file parser
 // and report types; the driver and coverage script arrive in plan 2.
 
+export { type CoverageGap, coverageGaps, formatGap } from "./coverage/coverage.ts";
+export { checkCanonical, checkRejected, checkWarnings, normalizeCanonical, type RejectedCheck } from "./driver/compare.ts";
+export { exitCodeFor, type RunOptions, runKit } from "./driver/run.ts";
+export { driverVersion, kitVersion } from "./driver/version.ts";
 export { type KitCase, type KitError, type KitFence, type ParsedFile, parseKitFile, topicOf } from "./kit/case.ts";
+export { embeddedKitCommit, embeddedKitFiles } from "./kit/embedded-source.ts";
 export { type FenceInfo, isInfoError, type Language, parseInfoString, type Role } from "./kit/info-string.ts";
-export { type Kit, loadKit } from "./kit/load.ts";
+export { type Kit, loadKit, loadKitFromFiles } from "./kit/load.ts";
 export { type Block, tokenize } from "./kit/markdown.ts";
-export { emptyReport, type Report, type ReportDiagnostic, type ReportProfile, type ReportRecord, type ReportResult, type ReportRole } from "./report.ts";
+export {
+	KIT_PATH,
+	type KitFiles,
+	kitFilesFromDirectory,
+	kitFilesFromMap,
+	profileOfPath,
+	type ResolvedText,
+	resolveTextFence,
+	textFenceTarget,
+} from "./kit/source.ts";
+export {
+	emptyReport,
+	formatSummary,
+	type Report,
+	type ReportDiagnostic,
+	type ReportProfile,
+	type ReportRecord,
+	type ReportResult,
+	type ReportRole,
+	type Summary,
+	summarize,
+	writeReport,
+} from "./report.ts";
+export { IN_PROCESS_CAPABILITIES, inProcessTestee, NODE_KINDS, resolveNode } from "./testee/in-process.ts";
+export { type ProcessOptions, processTestee } from "./testee/process.ts";
+export { ProtocolError, parseCapabilities, parseDecodeResponse, parseEnvelope, parseRequest, parseWriteTreeResponse } from "./testee/protocol.ts";
+export type {
+	Capabilities,
+	DecodeRequest,
+	DecodeResponse,
+	Envelope,
+	Layout,
+	PathMode,
+	Profile,
+	ProtocolDiagnostic,
+	ReadTreeRequest,
+	Request,
+	Testee,
+	TreeFile,
+	Warning,
+	WriteTreeRequest,
+	WriteTreeResponse,
+} from "./testee/testee.ts";

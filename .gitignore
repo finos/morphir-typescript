@@ -1,5 +1,8 @@
 node_modules/
 dist/
+# Cross-compilation runtimes `bun build --compile --target` downloads for
+# `mise run release:binaries`.
+.bun-cache/
 .DS_Store
 .env*
 *.log

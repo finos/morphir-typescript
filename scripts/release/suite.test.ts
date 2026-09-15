@@ -22,11 +22,11 @@ const malformedVisibilityCases = [
 	["packages/ir/package.json", null, "@finos/morphir-ir must be public"],
 	["packages/ir/package.json", {}, "@finos/morphir-ir must be public"],
 	["packages/ir/package.json", [], "@finos/morphir-ir must be public"],
-	["packages/mck/package.json", "true", "@finos/morphir-mck must be private"],
-	["packages/mck/package.json", 1, "@finos/morphir-mck must be private"],
-	["packages/mck/package.json", null, "@finos/morphir-mck must be private"],
-	["packages/mck/package.json", {}, "@finos/morphir-mck must be private"],
-	["packages/mck/package.json", [], "@finos/morphir-mck must be private"],
+	["packages/mck/package.json", "false", "@finos/morphir-mck must be public"],
+	["packages/mck/package.json", 0, "@finos/morphir-mck must be public"],
+	["packages/mck/package.json", null, "@finos/morphir-mck must be public"],
+	["packages/mck/package.json", {}, "@finos/morphir-mck must be public"],
+	["packages/mck/package.json", [], "@finos/morphir-mck must be public"],
 ] as const;
 
 function manifest(name: string, privatePackage: boolean, version = "0.0.0"): string {
@@ -84,7 +84,7 @@ async function fixture(options: { changelog?: string; lock?: string; versions?: 
 	temporaryDirectories.push(root);
 	await Bun.write(path.join(root, "package.json"), manifest("morphir-typescript", true, options.versions?.[0]));
 	await Bun.write(path.join(root, "packages/ir/package.json"), manifest("@finos/morphir-ir", false, options.versions?.[1]));
-	await Bun.write(path.join(root, "packages/mck/package.json"), manifest("@finos/morphir-mck", true, options.versions?.[2]));
+	await Bun.write(path.join(root, "packages/mck/package.json"), manifest("@finos/morphir-mck", false, options.versions?.[2]));
 	await Bun.write(path.join(root, "bun.lock"), options.lock ?? lockfile());
 	await Bun.write(path.join(root, "CHANGELOG.md"), options.changelog ?? changelog());
 	return root;
@@ -163,7 +163,7 @@ describe("prepareSuiteRelease", () => {
 	test.each([
 		["package.json", false, "root package must be private"],
 		["packages/ir/package.json", true, "@finos/morphir-ir must be public"],
-		["packages/mck/package.json", false, "@finos/morphir-mck must be private"],
+		["packages/mck/package.json", true, "@finos/morphir-mck must be public"],
 	] as const)("rejects invalid visibility in %s", async (relativePath, privatePackage, expectedMessage) => {
 		const root = await fixture();
 		await changeJson(root, relativePath, (value) => {
@@ -277,7 +277,7 @@ describe("prepareSuiteRelease", () => {
 		expect(preparedChangelog.replaceAll("\r\n", "")).not.toContain("\n");
 		expect(JSON.parse(await readFile(path.join(root, "package.json"), "utf8")).private).toBe(true);
 		expect(JSON.parse(await readFile(path.join(root, "packages/ir/package.json"), "utf8")).private).toBe(false);
-		expect(JSON.parse(await readFile(path.join(root, "packages/mck/package.json"), "utf8")).private).toBe(true);
+		expect(JSON.parse(await readFile(path.join(root, "packages/mck/package.json"), "utf8")).private).toBe(false);
 	});
 
 	test("removes every staged file when a temporary write fails", async () => {
