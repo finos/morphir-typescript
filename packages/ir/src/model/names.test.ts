@@ -5,7 +5,9 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { FQName, Name, type NameStyle, Path } from "./names.ts";
+import { JSON_PROFILE } from "../codec/profile.ts";
+import { modulePath, toPhysical } from "../layout/paths.ts";
+import { FQName, ModuleName, Name, type NameStyle, PackageName, Path } from "./names.ts";
 
 const corpusPath = path.resolve(import.meta.dir, "../../../../../../docs/spec/ir/fixtures/naming-conformance.json");
 // A missing corpus would quietly skip the conformance cases, so it is an error
@@ -103,6 +105,28 @@ describe.skipIf(corpus === null)("naming-conformance.json", () => {
 			const r = FQName.parse(c.canonical.uppercase);
 			expect(r.ok).toBe(true);
 			if (r.ok) for (const s of styles) expect(FQName.canonical(r.value, s)).toBe(c.canonical[s]);
+		}
+	});
+	// A package-qualified module spells as `package:module` (decision 0015's
+	// consequences). No IR member carries one yet, so there is no newtype: the
+	// two halves parse as a PackageName and a ModuleName, and the tree paths come
+	// from the layout, where the `@` segment ends a dependency's package path.
+	test("qualifiedModuleNameCases", () => {
+		for (const c of corpus.qualifiedModuleNameCases) {
+			const colon = c.canonical.uppercase.indexOf(":");
+			expect(colon).toBeGreaterThan(0);
+			expect(c.canonical.uppercase.includes("#")).toBe(false);
+			const pkg = PackageName.parse(c.canonical.uppercase.slice(0, colon));
+			const mod = ModuleName.parse(c.canonical.uppercase.slice(colon + 1));
+			expect(pkg.ok && mod.ok).toBe(true);
+			if (!pkg.ok || !mod.ok) continue;
+			for (const s of styles) {
+				expect(PackageName.canonical(pkg.value, s)).toBe(c.packagePath[s]);
+				expect(ModuleName.canonical(mod.value, s)).toBe(c.modulePath[s]);
+				expect(`${PackageName.canonical(pkg.value, s)}:${ModuleName.canonical(mod.value, s)}`).toBe(c.canonical[s]);
+			}
+			expect(toPhysical(modulePath("pkg", pkg.value, mod.value), JSON_PROFILE)).toBe(c.documentTreePath);
+			expect(toPhysical(modulePath("deps", pkg.value, mod.value), JSON_PROFILE)).toBe(c.dependencyTreePath);
 		}
 	});
 });
