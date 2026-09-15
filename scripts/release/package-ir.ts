@@ -23,7 +23,15 @@ import { parseStableVersion } from "./version.ts";
 
 export { promoteVerifiedArtifact, runCommand };
 
-const ENTRYPOINTS = ["index.ts", "model/index.ts", "versions/v4/index.ts", "codec/json/value.ts"] as const;
+const ENTRYPOINTS = [
+	"index.ts",
+	"model/index.ts",
+	"versions/v4/index.ts",
+	"codec/json/value.ts",
+	"codec/yaml/index.ts",
+	"layout/index.ts",
+	"layout/node.ts",
+] as const;
 
 const IDENTITY: PackageIdentity = { scheme: "morphir-ir", sourceLabel: "packages/ir/src", virtualDirectory: "src" };
 
@@ -40,6 +48,9 @@ const EXPORTS = {
 	"./model": { types: "./dist/model/index.d.ts", import: "./dist/model/index.js" },
 	"./v4": { types: "./dist/versions/v4/index.d.ts", import: "./dist/versions/v4/index.js" },
 	"./codec/json": { types: "./dist/codec/json/value.d.ts", import: "./dist/codec/json/value.js" },
+	"./codec/yaml": { types: "./dist/codec/yaml/index.d.ts", import: "./dist/codec/yaml/index.js" },
+	"./layout": { types: "./dist/layout/index.d.ts", import: "./dist/layout/index.js" },
+	"./layout/node": { types: "./dist/layout/node.d.ts", import: "./dist/layout/node.js" },
 } as const;
 // The one runtime dependency: the YAML profile's reader parses through it. It
 // is external to the bundle and declared in the published manifest, as the mck
@@ -58,10 +69,19 @@ const REQUIRED_FILES = [
 	"package/dist/versions/v4/index.js.map",
 	"package/dist/codec/json/value.js",
 	"package/dist/codec/json/value.js.map",
+	"package/dist/codec/yaml/index.js",
+	"package/dist/codec/yaml/index.js.map",
+	"package/dist/layout/index.js",
+	"package/dist/layout/index.js.map",
+	"package/dist/layout/node.js",
+	"package/dist/layout/node.js.map",
 	"package/dist/index.d.ts",
 	"package/dist/model/index.d.ts",
 	"package/dist/versions/v4/index.d.ts",
 	"package/dist/codec/json/value.d.ts",
+	"package/dist/codec/yaml/index.d.ts",
+	"package/dist/layout/index.d.ts",
+	"package/dist/layout/node.d.ts",
 ] as const;
 
 function expectExact(value: unknown, expected: unknown, field: string): void {
@@ -133,16 +153,105 @@ async function expectedArchiveFiles(packageRoot: string): Promise<ReadonlySet<st
 	return expected;
 }
 
-async function smokeTest(tarball: string, compiler: string): Promise<void> {
+const SPECIFIERS = [
+	"@finos/morphir-ir",
+	"@finos/morphir-ir/model",
+	"@finos/morphir-ir/v4",
+	"@finos/morphir-ir/codec/json",
+	"@finos/morphir-ir/codec/yaml",
+	"@finos/morphir-ir/layout",
+	"@finos/morphir-ir/layout/node",
+] as const;
+
+// A distribution with nothing in it, in the wire shape `@finos/morphir-ir/v4`
+// reads: small enough to write and read back by hand, but real enough to
+// exercise the manifest, the tree round trip, and the Node adapter's own
+// directory walk in one shot.
+const EMPTY_LIBRARY_DOCUMENT = "formatVersion: 4\ndistribution:\n  Library:\n    packageName: example\n    dependencies: {}\n    def:\n      modules: {}\n";
+
+// Runs the layout and its Node adapter the way a consumer does: parse a
+// document through the YAML codec, round-trip a tiny tree through the pure
+// `readTree`/`writeTree`, and round-trip the same tree through a real
+// directory with `readTreeFromDirectory`/`writeTreeToDirectory`.
+const LAYOUT_EXERCISE = [
+	'import { yaml } from "@finos/morphir-ir/v4";',
+	'import { parseYaml, YAML_PROFILE } from "@finos/morphir-ir/codec/yaml";',
+	'import { readTree, writeTree } from "@finos/morphir-ir/layout";',
+	'import { readTreeFromDirectory, writeTreeToDirectory } from "@finos/morphir-ir/layout/node";',
+	'import { mkdtemp, rm } from "node:fs/promises";',
+	'import { tmpdir } from "node:os";',
+	'import path from "node:path";',
+	"",
+	`const parsedDocument = parseYaml(${JSON.stringify("formatVersion: 4\n")});`,
+	'if (!parsedDocument.ok) throw new Error("parseYaml failed: " + parsedDocument.error.message);',
+	"",
+	`const parsedFile = yaml.read(${JSON.stringify(EMPTY_LIBRARY_DOCUMENT)});`,
+	'if (!parsedFile.ok) throw new Error("v4 yaml.read failed: " + parsedFile.error.message);',
+	"const file = parsedFile.value;",
+	"",
+	"const written = writeTree(file, { profile: YAML_PROFILE, pathBudget: 4000 });",
+	'if (!written.ok) throw new Error("writeTree failed: " + written.error.message);',
+	"const readBack = readTree(written.value, YAML_PROFILE);",
+	'if (!readBack.ok) throw new Error("readTree failed: " + readBack.error.message);',
+	'if (JSON.stringify(readBack.value.value) !== JSON.stringify(file)) throw new Error("readTree(writeTree(file)) did not round-trip");',
+	"",
+	'const directory = await mkdtemp(path.join(tmpdir(), "morphir-ir-smoke-layout-node-"));',
+	"try {",
+	"	await writeTreeToDirectory(directory, written.value, YAML_PROFILE);",
+	"	const fromDisk = await readTreeFromDirectory(directory, YAML_PROFILE);",
+	'	if (!fromDisk.ok) throw new Error("readTreeFromDirectory failed: " + fromDisk.error.message);',
+	'	if (JSON.stringify(fromDisk.value.value) !== JSON.stringify(file)) throw new Error("readTreeFromDirectory(writeTreeToDirectory(file)) did not round-trip");',
+	"} finally {",
+	"	await rm(directory, { recursive: true, force: true });",
+	"}",
+	"",
+].join("\n");
+
+// `--offline` cannot resolve `yaml` against a registry it must not reach, so
+// the consumer's own `yaml` dependency has to come from a local tarball too;
+// the override points it at the very tarball packed from this workspace's own
+// install, mirroring the trick `package-mck.ts` uses for the ir tarball.
+async function packYamlDependency(root: string, packedOutput: string): Promise<string> {
+	return packStagedPackage(path.join(root, "packages/ir/node_modules/yaml"), packedOutput, "yaml-2.9.1.tgz");
+}
+
+// Every published `.js` under `dist` except the Node adapter must stay clear
+// of `node:fs`: that is the one entry point a browser build is allowed to
+// never see.
+const FILESYSTEM_IMPORT = /\bnode:fs(?:\/promises)?\b/;
+
+async function assertBrowserSafe(tarball: string, files: readonly string[], cwd: string): Promise<void> {
+	const distScripts = files.filter((file) => file.startsWith("package/dist/") && file.endsWith(".js") && file !== "package/dist/layout/node.js");
+	for (const file of distScripts) {
+		const contents = await runCommand(["tar", "-xOf", tarball, file], cwd);
+		if (FILESYSTEM_IMPORT.test(contents)) throw new Error(`${file} imports node:fs, but only dist/layout/node.js may`);
+	}
+}
+
+async function smokeTest(tarball: string, files: readonly string[], compiler: string, root: string): Promise<void> {
+	await assertBrowserSafe(tarball, files, root);
+
 	const consumer = await mkdtemp(path.join(tmpdir(), "morphir-ir-consumer-"));
+	const yamlWork = await mkdtemp(path.join(tmpdir(), "morphir-ir-yaml-pack-"));
 	try {
-		await Bun.write(path.join(consumer, "package.json"), '{"name":"morphir-ir-artifact-consumer","private":true,"type":"module"}\n');
-		await runCommand([process.execPath, "add", "--offline", "--no-save", "--ignore-scripts", "--backend=copyfile", tarball], consumer);
-		const specifiers = ["@finos/morphir-ir", "@finos/morphir-ir/model", "@finos/morphir-ir/v4", "@finos/morphir-ir/codec/json"];
-		const program = `const specifiers = ${JSON.stringify(specifiers)}; for (const specifier of specifiers) { const resolved = import.meta.resolve(specifier); if (!resolved.includes('/node_modules/@finos/morphir-ir/')) throw new Error('resolved outside installed package: ' + resolved); await import(specifier); }`;
+		const yamlTarball = await packYamlDependency(root, yamlWork);
+		const consumerManifest = {
+			name: "morphir-ir-artifact-consumer",
+			private: true,
+			type: "module",
+			overrides: { yaml: `file:${yamlTarball.split(path.sep).join("/")}` },
+		};
+		await Bun.write(path.join(consumer, "package.json"), `${JSON.stringify(consumerManifest)}\n`);
+		await runCommand([process.execPath, "add", "--offline", "--no-save", "--ignore-scripts", "--backend=copyfile", yamlTarball, tarball], consumer);
+
+		const program = `const specifiers = ${JSON.stringify(SPECIFIERS)}; for (const specifier of specifiers) { const resolved = import.meta.resolve(specifier); if (!resolved.includes('/node_modules/@finos/morphir-ir/')) throw new Error('resolved outside installed package: ' + resolved); await import(specifier); }`;
 		await runCommand([process.execPath, "--eval", program], consumer);
 		const nodeProgram = `if (process.versions.node.split('.')[0] !== '20') throw new Error('expected Node 20, received ' + process.versions.node); ${program}`;
 		await runCommand(["node", "--input-type=module", "--eval", nodeProgram], consumer);
+
+		await Bun.write(path.join(consumer, "layout-exercise.mjs"), LAYOUT_EXERCISE);
+		await runCommand([process.execPath, "layout-exercise.mjs"], consumer);
+
 		await Bun.write(
 			path.join(consumer, "index.ts"),
 			[
@@ -150,13 +259,17 @@ async function smokeTest(tarball: string, compiler: string): Promise<void> {
 				'import * as model from "@finos/morphir-ir/model";',
 				'import * as v4 from "@finos/morphir-ir/v4";',
 				'import * as json from "@finos/morphir-ir/codec/json";',
-				"void [ir, model, v4, json];",
+				'import * as yaml from "@finos/morphir-ir/codec/yaml";',
+				'import * as layout from "@finos/morphir-ir/layout";',
+				'import * as layoutNode from "@finos/morphir-ir/layout/node";',
+				"void [ir, model, v4, json, yaml, layout, layoutNode];",
 				"",
 			].join("\n"),
 		);
 		await runCommand([compiler, "--noEmit", "--strict", "--target", "ES2022", "--module", "NodeNext", "--moduleResolution", "NodeNext", "index.ts"], consumer);
 	} finally {
 		await rm(consumer, { recursive: true, force: true });
+		await rm(yamlWork, { recursive: true, force: true });
 	}
 }
 
@@ -205,7 +318,7 @@ export async function buildIrArtifact(root: string, outputDirectory: string): Pr
 		const files = await promoteVerifiedArtifact(stagedTarball, tarball, async (candidate) => {
 			const candidateFiles = await archiveFiles(validatePackageFiles, candidate, absoluteRoot, await expectedArchiveFiles(packageRoot));
 			await verifyExtractedFiles(candidate, candidateFiles, work);
-			await smokeTest(candidate, path.join(absoluteRoot, "node_modules/.bin/tsc"));
+			await smokeTest(candidate, candidateFiles, path.join(absoluteRoot, "node_modules/.bin/tsc"), absoluteRoot);
 			return candidateFiles;
 		});
 		return { tarball, files };

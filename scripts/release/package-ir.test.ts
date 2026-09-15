@@ -18,6 +18,9 @@ const exportsMap = {
 	"./model": { types: "./dist/model/index.d.ts", import: "./dist/model/index.js" },
 	"./v4": { types: "./dist/versions/v4/index.d.ts", import: "./dist/versions/v4/index.js" },
 	"./codec/json": { types: "./dist/codec/json/value.d.ts", import: "./dist/codec/json/value.js" },
+	"./codec/yaml": { types: "./dist/codec/yaml/index.d.ts", import: "./dist/codec/yaml/index.js" },
+	"./layout": { types: "./dist/layout/index.d.ts", import: "./dist/layout/index.js" },
+	"./layout/node": { types: "./dist/layout/node.d.ts", import: "./dist/layout/node.js" },
 } as const;
 
 function sourceManifest(): Record<string, unknown> {
@@ -220,7 +223,7 @@ describe("@finos/morphir-ir artifact", () => {
 	let output: string;
 	let artifact: Awaited<ReturnType<typeof buildIrArtifact>>;
 
-	test("builds one clean tarball and smoke-tests all four installed exports", async () => {
+	test("builds one clean tarball and smoke-tests all seven installed exports", async () => {
 		output = await mkdtemp(path.join(tmpdir(), "morphir-ir-artifact-test-"));
 		artifact = await buildIrArtifact(root, output);
 
@@ -236,10 +239,16 @@ describe("@finos/morphir-ir artifact", () => {
 			"package/dist/model/index.js",
 			"package/dist/versions/v4/index.js",
 			"package/dist/codec/json/value.js",
+			"package/dist/codec/yaml/index.js",
+			"package/dist/layout/index.js",
+			"package/dist/layout/node.js",
 			"package/dist/index.d.ts",
 			"package/dist/model/index.d.ts",
 			"package/dist/versions/v4/index.d.ts",
 			"package/dist/codec/json/value.d.ts",
+			"package/dist/codec/yaml/index.d.ts",
+			"package/dist/layout/index.d.ts",
+			"package/dist/layout/node.d.ts",
 		]) {
 			expect(artifact.files).toContain(required);
 		}

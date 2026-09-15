@@ -31,6 +31,18 @@
 		"./codec/json": {
 			"types": "./dist/codec/json/value.d.ts",
 			"import": "./dist/codec/json/value.js"
+		},
+		"./codec/yaml": {
+			"types": "./dist/codec/yaml/index.d.ts",
+			"import": "./dist/codec/yaml/index.js"
+		},
+		"./layout": {
+			"types": "./dist/layout/index.d.ts",
+			"import": "./dist/layout/index.js"
+		},
+		"./layout/node": {
+			"types": "./dist/layout/node.d.ts",
+			"import": "./dist/layout/node.js"
 		}
 	},
 	"sideEffects": false,
