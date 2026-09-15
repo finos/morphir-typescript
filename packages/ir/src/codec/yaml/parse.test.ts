@@ -114,6 +114,10 @@ describe("parseYaml rejections", () => {
 	test("a plain scalar containing a literal % is unaffected", () => {
 		expect(value("a: 100%\n")).toEqual(j('{ "a": "100%" }'));
 	});
+	test("a bare document marker and a quoted %TAG are not directives", () => {
+		expect(value("---\na: 1\n")).toEqual(j('{ "a": 1 }'));
+		expect(value('name: "%TAG"\n')).toEqual(j('{ "name": "%TAG" }'));
+	});
 	test("non-string keys", () => {
 		expect(fail("1: a\n")).toMatchObject({ code: "invalid_type", message: "mapping keys must be strings", cursor: "/" });
 		expect(fail("? [a]\n: b\n").code).toBe("invalid_type");
