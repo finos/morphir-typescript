@@ -29,6 +29,7 @@ import {
 	runCommand,
 	verifyExtractedFiles,
 } from "./package-common.ts";
+import { packYamlDependency } from "./package-ir.ts";
 import { parseStableVersion } from "./version.ts";
 
 const ENTRYPOINTS = ["index.ts", "cli.ts", "adapter.ts"] as const;
@@ -200,22 +201,30 @@ async function copyTree(from: string, to: string): Promise<void> {
  * still adjudicates the report against ALLOWED_FAILING_CASES, and
  * `expectKitRun` still requires that exit code from the driver.
  */
-async function smokeTest(mckTarball: string, irTarball: string, compiler: string): Promise<void> {
+async function smokeTest(mckTarball: string, irTarball: string, compiler: string, root: string): Promise<void> {
 	const consumer = await mkdtemp(path.join(tmpdir(), "morphir-mck-consumer-"));
+	const yamlWork = await mkdtemp(path.join(tmpdir(), "morphir-mck-yaml-pack-"));
 	try {
 		// The packed manifest depends on `@finos/morphir-ir` by exact version, and
-		// `--offline` cannot resolve that name against a registry it must not
-		// reach. The override points the transitive dependency at the very
-		// tarball this run built; `yaml`, the IR's own runtime dependency, still
-		// comes from bun's local cache rather than another packed tarball.
+		// the IR in turn on `yaml`; `--offline` cannot resolve either name against
+		// a registry it must not reach (a fresh CI runner has no cached manifest
+		// for `yaml`). The overrides point both at local tarballs: the IR tarball
+		// this run built, and `yaml` packed from this workspace's own install.
+		const yamlTarball = await packYamlDependency(root, yamlWork);
 		const consumerManifest = {
 			name: "morphir-mck-artifact-consumer",
 			private: true,
 			type: "module",
-			overrides: { "@finos/morphir-ir": `file:${irTarball.split(path.sep).join("/")}` },
+			overrides: {
+				"@finos/morphir-ir": `file:${irTarball.split(path.sep).join("/")}`,
+				yaml: `file:${yamlTarball.split(path.sep).join("/")}`,
+			},
 		};
 		await Bun.write(path.join(consumer, "package.json"), `${JSON.stringify(consumerManifest)}\n`);
-		await runCommand([process.execPath, "add", "--offline", "--no-save", "--ignore-scripts", "--backend=copyfile", irTarball, mckTarball], consumer);
+		await runCommand(
+			[process.execPath, "add", "--offline", "--no-save", "--ignore-scripts", "--backend=copyfile", yamlTarball, irTarball, mckTarball],
+			consumer,
+		);
 		const cli = "node_modules/@finos/morphir-mck/dist/cli.js";
 		const adapter = "node_modules/@finos/morphir-mck/dist/adapter.js";
 
@@ -242,6 +251,7 @@ async function smokeTest(mckTarball: string, irTarball: string, compiler: string
 		await runCommand([compiler, "--noEmit", "--strict", "--target", "ES2022", "--module", "NodeNext", "--moduleResolution", "NodeNext", "index.ts"], consumer);
 	} finally {
 		await rm(consumer, { recursive: true, force: true });
+		await rm(yamlWork, { recursive: true, force: true });
 	}
 }
 
@@ -384,7 +394,7 @@ export async function buildMckArtifact(
 			const candidateFiles = await archiveFiles(validatePackageFiles, candidate, absoluteRoot, await expectedArchiveFiles(packageRoot));
 			await verifyExtractedFiles(candidate, candidateFiles, work);
 			await verifyDeclarations(candidate, candidateFiles, absoluteRoot);
-			await smokeTest(candidate, path.resolve(irTarball), path.join(absoluteRoot, "node_modules/.bin/tsc"));
+			await smokeTest(candidate, path.resolve(irTarball), path.join(absoluteRoot, "node_modules/.bin/tsc"), absoluteRoot);
 			return candidateFiles;
 		});
 		return { tarball, files };

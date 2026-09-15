@@ -207,16 +207,19 @@ const LAYOUT_EXERCISE = [
 	"",
 ].join("\n");
 
-// `--offline` cannot resolve `yaml` against a registry it must not reach, so
-// the consumer's own `yaml` dependency has to come from a local tarball too;
-// the override points it at the very tarball packed from this workspace's own
-// install, mirroring the trick `package-mck.ts` uses for the ir tarball.
+// `--offline` cannot resolve `yaml` against a registry it must not reach (a
+// fresh CI runner has no cached manifest for it), so the consumer's own
+// `yaml` dependency has to come from a local tarball too; the override points
+// it at the very tarball packed from this workspace's own install, mirroring
+// the trick `package-mck.ts` uses for the ir tarball. `package-mck.ts` reuses
+// this packer for the same reason.
 /** The filename `bun pm pack` gives the vendored `yaml` dependency, derived from the pinned version rather than hard-coded. */
 export function yamlTarballName(): string {
 	return `yaml-${DEPENDENCIES.yaml}.tgz`;
 }
 
-async function packYamlDependency(root: string, packedOutput: string): Promise<string> {
+/** Packs this workspace's installed `yaml` into `packedOutput` and returns the tarball path. */
+export async function packYamlDependency(root: string, packedOutput: string): Promise<string> {
 	return packStagedPackage(path.join(root, "packages/ir/node_modules/yaml"), packedOutput, yamlTarballName());
 }
 
