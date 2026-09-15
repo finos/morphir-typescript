@@ -39,6 +39,7 @@ function sourceManifest(): Record<string, unknown> {
 		exports: structuredClone(exportsMap),
 		sideEffects: false,
 		publishConfig: { access: "public" },
+		dependencies: { yaml: "2.9.1" },
 		scripts: { typecheck: "tsc -p tsconfig.json" },
 		devDependencies: { "@finos/morphir-mck": "workspace:*" },
 	};
@@ -62,6 +63,7 @@ describe("publishManifest", () => {
 			exports: exportsMap,
 			sideEffects: false,
 			files: ["dist", "README.md", "LICENSE", "NOTICE"],
+			dependencies: { yaml: "2.9.1" },
 			publishConfig: { access: "public" },
 		});
 		expect(result).not.toHaveProperty("private");

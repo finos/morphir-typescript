@@ -19,6 +19,8 @@
 // Checked<T> and one that does not keeps the plain reader.
 import { type Ctx, fail, newRoot } from "../../codec/json/cursor.ts";
 import { type JsonValue, parseJson, writeJson } from "../../codec/json/value.ts";
+import { JSON_PROFILE, type ProfileCodec } from "../../codec/profile.ts";
+import { parseYaml, writeYaml, YAML_PROFILE } from "../../codec/yaml/index.ts";
 import {
 	type AttributeMapper,
 	mapAttributes,
@@ -134,17 +136,26 @@ function nodeOf<K extends NodeKind, T>(node: K, r: Result<T, Diagnostic>): Resul
 	return r.ok ? ok({ node, value: r.value }) : r;
 }
 
-// The node entry point that keeps the warnings. Each call starts from its own
-// root context, so one node's legacy spellings never show up on the next.
-export function readNodeChecked(node: NodeKind, text: string): Result<Checked<NodeValue>, Diagnostic> {
-	const parsed = parseJson(text);
+// The node entry point that keeps the warnings, over whichever profile spells
+// the text. Each call starts from its own root context, so one node's legacy
+// spellings never show up on the next. The readers below this line never learn
+// which profile they were fed: both parse to the same JsonValue tree.
+export function readNodeCheckedWith(profile: ProfileCodec, node: NodeKind, text: string): Result<Checked<NodeValue>, Diagnostic> {
+	const parsed = profile.parse(text);
 	if (!parsed.ok) return parsed;
-	const v = parsed.value;
 	const ctx = newRoot();
-	const r = readNodeValue(node, ctx, v);
+	const r = readNodeValue(node, ctx, parsed.value);
 	// Copied, not aliased: ctx.warnings stays mutable for the readers, and the
 	// Checked a caller holds is the list as it stood when the read finished.
 	return r.ok ? ok({ value: r.value, warnings: [...ctx.warnings] }) : r;
+}
+
+export function writeNodeWith(profile: ProfileCodec, v: NodeValue): string {
+	return profile.write(writeNodeValue(v));
+}
+
+export function readNodeChecked(node: NodeKind, text: string): Result<Checked<NodeValue>, Diagnostic> {
+	return readNodeCheckedWith(JSON_PROFILE, node, text);
 }
 
 // Drops the warnings; the value and the diagnostics are unchanged.
@@ -245,7 +256,7 @@ function writeNodeValue(v: NodeValue): JsonValue {
 }
 
 export function writeNode(v: NodeValue): string {
-	return writeJson(writeNodeValue(v));
+	return writeNodeWith(JSON_PROFILE, v);
 }
 
 // The name a fence means by `expect=`: the variant a node decoded to. Names,
@@ -359,6 +370,41 @@ export const json = {
 	readNodeChecked,
 	writeNode,
 };
+
+// The same surface in the other profile. The readers and writers are shared;
+// only the text layer differs, so a node written here and read back through
+// `json` is the same node.
+export const yaml = {
+	read(text: string): Result<IRFile, Diagnostic> {
+		const parsed = parseYaml(text);
+		return parsed.ok ? readIRFile(parsed.value) : parsed;
+	},
+	readChecked(text: string): Result<Checked<IRFile>, Diagnostic> {
+		const parsed = parseYaml(text);
+		if (!parsed.ok) return parsed;
+		const ctx = newRoot();
+		const r = readIRFile(parsed.value, ctx);
+		return r.ok ? ok({ value: r.value, warnings: [...ctx.warnings] }) : r;
+	},
+	write(file: IRFile): string {
+		return writeYaml(writeIRFile(file));
+	},
+	readNode(node: NodeKind, text: string): Result<NodeValue, Diagnostic> {
+		const r = readNodeCheckedWith(YAML_PROFILE, node, text);
+		return r.ok ? ok(r.value.value) : r;
+	},
+	readNodeChecked(node: NodeKind, text: string): Result<Checked<NodeValue>, Diagnostic> {
+		return readNodeCheckedWith(YAML_PROFILE, node, text);
+	},
+	writeNode(v: NodeValue): string {
+		return writeNodeWith(YAML_PROFILE, v);
+	},
+};
+
+// The profiles by name, for a caller that picks one at run time (the document
+// tree and the kit driver both do).
+export const profiles = { json: JSON_PROFILE, yaml: YAML_PROFILE } as const;
+export type { ProfileCodec, ProfileName } from "../../codec/profile.ts";
 
 // ------------------------------------------------------------- vocabulary
 

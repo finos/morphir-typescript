@@ -41,6 +41,12 @@ const EXPORTS = {
 	"./v4": { types: "./dist/versions/v4/index.d.ts", import: "./dist/versions/v4/index.js" },
 	"./codec/json": { types: "./dist/codec/json/value.d.ts", import: "./dist/codec/json/value.js" },
 } as const;
+// The one runtime dependency: the YAML profile's reader parses through it. It
+// is external to the bundle and declared in the published manifest, as the mck
+// package declares its dependency on this one — a bundled copy would put a
+// second `yaml` in a consumer's graph and would drag that package's paths into
+// our source maps.
+const DEPENDENCIES = { yaml: "2.9.1" } as const;
 const ROOT_FILES = ["package/package.json", "package/README.md", "package/LICENSE", "package/NOTICE"] as const;
 const REQUIRED_FILES = [
 	...ROOT_FILES,
@@ -77,6 +83,7 @@ export function publishManifest(source: JsonRecord): JsonRecord & { readonly exp
 	expectExact(source.exports, EXPORTS, "exports");
 	expectExact(source.sideEffects, false, "sideEffects");
 	expectExact(source.publishConfig, { access: "public" }, "publishConfig");
+	expectExact(source.dependencies, DEPENDENCIES, "dependencies");
 
 	return {
 		name: source.name,
@@ -91,6 +98,7 @@ export function publishManifest(source: JsonRecord): JsonRecord & { readonly exp
 		exports: structuredClone(EXPORTS),
 		sideEffects: false,
 		files: ["dist", "README.md", "LICENSE", "NOTICE"],
+		dependencies: structuredClone(DEPENDENCIES),
 		publishConfig: { access: "public" },
 	};
 }
@@ -169,6 +177,7 @@ export async function buildIrArtifact(root: string, outputDirectory: string): Pr
 			format: "esm",
 			minify: false,
 			sourcemap: "external",
+			external: Object.keys(DEPENDENCIES),
 		});
 		if (!build.success) throw new AggregateError(build.logs, "Bun failed to build @finos/morphir-ir");
 
