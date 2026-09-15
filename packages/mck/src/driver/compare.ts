@@ -14,6 +14,18 @@ export function normalizeCanonical(s: string): string {
 	return s;
 }
 
+// The tree comparison needs the set's path budget, and the driver may not
+// parse either profile (S8): it reads the number lexically from the manifest
+// fence with one expression that matches both spellings.
+const PATH_BUDGET = /"pathBudget"\s*:\s*(\d+)|^\s*pathBudget\s*:\s*(\d+)\s*$/m;
+
+export function pathBudgetOf(manifestText: string): number | null {
+	const m = PATH_BUDGET.exec(manifestText);
+	if (m === null) return null;
+	const digits = m[1] ?? m[2];
+	return digits === undefined ? null : Number.parseInt(digits, 10);
+}
+
 export function checkCanonical(expected: string, actual: string): string | null {
 	const e = normalizeCanonical(expected).split("\n");
 	const a = normalizeCanonical(actual).split("\n");

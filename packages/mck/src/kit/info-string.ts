@@ -24,7 +24,10 @@ const KEYS: Readonly<Record<Role, ReadonlySet<string>>> = {
 	// that warning (decision 0006's compatibility window).
 	accepted: new Set(["warning"]),
 	rejected: new Set(["diagnostic", "expect"]),
-	file: new Set(["path", "set"]),
+	// mode=read: the set holds input a canonical writer never reproduces (a
+	// `$meta` member, say), so only the read half of the tree comparison runs
+	// for it. It is all-or-nothing per set, which `case.ts` enforces.
+	file: new Set(["path", "set", "mode"]),
 };
 
 export function isInfoError(value: FenceInfo | InfoError): value is InfoError {
@@ -59,7 +62,10 @@ export function parseInfoString(info: string): FenceInfo | InfoError {
 		const count = ("diagnostic" in keys ? 1 : 0) + ("expect" in keys ? 1 : 0);
 		if (count !== 1) return { message: "rejected needs exactly one of diagnostic or expect" };
 	}
-	if (typedRole === "file" && !("path" in keys)) return { message: "file needs path" };
+	if (typedRole === "file") {
+		if (!("path" in keys)) return { message: "file needs path" };
+		if ("mode" in keys && keys.mode !== "read") return { message: "mode must be read" };
+	}
 
 	return { language: language as Language, role: typedRole, keys };
 }

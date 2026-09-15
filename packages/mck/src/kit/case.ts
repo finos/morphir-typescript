@@ -97,6 +97,20 @@ export function parseKitFile(file: string, source: string): ParsedFile {
 				if (count === 2) fail(fence.line, `more than one canonical ${profile} fence in ${current.id}`);
 			}
 		}
+		// `mode=read` is a property of a set, not of one file in it: the driver
+		// either runs the write half for the whole set or for none of it, so a
+		// set that says both is a kit error rather than a silent choice.
+		const modes = new Map<string, string | undefined>();
+		for (const fence of current.fences) {
+			if (fence.info.role !== "file") continue;
+			const set = fence.info.keys.set ?? "";
+			const mode = fence.info.keys.mode;
+			if (!modes.has(set)) {
+				modes.set(set, mode);
+				continue;
+			}
+			if (modes.get(set) !== mode) fail(fence.line, `set ${set} mixes mode=read and default fences`);
+		}
 		if (current.status === "pending") {
 			const bad = current.fences.find((f) => f.info.role !== "rejected");
 			if (bad !== undefined) fail(bad.line, `pending case may not carry canonical, accepted, or file fences (${current.id})`);

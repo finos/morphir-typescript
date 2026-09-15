@@ -152,16 +152,25 @@ describe("checkKitRunReport", () => {
 		expect(() => checkKitRunReport(report([record("types-0001", "pass"), record("names-0001", "skipped")]), "r.json")).not.toThrow();
 	});
 
-	test("rejects a failing case, naming it, since the allowance is empty", () => {
+	test("rejects a failing case the allowance does not name", () => {
 		const extra = report([record("distributions-0004", "fail"), record("values-0007", "fail")]);
 
 		expect(() => checkKitRunReport(extra, "r.json")).toThrow(/values-0007/);
 		expect(() => checkKitRunReport(extra, "r.json")).toThrow("does not allow");
 	});
 
+	// The allowance holds the kit's known-bad fences until the resync corrects
+	// them; a case in it passes up to its count and no further.
+	test("accepts an allowed case up to its count", () => {
+		expect(() => checkKitRunReport(report([record("distributions-0004", "fail"), record("distributions-0004", "fail")]), "r.json")).not.toThrow();
+		expect(() =>
+			checkKitRunReport(report([record("document-tree-0005", "fail"), record("document-tree-0005", "fail"), record("document-tree-0005", "fail")]), "r.json"),
+		).not.toThrow();
+	});
+
 	test("rejects repeated failures of the same case, kit errors, another binding, and an empty run", () => {
-		const tooMany = report([record("distributions-0004", "fail"), record("distributions-0004", "fail"), record("distributions-0004", "fail")]);
-		expect(() => checkKitRunReport(tooMany, "r.json")).toThrow(/distributions-0004 \(3 failing record\(s\), at most 0 allowed\)/);
+		const tooMany = report([record("values-0007", "fail"), record("values-0007", "fail"), record("values-0007", "fail")]);
+		expect(() => checkKitRunReport(tooMany, "r.json")).toThrow(/values-0007 \(3 failing record\(s\), at most 0 allowed\)/);
 
 		expect(() => checkKitRunReport(report([record("types-0001", "kit-error")]), "r.json")).toThrow("kit-error");
 		expect(() => checkKitRunReport({ ...report([record("types-0001", "pass")]), binding: "morphir-rust" }, "r.json")).toThrow("morphir-rust");
