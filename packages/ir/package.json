@@ -34,6 +34,9 @@
 		}
 	},
 	"sideEffects": false,
+	"dependencies": {
+		"yaml": "2.9.1"
+	},
 	"publishConfig": {
 		"access": "public"
 	},

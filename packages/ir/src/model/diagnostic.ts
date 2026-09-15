@@ -31,7 +31,10 @@ export type DiagnosticCode =
 	| "invalid_format_version_syntax"
 	| "format_version_out_of_range"
 	| "unsupported_format_version_major"
-	| "unsupported_format_version_revision";
+	| "unsupported_format_version_revision"
+	// YAML profile: syntax the profile forbids (S4)
+	| "invalid_yaml"
+	| "unsupported_yaml_feature";
 
 export interface Diagnostic {
 	readonly code: DiagnosticCode;
