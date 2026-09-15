@@ -98,6 +98,22 @@ describe("parseYaml rejections", () => {
 		expect(fail("base: {x: 1}\nchild:\n  <<: {y: 2}\n")).toMatchObject({ code: "unsupported_yaml_feature", message: "merge keys are not part of the profile" });
 		expect(fail("%YAML 1.2\n---\na: 1\n").code).toBe("unsupported_yaml_feature");
 	});
+	test("a %TAG directive is rejected even when it only redefines a default handle", () => {
+		expect(fail("%TAG !! tag:example.com,2000:\n---\na: 1\n")).toMatchObject({
+			code: "unsupported_yaml_feature",
+			message: "directives are not part of the profile",
+		});
+		expect(fail("%TAG !e! tag:e,2000:\n---\na: 1\n")).toMatchObject({
+			code: "unsupported_yaml_feature",
+			message: "directives are not part of the profile",
+		});
+	});
+	test("a %YAML directive is rejected with the directives message", () => {
+		expect(fail("%YAML 1.2\n---\na: 1\n")).toMatchObject({ code: "unsupported_yaml_feature", message: "directives are not part of the profile" });
+	});
+	test("a plain scalar containing a literal % is unaffected", () => {
+		expect(value("a: 100%\n")).toEqual(j('{ "a": "100%" }'));
+	});
 	test("non-string keys", () => {
 		expect(fail("1: a\n")).toMatchObject({ code: "invalid_type", message: "mapping keys must be strings", cursor: "/" });
 		expect(fail("? [a]\n: b\n").code).toBe("invalid_type");

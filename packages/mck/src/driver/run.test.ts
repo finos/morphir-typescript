@@ -695,6 +695,26 @@ describe("runKit: the tree comparison", () => {
 		expect(second.records.filter((r) => r.role === "file")[0]).toMatchObject({ result: "kit-error", message: "set s has no manifest" });
 	});
 
+	test("f2. an unresolved text file fence carries the fuller `set <name>: <message>`, the set's other fences the bare message", async () => {
+		const kit = await treeKit([
+			"```yaml file path=manifest set=s",
+			MANIFEST_BODY,
+			"```",
+			"```text file path=pkg/a/b/m/module set=s",
+			`${KIT_PATH}/documents/missing.yaml`,
+			"```",
+		]);
+		const { testee } = treeTestee(TREE_CAPS, {});
+		const report = await runKit(kit, testee, opts);
+		const files = report.records.filter((r) => r.role === "file");
+		expect(files).toHaveLength(2);
+		const bareMessage = `text fence names ${KIT_PATH}/documents/missing.yaml, which is not in the kit source (scripted)`;
+		const manifestRecord = files.find((r) => r.fenceIndex === 1);
+		const moduleRecord = files.find((r) => r.fenceIndex === 2);
+		expect(manifestRecord).toMatchObject({ result: "kit-error", message: bareMessage });
+		expect(moduleRecord).toMatchObject({ result: "kit-error", message: `set s: ${bareMessage}` });
+	});
+
 	test("g. a testee without the tree layout skips the set, and one without the profile skips it too", async () => {
 		const kit = await treeKit(SET_FENCES);
 		const single = await runKit(kit, treeTestee({ ...TREE_CAPS, layouts: ["single"] }, {}).testee, opts);

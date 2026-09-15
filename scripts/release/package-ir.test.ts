@@ -6,7 +6,15 @@ import { mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { runReleaseCli } from "./cli.ts";
-import { buildIrArtifact, canonicalSourceMap, promoteVerifiedArtifact, publishManifest, runCommand, validatePackageFiles } from "./package-ir.ts";
+import {
+	buildIrArtifact,
+	canonicalSourceMap,
+	promoteVerifiedArtifact,
+	publishManifest,
+	runCommand,
+	validatePackageFiles,
+	yamlTarballName,
+} from "./package-ir.ts";
 import { parseStableVersion } from "./version.ts";
 
 const root = path.resolve(import.meta.dir, "../..");
@@ -94,6 +102,14 @@ describe("publishManifest", () => {
 		const wrongExports = sourceManifest();
 		wrongExports.exports = { ".": exportsMap["."] };
 		expect(() => publishManifest(wrongExports)).toThrow("exports");
+	});
+});
+
+describe("yamlTarballName", () => {
+	test("derives the packed yaml tarball name from the pinned dependency version, not a hard-coded literal", () => {
+		const source = sourceManifest();
+		const pinned = publishManifest(source).dependencies.yaml;
+		expect(yamlTarballName()).toBe(`yaml-${pinned}.tgz`);
 	});
 });
 

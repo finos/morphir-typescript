@@ -23,14 +23,17 @@ function pad(bytes: Uint8Array): Uint8Array {
 	const out = new Uint8Array(paddedLen);
 	out.set(bytes);
 	out[bytes.length] = 0x80;
-	// bitLen fits in 32 bits for any input this binding handles; the high word
-	// of the 64-bit length is always zero.
 	const view = new DataView(out.buffer);
 	view.setUint32(paddedLen - 4, bitLen >>> 0, false);
 	return out;
 }
 
-/** UTF-8 text in, lowercase hex SHA-256 digest out. */
+/**
+ * UTF-8 text in, lowercase hex SHA-256 digest out.
+ *
+ * The bit length written into the padding fits in 32 bits for any input this
+ * binding handles; the high word of the 64-bit length field is always zero.
+ */
 export function sha256Hex(text: string): string {
 	const message = pad(new TextEncoder().encode(text));
 	let h0 = 0x6a09e667;

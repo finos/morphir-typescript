@@ -211,8 +211,13 @@ const LAYOUT_EXERCISE = [
 // the consumer's own `yaml` dependency has to come from a local tarball too;
 // the override points it at the very tarball packed from this workspace's own
 // install, mirroring the trick `package-mck.ts` uses for the ir tarball.
+/** The filename `bun pm pack` gives the vendored `yaml` dependency, derived from the pinned version rather than hard-coded. */
+export function yamlTarballName(): string {
+	return `yaml-${DEPENDENCIES.yaml}.tgz`;
+}
+
 async function packYamlDependency(root: string, packedOutput: string): Promise<string> {
-	return packStagedPackage(path.join(root, "packages/ir/node_modules/yaml"), packedOutput, "yaml-2.9.1.tgz");
+	return packStagedPackage(path.join(root, "packages/ir/node_modules/yaml"), packedOutput, yamlTarballName());
 }
 
 // Every published `.js` under `dist` except the Node adapter must stay clear

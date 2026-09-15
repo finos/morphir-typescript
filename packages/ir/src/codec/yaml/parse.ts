@@ -36,6 +36,21 @@ const NULLS = new Set(["null", "Null", "NULL", "~", ""]);
 const TRUES = new Set(["true", "True", "TRUE"]);
 const FALSES = new Set(["false", "False", "FALSE"]);
 
+// The library always reports the built-in `!!` handle in `directives.tags`,
+// even when nothing in the source names a directive, so an explicit `%TAG`
+// that merely redefines `!!` (or `!`) to a different URI is indistinguishable
+// from the default by key alone. Comparing the whole map against this default
+// catches a redefinition too, not just a handle the profile has never seen.
+const DEFAULT_TAG_HANDLES: Readonly<Record<string, string>> = { "!!": "tag:yaml.org,2002:" };
+
+function hasExplicitDirectives(doc: Document.Parsed): boolean {
+	if (doc.directives.yaml.explicit) return true;
+	const tags = doc.directives.tags as Readonly<Record<string, string>>;
+	const keys = Object.keys(tags);
+	if (keys.length !== Object.keys(DEFAULT_TAG_HANDLES).length) return true;
+	return keys.some((handle) => tags[handle] !== DEFAULT_TAG_HANDLES[handle]);
+}
+
 class Rejection extends Error {
 	constructor(
 		readonly code: DiagnosticCode,
@@ -142,7 +157,15 @@ export function parseYaml(text: string): Result<JsonValue, Diagnostic> {
 	const at = (offset: number | null) => (offset === null ? undefined : { line: lineCounter.linePos(offset).line, column: lineCounter.linePos(offset).col });
 	let doc: Document.Parsed;
 	try {
-		doc = parseDocument(text, { version: "1.2", schema: "core", uniqueKeys: false, keepSourceTokens: true, lineCounter, merge: false, logLevel: "error" });
+		doc = parseDocument(text, {
+			version: "1.2",
+			schema: "core",
+			uniqueKeys: false, // duplicate keys are detected by hand below (see convertMap): it reports the profile's own code and cursor
+			keepSourceTokens: true,
+			lineCounter,
+			merge: false,
+			logLevel: "error",
+		});
 	} catch (error) {
 		return err(diagnostic("invalid_yaml", "syntax", "/", error instanceof Error ? error.message : String(error)));
 	}
@@ -151,7 +174,7 @@ export function parseYaml(text: string): Result<JsonValue, Diagnostic> {
 		const message = first.code === "MULTIPLE_DOCS" ? "expected exactly one document" : first.message;
 		return err(diagnostic("invalid_yaml", "syntax", "/", message, at(first.pos[0])));
 	}
-	if (doc.directives.yaml.explicit || Object.keys(doc.directives.tags).some((h) => h !== "!" && h !== "!!")) {
+	if (hasExplicitDirectives(doc)) {
 		return err(diagnostic("unsupported_yaml_feature", "syntax", "/", "directives are not part of the profile"));
 	}
 	if (doc.contents === null && text.trim() === "") return err(diagnostic("invalid_yaml", "syntax", "/", "expected exactly one document"));

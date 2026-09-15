@@ -8,8 +8,6 @@ describe("pathBudgetOf", () => {
 		expect(pathBudgetOf(["formatVersion: 4", "distribution: Library", "package: a/b", "pathBudget: 4000"].join("\n"))).toBe(4000);
 		expect(pathBudgetOf('{ "formatVersion": 4, "distribution": "Library", "package": "a/b", "pathBudget": 64 }')).toBe(64);
 		expect(pathBudgetOf('{\n\t"pathBudget" : 128\n}')).toBe(128);
-		// Indented, as a manifest nested in a yaml fence body may be.
-		expect(pathBudgetOf("  pathBudget: 96  \n")).toBe(96);
 	});
 	test("a manifest with no budget, or one that is not a plain integer, reads as null", () => {
 		expect(pathBudgetOf("formatVersion: 4\n")).toBeNull();
@@ -17,6 +15,9 @@ describe("pathBudgetOf", () => {
 		expect(pathBudgetOf("")).toBeNull();
 		// A `pathBudget` that is not the whole yaml value is not the budget.
 		expect(pathBudgetOf("note: pathBudget: 4000 is the default\n")).toBeNull();
+		// The yaml form is anchored at column 0: an indented `pathBudget:` is a
+		// nested field, not the manifest's own key, and is not matched.
+		expect(pathBudgetOf("  pathBudget: 96  \n")).toBeNull();
 	});
 });
 

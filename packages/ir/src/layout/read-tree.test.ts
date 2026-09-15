@@ -9,6 +9,7 @@
 // Run with: bun test packages/ir/src/layout/read-tree.test.ts
 import { describe, expect, test } from "bun:test";
 import { YAML_PROFILE } from "../codec/yaml/index.ts";
+import { ModuleName } from "../model/names.ts";
 import { yaml } from "../versions/v4/index.ts";
 import { canonicalYaml, fileSet } from "./kit-fixtures.test-helper.ts";
 import { readTree } from "./read-tree.ts";
@@ -185,6 +186,56 @@ describe("a file's own diagnostics come back under the file's logical path", () 
 		expect(w?.cursor.startsWith(`${TYPE_FILE}#/`)).toBe(true);
 		expect(w?.cursor).toContain("/arg");
 		expect(w?.message).toContain("parameterType");
+	});
+});
+
+// --------------------------------------------------------- module ordering
+
+// A directory tree carries no order of its own (see read-tree.ts's header
+// note), so this fixture supplies the modules out of logical-path order in
+// the map itself: `readTree` still has to come back sorted, and `writeTree`
+// of that result has to emit them sorted too, not merely echo the input.
+describe("readTree sorts modules by logical path regardless of map insertion order", () => {
+	const OUT_OF_ORDER = new Map<string, string>([
+		["manifest", "formatVersion: 4\ndistribution: Library\npackage: example\npathBudget: 4000\n"],
+		["pkg/example/zeta/module", "formatVersion: 4\npath: zeta\ntypes: []\nvalues: []\n"],
+		["pkg/example/alpha/module", "formatVersion: 4\npath: alpha\ntypes: []\nvalues: []\n"],
+	]);
+
+	const SORTED_DOCUMENT = [
+		"formatVersion: 4",
+		"distribution:",
+		"  Library:",
+		"    packageName: example",
+		"    dependencies: {}",
+		"    def:",
+		"      modules:",
+		"        alpha:",
+		"          Public:",
+		"            types: {}",
+		"            values: {}",
+		"        zeta:",
+		"          Public:",
+		"            types: {}",
+		"            values: {}",
+		"",
+	].join("\n");
+
+	test("readTree returns the modules sorted by logical path, not in map order", () => {
+		const r = okOf(OUT_OF_ORDER);
+		expect(r.value).toEqual(expectIRFile(SORTED_DOCUMENT));
+		const d = r.value.distribution;
+		expect(d.kind).toBe("Library");
+		if (d.kind !== "Library") return;
+		expect(d.def.modules.map((m) => ModuleName.canonical(m.name))).toEqual(["alpha", "zeta"]);
+	});
+
+	test("writeTree of that result emits the modules in sorted order", () => {
+		const back = writeTree(okOf(OUT_OF_ORDER).value, { profile: YAML_PROFILE, pathBudget: 4000 });
+		expect(back.ok).toBe(true);
+		if (!back.ok) return;
+		expect([...back.value.keys()]).toEqual(["manifest", "pkg/example/alpha/module", "pkg/example/zeta/module"]);
+		expect(new Map(back.value)).toEqual(OUT_OF_ORDER);
 	});
 });
 

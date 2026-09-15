@@ -206,8 +206,8 @@ async function smokeTest(mckTarball: string, irTarball: string, compiler: string
 		// The packed manifest depends on `@finos/morphir-ir` by exact version, and
 		// `--offline` cannot resolve that name against a registry it must not
 		// reach. The override points the transitive dependency at the very
-		// tarball this run built, so the consumer installs the pair and nothing
-		// else.
+		// tarball this run built; `yaml`, the IR's own runtime dependency, still
+		// comes from bun's local cache rather than another packed tarball.
 		const consumerManifest = {
 			name: "morphir-mck-artifact-consumer",
 			private: true,

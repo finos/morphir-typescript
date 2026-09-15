@@ -275,8 +275,9 @@ async function runFileSet(run: FileSetRun): Promise<ReadonlyMap<number, Verdict>
 
 	const unresolved = set.targets.find((t) => t.body === null);
 	if (unresolved !== undefined) {
-		all({ result: "kit-error", message: `set ${label(set)}: ${unresolved.message ?? "unresolved text fence"}` });
-		for (const t of set.targets) if (t.body === null) out.set(t.fence.index, { result: "kit-error", message: t.message ?? "unresolved text fence" });
+		all({ result: "kit-error", message: unresolved.message ?? "unresolved text fence" });
+		for (const t of set.targets)
+			if (t.body === null) out.set(t.fence.index, { result: "kit-error", message: `set ${label(set)}: ${t.message ?? "unresolved text fence"}` });
 		return out;
 	}
 	if (caps === null || dead !== null)
