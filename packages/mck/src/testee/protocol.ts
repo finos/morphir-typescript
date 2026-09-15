@@ -75,10 +75,14 @@ export function parseCapabilities(v: unknown): Capabilities {
 	// skips everything. protocol.schema.json says the same ("minItems": 1).
 	const nodes = stringArray(o, "nodes");
 	need(nodes.length > 0, '"nodes" must list at least one node kind', nodes);
+	const binding = str(o, "binding");
+	need(binding.length > 0, '"binding" must be a non-empty string', binding);
+	const language = str(o, "language");
+	need(language.length > 0, '"language" must be a non-empty string', language);
 	return {
 		contractVersion: 1,
-		binding: str(o, "binding"),
-		language: str(o, "language"),
+		binding,
+		language,
 		versions: versions as number[],
 		profiles: list(o, "profiles", PROFILES),
 		layouts: list(o, "layouts", LAYOUTS),
@@ -198,7 +202,11 @@ export function parseRequest(v: unknown): Request {
 				...common(),
 				policy: {
 					profile: need(PROFILES.includes(p.profile as Profile), '"policy.profile" must be json or yaml', p.profile as Profile),
-					pathBudget: need(Number.isInteger(p.pathBudget), '"policy.pathBudget" must be an integer', p.pathBudget as number),
+					pathBudget: need(
+						Number.isInteger(p.pathBudget) && (p.pathBudget as number) >= 64,
+						'"policy.pathBudget" must be an integer of at least 64',
+						p.pathBudget as number,
+					),
 				},
 				input: str(o, "input"),
 			};
