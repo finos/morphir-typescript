@@ -32,7 +32,7 @@ import { isInteger, isObject, type JsonObject, type JsonValue, jsonObject } from
 import type { Diagnostic } from "../../model/diagnostic.ts";
 import type { EntryPoint, FormatVersion } from "../../model/distribution.ts";
 import type { AccessControlled, Documented, Named } from "../../model/modules.ts";
-import { Name, type PackageName } from "../../model/names.ts";
+import { Name, PackageName } from "../../model/names.ts";
 import { ok, type Result } from "../../model/result.ts";
 import type {
 	DistributionKindName,
@@ -107,13 +107,26 @@ function readPathBudget(ctx: Ctx, v: JsonValue): Result<number, Diagnostic> {
 	return budget < MIN_PATH_BUDGET ? tooSmall() : ok(budget);
 }
 
+// A manifest that lists the same dependency twice would give `readTree`'s
+// `owner()` two package roots with the identical directory prefix; reporting
+// it here, at the second occurrence, keeps that a diagnostic instead of a
+// crash further down the pipeline. "duplicate_member" is the closest existing
+// code — the array plays the role a JSON object's members would, and
+// `read-values.ts`'s duplicate `externals` binding already reports a
+// duplicate array entry the same way.
 function readPackageNames(ctx: Ctx, v: JsonValue): Result<readonly PackageName[], Diagnostic> {
 	const items = expectArray(ctx, v);
 	if (!items.ok) return items;
 	const out: PackageName[] = [];
+	const seen = new Set<string>();
 	for (let i = 0; i < items.value.length; i += 1) {
 		const name = readPackageName(at(ctx, i), items.value[i] as JsonValue);
 		if (!name.ok) return name;
+		const canonical = PackageName.canonical(name.value);
+		if (seen.has(canonical)) {
+			return fail(at(ctx, i), "duplicate_member", `duplicate dependency "${canonical}"`, items.value[i] as JsonValue);
+		}
+		seen.add(canonical);
 		out.push(name.value);
 	}
 	return ok(out);

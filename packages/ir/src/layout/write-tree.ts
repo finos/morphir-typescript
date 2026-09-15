@@ -131,7 +131,7 @@ function writeDefinitionPackage(
 	modules: readonly NamedModule<AccessControlled<ModuleDefinition<TA, VA>>>[],
 ): Result<null, Diagnostic> {
 	for (const m of modules) {
-		const dir = moduleDir(pkg, m.name);
+		const dir = moduleDir(root, pkg, m.name);
 		const room = fits(root, dir, w.policy);
 		if (!room.ok) return room;
 		const def = m.value.value;
@@ -153,7 +153,7 @@ function writeSpecificationPackage(
 	modules: readonly NamedModule<ModuleSpecification<TA, VA>>[],
 ): Result<null, Diagnostic> {
 	for (const m of modules) {
-		const dir = moduleDir(pkg, m.name);
+		const dir = moduleDir(root, pkg, m.name);
 		// A module manifest has no place for annotations, so a specification that
 		// carries any cannot be written as a tree at all (ruling S7.3a).
 		if (m.value.annotations.length > 0) {

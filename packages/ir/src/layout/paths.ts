@@ -64,9 +64,25 @@ export function fromPhysical(name: string): LogicalPath | null {
 	return null;
 }
 
+/**
+ * The segment that ends a dependency's package path in `deps/` and marks where its version would go
+ * (decision 0015). The v4 model carries no package version, so the segment is always bare.
+ */
+export const VERSION_SLOT = "@";
+
+/**
+ * The escaped directory a package's own files live under, under `root`. `pkg` is just the escaped package
+ * path; `deps` appends the version slot, so one dependency's directory can never be a prefix of another's
+ * (decision 0015) — a package named `a` and one named `a/b` land at `a/@` and `a/b/@`, never `a` and `a/b`.
+ */
+export function packageDir(root: "pkg" | "deps", pkg: PackageName): string {
+	const escaped = Path.escaped(pkg.path);
+	return root === "deps" ? `${escaped}/${VERSION_SLOT}` : escaped;
+}
+
 /** The escaped directory one module's files live in, as `classify` spells it: without the root. */
-export function moduleDir(pkg: PackageName, mod: ModuleName): string {
-	return `${Path.escaped(pkg.path)}/${Path.escaped(mod.path)}`;
+export function moduleDir(root: "pkg" | "deps", pkg: PackageName, mod: ModuleName): string {
+	return `${packageDir(root, pkg)}/${Path.escaped(mod.path)}`;
 }
 
 /**
@@ -88,12 +104,12 @@ export function nodeFilePath(root: "pkg" | "deps", dir: string, stem: string, ki
 	return `${moduleDirPrefix(root, dir)}${stem}.${kind}`;
 }
 
-/** The logical path of a module's manifest, under `pkg/` or `deps/<pkg path>/…` (ruling S7.3a). */
+/** The logical path of a module's manifest, under `pkg/<pkg path>/…` or `deps/<pkg path>/@<version>/…` (ruling S7.3a, decision 0015). */
 export function modulePath(root: "pkg" | "deps", pkg: PackageName, mod: ModuleName): LogicalPath {
-	return moduleManifestPath(root, moduleDir(pkg, mod));
+	return moduleManifestPath(root, moduleDir(root, pkg, mod));
 }
 
 /** The logical path of one type's or one value's own file, when the tree keeps each in its own file. */
 export function definitionPath(root: "pkg" | "deps", pkg: PackageName, mod: ModuleName, stem: string, kind: "type" | "value"): LogicalPath {
-	return nodeFilePath(root, moduleDir(pkg, mod), stem, kind);
+	return nodeFilePath(root, moduleDir(root, pkg, mod), stem, kind);
 }
