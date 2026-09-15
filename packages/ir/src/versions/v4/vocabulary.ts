@@ -201,4 +201,14 @@ export const VOCABULARY: readonly VocabularyEntry[] = [
 		variant: "Application",
 		members: [canonical("packageName"), canonical("dependencies"), canonical("def"), canonical("entryPoints"), canonical("doc")],
 	},
+
+	// -------------------------------------------- the document tree's files
+	// DistributionManifestFile, ModuleManifestFile, TypeDefinitionFile and
+	// ValueDefinitionFile have no entries here on purpose. A file kind is a
+	// wrapper, not a variant: its body is a definition or a specification the
+	// entries above already cover, and its own members are a fixed record with
+	// no alternative spellings inside decision 0006's window. read-tree-files.ts
+	// matches its wire labels ("Library", "Public", …) with lookups rather than
+	// `case "<Label>":` switches for the same reason, so it is not one of the
+	// sources vocabulary.test.ts scans.
 ];

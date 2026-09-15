@@ -8,5 +8,6 @@ export * from "./distribution.ts";
 export * from "./modules.ts";
 export * from "./names.ts";
 export * from "./result.ts";
+export * from "./tree-files.ts";
 export * from "./types.ts";
 export * from "./values.ts";

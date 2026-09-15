@@ -93,7 +93,7 @@ export function readPackageSpecification(ctx: Ctx, v: JsonValue): Result<Package
 
 // An entry point map is keyed by the entry point's own name, which is a plain
 // label rather than a Morphir name, so it is carried through as written.
-function readEntryPoints(ctx: Ctx, v: JsonValue): Result<readonly EntryPoint[], Diagnostic> {
+export function readEntryPoints(ctx: Ctx, v: JsonValue): Result<readonly EntryPoint[], Diagnostic> {
 	const o = expectObject(ctx, v);
 	if (!o.ok) return o;
 	const out: EntryPoint[] = [];
