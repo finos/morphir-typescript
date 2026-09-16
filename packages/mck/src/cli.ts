@@ -37,11 +37,12 @@ import { driverVersion, kitVersion } from "./driver/version.ts";
 import { embeddedKitCommit, embeddedKitFiles } from "./kit/embedded-source.ts";
 import { loadKit, loadKitFromFiles } from "./kit/load.ts";
 import { kitStatus, readLock, syncKit } from "./kit/sync.ts";
+import { runPackageCommand } from "./package/cli.ts";
 import { formatSummary, writeReport } from "./report.ts";
 import { inProcessTestee, resolveNode } from "./testee/in-process.ts";
 import { processTestee } from "./testee/process.ts";
 
-const ROOT_USAGE = "usage: mck <check | run | coverage | kit> [options]; see `mck --help`";
+const ROOT_USAGE = "usage: mck <check | run | coverage | kit | package> [options]; see `mck --help`";
 const KIT_USAGE = "usage: mck kit <sync | status> [options]; see `mck kit --help`";
 
 function packageRoot(): string {
@@ -316,9 +317,26 @@ const coverage = Command.make("coverage", { kit: kitOption, repoRoot: repoRootOp
 	Command.withDescription("Report every v4 vocabulary entry that no kit case exercises."),
 );
 
+const packageRun = Command.make(
+	"run",
+	{
+		kit: Options.text("kit").pipe(Options.withDescription("The draft spec/package/mck corpus directory.")),
+		adapter: Options.text("adapter").pipe(Options.optional, Options.map(Option.getOrUndefined)),
+		adapterArgs: Options.text("adapter-arg").pipe(Options.withDescription("An argument for the package adapter; repeatable."), Options.repeated),
+		report: Options.text("report").pipe(Options.optional, Options.map(Option.getOrUndefined)),
+		timeoutMs: Options.integer("timeout").pipe(Options.withSchema(PositiveMilliseconds), Options.withDefault(DEFAULT_TIMEOUT_MS)),
+	},
+	handler(runPackageCommand),
+).pipe(Command.withDescription("Run the draft package suite; every case is required."));
+
+const packageCommand = Command.make("package", {}, usageError("usage: mck package run --kit <directory>; see `mck package --help`")).pipe(
+	Command.withDescription("Run model package compatibility cases."),
+	Command.withSubcommands([packageRun]),
+);
+
 const mck = Command.make("mck", {}, usageError(ROOT_USAGE)).pipe(
 	Command.withDescription("The Morphir Compatibility Kit driver."),
-	Command.withSubcommands([check, run, coverage, kit]),
+	Command.withSubcommands([check, run, coverage, kit, packageCommand]),
 );
 
 /**

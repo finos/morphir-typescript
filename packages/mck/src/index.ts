@@ -22,6 +22,22 @@ export {
 	textFenceTarget,
 } from "./kit/source.ts";
 export {
+	PACKAGE_CONTRACT,
+	PACKAGE_OPERATIONS,
+	type PackageCapabilities,
+	type PackageLibrary,
+	type PackageOperation,
+	type PackageRequest,
+	type PackageResponse,
+	type PackageSchemas,
+	type PackageTestee,
+} from "./package/contract.ts";
+export { loadPackageKit, loadPackageKitFromFiles, type PackageCase, type PackageKit } from "./package/corpus.ts";
+export { processPackageTestee } from "./package/process.ts";
+export { parsePackageCapabilities, parsePackageRequest, parsePackageResponse } from "./package/protocol.ts";
+export { canonicalizePackageDocument, packageFileDigest, referencePackageTestee } from "./package/reference.ts";
+export { type PackageRecord, type PackageReport, packageExitCode, runPackageKit } from "./package/run.ts";
+export {
 	emptyReport,
 	formatSummary,
 	type Report,

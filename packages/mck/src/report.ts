@@ -65,7 +65,9 @@ export interface Summary {
 	readonly skipped: number;
 }
 
-export function summarize(report: Report): Summary {
+type Summarizable = { readonly records: readonly { readonly result: ReportResult }[] };
+
+export function summarize(report: Summarizable): Summary {
 	let pass = 0;
 	let fail = 0;
 	let kitError = 0;
@@ -79,7 +81,7 @@ export function summarize(report: Report): Summary {
 	return { pass, fail, kitError, skipped };
 }
 
-export function formatSummary(report: Report): string {
+export function formatSummary(report: Summarizable): string {
 	const s = summarize(report);
 	return `${s.pass} pass, ${s.fail} fail, ${s.kitError} kit-error, ${s.skipped} skipped`;
 }

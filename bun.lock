@@ -30,6 +30,7 @@
       },
       "dependencies": {
         "@finos/morphir-ir": "workspace:*",
+        "ajv": "8.20.0",
       },
       "devDependencies": {
         "@effect/cli": "0.77.2",

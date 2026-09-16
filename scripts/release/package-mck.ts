@@ -8,7 +8,7 @@
 // bundle and the declarations rewrite those paths to the `@finos/morphir-ir`
 // package specifiers the published package depends on.
 //
-// The IR is the only external dependency. The driver's command line is built
+// The IR and Ajv validator are external dependencies. The command line is built
 // on @effect/cli, and those packages (declared as devDependencies) are bundled
 // into dist/cli.js rather than published as dependencies: nobody imports the
 // driver entry, and @effect/platform-node would otherwise hand every consumer
@@ -16,6 +16,7 @@
 // cli.js.map under a virtual node_modules path.
 
 import { copyFile, mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
@@ -55,12 +56,13 @@ const REPOSITORY = {
 } as const;
 const EXPORTS = { ".": { types: "./dist/index.d.ts", import: "./dist/index.js" } } as const;
 const BIN = { mck: "./dist/cli.js", "mck-adapter-typescript": "./dist/adapter.js" } as const;
-const WORKSPACE_DEPENDENCIES = { "@finos/morphir-ir": "workspace:*" } as const;
+const RUNTIME_DEPENDENCIES = { ajv: "8.20.0" } as const;
+const WORKSPACE_DEPENDENCIES = { "@finos/morphir-ir": "workspace:*", ...RUNTIME_DEPENDENCIES } as const;
 
 // The adapter protocol's schema and worked example ship beside the kit: an
 // installed consumer writing an adapter needs the contract it is held to, and
 // the README points at both by name.
-const CONTRACT_FILES = ["protocol.schema.json", "protocol.example.json"] as const;
+const CONTRACT_FILES = ["protocol.schema.json", "protocol.example.json", "package-protocol.schema.json", "package-report.schema.json"] as const;
 
 const ROOT_FILES = [
 	"package/package.json",
@@ -97,6 +99,7 @@ function irPackageSpecifier(specifier: string): string {
 	if (normalized.endsWith("/ir/src/index.ts")) return "@finos/morphir-ir";
 	if (normalized.endsWith("/ir/src/versions/v4/index.ts") || normalized.endsWith("/ir/src/versions/v4/vocabulary.ts")) return "@finos/morphir-ir/v4";
 	if (normalized.endsWith("/ir/src/layout/index.ts")) return "@finos/morphir-ir/layout";
+	if (normalized.endsWith("/ir/src/codec/json/value.ts")) return "@finos/morphir-ir/codec/json";
 	throw new Error(`@finos/morphir-mck imports an IR source that no published export covers: ${specifier}`);
 }
 
@@ -104,6 +107,7 @@ const DECLARATION_REWRITES: readonly DeclarationRewrite[] = [
 	[/(["'])(?:\.\.\/)+ir\/src\/index\.ts\1/g, '"@finos/morphir-ir"'],
 	[/(["'])(?:\.\.\/)+ir\/src\/versions\/v4\/(?:index|vocabulary)\.ts\1/g, '"@finos/morphir-ir/v4"'],
 	[/(["'])(?:\.\.\/)+ir\/src\/layout\/index\.ts\1/g, '"@finos/morphir-ir/layout"'],
+	[/(["'])(?:\.\.\/)+ir\/src\/codec\/json\/value\.ts\1/g, '"@finos/morphir-ir/codec/json"'],
 ];
 
 function expectExact(value: unknown, expected: unknown, field: string): void {
@@ -142,7 +146,7 @@ export function publishMckManifest(source: JsonRecord): JsonRecord & { readonly 
 		bin: structuredClone(BIN),
 		sideEffects: false,
 		files: ["dist", "kit", "kit.lock.json", ...CONTRACT_FILES, "README.md", "LICENSE", "NOTICE"],
-		dependencies: { "@finos/morphir-ir": source.version },
+		dependencies: { "@finos/morphir-ir": source.version, ...RUNTIME_DEPENDENCIES },
 		publishConfig: { access: "public" },
 	};
 }
@@ -200,6 +204,74 @@ async function copyTree(from: string, to: string): Promise<void> {
 	});
 }
 
+/** Packs the installed validator and its runtime dependency tree for an offline consumer. */
+async function packAjvDependencies(root: string, packedOutput: string): Promise<Readonly<Record<string, string>>> {
+	const packed = new Map<string, { readonly version: string; readonly tarball: string }>();
+	async function pack(name: string, from: string): Promise<void> {
+		const manifestPath = createRequire(from).resolve(`${name}/package.json`);
+		const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as { name: string; version: string; dependencies?: Record<string, string> };
+		const previous = packed.get(name);
+		if (previous !== undefined) {
+			if (previous.version !== manifest.version) throw new Error(`offline validator dependencies require multiple versions of ${name}`);
+			return;
+		}
+		if (name === "ajv" && manifest.version !== RUNTIME_DEPENDENCIES.ajv) throw new Error("installed Ajv does not match the publishing contract");
+		const tarball = await packStagedPackage(
+			path.dirname(manifestPath),
+			packedOutput,
+			`${manifest.name.replace(/^@/, "").replaceAll("/", "-")}-${manifest.version}.tgz`,
+		);
+		packed.set(name, { version: manifest.version, tarball });
+		for (const dependency of Object.keys(manifest.dependencies ?? {})) await pack(dependency, manifestPath);
+	}
+	await pack("ajv", path.join(root, "packages/mck/package.json"));
+	return Object.fromEntries([...packed].map(([name, { tarball }]) => [name, `file:${tarball.split(path.sep).join("/")}`]));
+}
+
+const PACKAGE_SMOKE = String.raw`
+import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { referencePackageTestee, processPackageTestee } from "@finos/morphir-mck";
+
+const digest = (text) => "sha256:" + createHash("sha256").update(text).digest("hex");
+const canonical = '{"a":"first","z":"last"}';
+const expected = {
+	ok: true,
+	canonical,
+	manifestDigest: digest(canonical),
+	packageContentDigest: digest("morphir-package-content:0.1.0-draft.1\n" + canonical),
+};
+const schemas = {
+	manifest: {
+		$schema: "https://json-schema.org/draft/2020-12/schema",
+		$id: "https://example.invalid/package-manifest",
+		type: "object",
+		required: ["name"],
+		properties: { name: { type: "string" } },
+		additionalProperties: false,
+	},
+	lock: { $ref: "https://example.invalid/package-manifest" },
+};
+let exitCode;
+const processTestee = processPackageTestee(
+	[process.execPath, "node_modules/@finos/morphir-mck/dist/adapter.js", "--suite", "package"],
+	{ timeoutMs: 5000, onExit: (code) => { exitCode = code; } },
+);
+for (const testee of [referencePackageTestee(), processTestee]) {
+	try {
+		assert.equal((await testee.capabilities()).suite, "package");
+		assert.deepEqual(await testee.execute({ op: "normalize", input: '{ "z": "last", "a": "first" }' }), expected);
+		for (const artifact of ["manifest", "lock"]) {
+			assert.deepEqual(await testee.execute({ op: "validate", artifact, input: '{"name":"sample"}', schemas }), { ok: true, valid: true });
+			assert.deepEqual(await testee.execute({ op: "validate", artifact, input: '{"name":123}', schemas }), { ok: true, valid: false });
+		}
+	} finally {
+		await testee.close();
+	}
+}
+assert.equal(exitCode, 0);
+`;
+
 /**
  * Runs the packed driver the way a user does: `--version`, an embedded-kit run,
  * and the same run over the packed adapter as a child process.
@@ -211,13 +283,12 @@ async function copyTree(from: string, to: string): Promise<void> {
 async function smokeTest(mckTarball: string, irTarball: string, compiler: string, root: string): Promise<void> {
 	const consumer = await mkdtemp(path.join(tmpdir(), "morphir-mck-consumer-"));
 	const yamlWork = await mkdtemp(path.join(tmpdir(), "morphir-mck-yaml-pack-"));
+	const ajvWork = await mkdtemp(path.join(tmpdir(), "morphir-mck-ajv-pack-"));
 	try {
-		// The packed manifest depends on `@finos/morphir-ir` by exact version, and
-		// the IR in turn on `yaml`; `--offline` cannot resolve either name against
-		// a registry it must not reach (a fresh CI runner has no cached manifest
-		// for `yaml`). The overrides point both at local tarballs: the IR tarball
-		// this run built, and `yaml` packed from this workspace's own install.
+		// A fresh runner has no registry metadata for offline resolution. Local
+		// tarball overrides cover the IR, yaml, Ajv, and Ajv's runtime dependencies.
 		const yamlTarball = await packYamlDependency(root, yamlWork);
+		const ajvOverrides = await packAjvDependencies(root, ajvWork);
 		const consumerManifest = {
 			name: "morphir-mck-artifact-consumer",
 			private: true,
@@ -225,6 +296,7 @@ async function smokeTest(mckTarball: string, irTarball: string, compiler: string
 			overrides: {
 				"@finos/morphir-ir": `file:${irTarball.split(path.sep).join("/")}`,
 				yaml: `file:${yamlTarball.split(path.sep).join("/")}`,
+				...ajvOverrides,
 			},
 		};
 		await Bun.write(path.join(consumer, "package.json"), `${JSON.stringify(consumerManifest)}\n`);
@@ -253,12 +325,14 @@ async function smokeTest(mckTarball: string, irTarball: string, compiler: string
 
 		await expectKitRun(["node", cli, "run", "--report", "r.json"], consumer, "r.json");
 		await expectKitRun(["node", cli, "run", "--adapter", "node", "--adapter-arg", adapter, "--report", "a.json"], consumer, "a.json");
+		await runCommand(["node", "--input-type=module", "--eval", PACKAGE_SMOKE], consumer);
 
 		await Bun.write(path.join(consumer, "index.ts"), ['import * as mck from "@finos/morphir-mck";', "void mck;", ""].join("\n"));
 		await runCommand([compiler, "--noEmit", "--strict", "--target", "ES2022", "--module", "NodeNext", "--moduleResolution", "NodeNext", "index.ts"], consumer);
 	} finally {
 		await rm(consumer, { recursive: true, force: true });
 		await rm(yamlWork, { recursive: true, force: true });
+		await rm(ajvWork, { recursive: true, force: true });
 	}
 }
 
@@ -346,7 +420,7 @@ export async function buildMckArtifact(
 			format: "esm",
 			minify: false,
 			sourcemap: "external",
-			external: ["@finos/morphir-ir"],
+			external: ["@finos/morphir-ir", ...Object.keys(RUNTIME_DEPENDENCIES)],
 			plugins: [
 				{
 					name: "ir-as-package",
