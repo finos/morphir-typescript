@@ -224,7 +224,7 @@ describe("release automation contract", () => {
 		const readme = await readFile(path.join(root, "README.md"), "utf8");
 		const status = markdownSection(readme, "Project status");
 		expect(status).toContain("@finos/morphir-ir");
-		expect(status).toContain("0.0.1");
+		expect(status).toContain("0.1.0");
 		expect(status).toContain("@finos/morphir-mck");
 		expect(status).toContain("private");
 		expect(status).toContain("suite version");
@@ -264,11 +264,10 @@ describe("release automation contract", () => {
 		expect(publishing).not.toContain("mise run release:prepare -- 0.0.1");
 		expect(publishing).toMatch(/does not (?:commit|create commits), tag, or push/i);
 		expect(publishing).toContain("One tag publishes both packages");
-		// 0.0.1 shipped ir only; the version mck first publishes at is whatever
-		// the next `release:prepare` assigns, so the docs must not name one.
+		// 0.0.1 shipped ir only; 0.1.0 was the first release to publish both.
 		expect(publishing).toContain("0.0.1 published only @finos/morphir-ir");
-		expect(publishing).toContain("@finos/morphir-mck publishes from the next suite release");
-		expect(publishing).not.toMatch(/(?:public|publishes) (?:from|at) suite version \d/);
+		expect(publishing).toContain("0.1.0 was the first release to publish both");
+		expect(publishing).not.toContain("publishes from the next suite release");
 		for (const expected of [
 			"mck-VERSION-OS-ARCH",
 			"mck-adapter-typescript-VERSION-OS-ARCH",
