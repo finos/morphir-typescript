@@ -1,7 +1,9 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 //
-// Tests for the YAML profile's strict reader (spec S4).
+// Tests for the YAML profile's strict reader (the YAML profile page's "Reader
+// restrictions" and "Scalar resolution" sections, docs/spec/ir/schemas/v4/yaml-profile.md
+// in finos/morphir).
 import { describe, expect, test } from "bun:test";
 import { parseJson } from "../json/value.ts";
 import { parseYaml } from "./parse.ts";

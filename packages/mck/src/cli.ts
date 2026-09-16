@@ -8,13 +8,14 @@
 //   mck coverage [--kit <dir>] [--repo-root <dir>]
 //   mck --version
 //
-// Plan 1 shipped `check`. Plan 2 adds `kit sync` (vendor the parent
-// repository's kit into packages/mck/kit) and `kit status` (prove the
-// vendored copy still matches kit.lock.json). Plan 2b adds `run`, the driver
+// finos/morphir-typescript#1 shipped `check`. #6 adds `kit sync` (vendor the
+// parent repository's kit into packages/mck/kit) and `kit status` (prove the
+// vendored copy still matches kit.lock.json), plus `run`, the driver
 // itself, over the in-process TypeScript binding by default, or over
 // `--adapter <exe>` (a child process speaking the JSON-lines protocol) when
-// given; and `coverage` (spec S7), which reports every v4 vocabulary entry
-// (a variant or a member spelling) that no kit case exercises.
+// given; and `coverage` (see the kit README's coverage description), which
+// reports every v4 vocabulary entry (a variant or a member spelling) that no
+// kit case exercises.
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";

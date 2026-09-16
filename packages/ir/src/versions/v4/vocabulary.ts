@@ -1,17 +1,17 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 //
-// The v4 vocabulary manifest (spec S7): every node variant the v4 readers
-// recognize, and every member spelling (canonical and legacy) they accept for
-// it. The compatibility kit's `mck coverage` rule walks this table against the
-// kit's cases and reports a gap for any variant or member spelling with no
-// case.
+// The v4 vocabulary manifest (see the kit README's coverage description):
+// every node variant the v4 readers recognize, and every member spelling
+// (canonical and legacy) they accept for it. The compatibility kit's
+// `mck coverage` rule walks this table against the kit's cases and reports a
+// gap for any variant or member spelling with no case.
 //
-// This table is hand-written, not derived, by a ruling in plan 2b's global
-// constraints: read-types.ts, read-values.ts and read-definitions.ts do not
-// expose the variant and member tables they switch on, and refactoring them
-// to do so is out of scope here. vocabulary.test.ts is the drift guard — it
-// scans those three reader sources for every `case "<Label>":` and every
+// This table is hand-written, not derived: read-types.ts, read-values.ts and
+// read-definitions.ts do not expose the variant and member tables they switch
+// on, and refactoring them to do so is out of scope here. vocabulary.test.ts
+// is the drift guard — it scans those three reader sources for every
+// `case "<Label>":` and every
 // `windowed(ctx, m, "<canonical>", "<legacy>", ...)` occurrence and fails when
 // this table and the readers disagree. To add a new variant or member
 // spelling: add the reader code first, run vocabulary.test.ts to see it fail

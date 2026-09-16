@@ -1,12 +1,13 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 //
-// The drift guard for vocabulary.ts (ruling in plan 2b's global constraints):
-// VOCABULARY is hand-written, so this test scans read-types.ts,
-// read-values.ts, read-definitions.ts and read-distribution.ts for the variant
-// names and member spellings the readers actually accept, and fails when it has
-// drifted from them. It is the arbiter of completeness — extend it, watch it
-// fail, then edit vocabulary.ts to match.
+// The drift guard for vocabulary.ts: the table is hand-written, not derived,
+// so a reader that grows a variant without a kit case fails this guard. This
+// test scans read-types.ts, read-values.ts, read-definitions.ts and
+// read-distribution.ts for the variant names and member spellings the readers
+// actually accept, and fails when it has drifted from them. It is the arbiter
+// of completeness — extend it, watch it fail, then edit vocabulary.ts to
+// match.
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";

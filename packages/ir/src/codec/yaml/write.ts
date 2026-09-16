@@ -1,7 +1,9 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 //
-// The YAML profile's canonical writer (spec S5). The kit's YAML canonical
+// The YAML profile's canonical writer (the YAML profile page's "Canonical
+// writer" section, docs/spec/ir/schemas/v4/yaml-profile.md in finos/morphir).
+// The kit's YAML canonical
 // fences pin these bytes; the `yaml` package's stringifier is not used, because
 // canonical output has to be specified rather than inherited. The rules:
 //

@@ -1,7 +1,8 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 //
-// The coverage rule (spec S7): every variant the v4 reader recognizes, and
+// The coverage rule (see the kit README's coverage description and
+// `mck coverage`): every variant the v4 reader recognizes, and
 // every member spelling it accepts, has at least one kit case. A JSON fence
 // covers a variant when the variant's name is an object key anywhere in it,
 // and covers a member spelling when that member is a key of the object under

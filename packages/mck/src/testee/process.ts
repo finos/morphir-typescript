@@ -1,9 +1,10 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 //
-// A Testee over a child process speaking JSON lines (S5.3). One request in
-// flight at a time; ids increase by one; any deviation is a ProtocolError,
-// after which the driver stops talking to this adapter.
+// A Testee over a child process speaking JSON lines (kit README, "What the
+// driver does with a case" and "Running the driver against a binding"). One
+// request in flight at a time; ids increase by one; any deviation is a
+// ProtocolError, after which the driver stops talking to this adapter.
 import { type ChildProcess, spawn } from "node:child_process";
 import { readLines } from "../lines.ts";
 import { ProtocolError, parseCapabilities, parseDecodeResponse, parseEnvelope, parseWriteTreeResponse } from "./protocol.ts";

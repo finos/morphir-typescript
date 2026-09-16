@@ -1,7 +1,8 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 //
-// Writing a document tree (S7.3): a distribution becomes a map of logical
+// Writing a document tree (document-tree page,
+// docs/spec/ir/schemas/v4/document-tree-files.md in finos/morphir): a distribution becomes a map of logical
 // paths to text. Pure — nothing here touches a filesystem, and the profile is
 // the only thing that decides what the text looks like.
 //
@@ -155,7 +156,8 @@ function writeSpecificationPackage(
 	for (const m of modules) {
 		const dir = moduleDir(root, pkg, m.name);
 		// A module manifest has no place for annotations, so a specification that
-		// carries any cannot be written as a tree at all (ruling S7.3a).
+		// carries any cannot be written as a tree at all (document-tree page,
+		// "Module order and annotations").
 		if (m.value.annotations.length > 0) {
 			return err(
 				diagnostic("invalid_distribution_shape", "semantic", moduleManifestPath(root, dir), "module annotations cannot be written to a document tree"),
@@ -201,7 +203,8 @@ export function writeTree(file: IRFile<TA, VA>, policy: TreePolicy): Result<Docu
 	if (!own.ok) return own;
 
 	// An application links its dependencies statically, so `deps/` holds package
-	// definitions there and package specifications everywhere else (S7.3a).
+	// definitions there and package specifications everywhere else (document-tree
+	// page, "Dependencies").
 	if (d.kind === "Application") {
 		for (const dep of d.dependencies) {
 			const r = writeDefinitionPackage(w, "deps", dep.name, dep.value.modules);

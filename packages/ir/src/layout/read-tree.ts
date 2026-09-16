@@ -1,7 +1,9 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 //
-// Reading a document tree (S7.2): a map of logical paths to text becomes the
+// Reading a document tree (document-tree page, "Reading a tree",
+// docs/spec/ir/schemas/v4/document-tree-files.md in finos/morphir): a map of
+// logical paths to text becomes the
 // same IRFile the equivalent single document would have produced.
 //
 // A tree is a distribution taken apart, so reading one is putting it back
@@ -282,7 +284,8 @@ export function readTree(files: DocumentTree, profile: ProfileCodec, ctx: Ctx = 
 			const values = entriesOf(m.value.values, m.value, valueSpecLoader(where));
 			if (!values.ok) return values;
 			// A tree has nowhere to keep module annotations, so a module read out
-			// of one has none (ruling S7.3a); the writer refuses one that has any.
+			// of one has none (document-tree page, "Module order and annotations");
+			// the writer refuses one that has any.
 			modules.push({ name: m.value.path, value: { annotations: [], doc: m.value.doc, types: types.value, values: values.value } });
 		}
 		return ok({ modules });
@@ -334,7 +337,8 @@ export function readTree(files: DocumentTree, profile: ProfileCodec, ctx: Ctx = 
 			return ok({ kind: "Library", packageName, dependencies: dependencies.value, def: def.value });
 		}
 		// An application links its dependencies statically, so `deps/` holds
-		// package definitions rather than specifications (S7.3a).
+		// package definitions rather than specifications (document-tree page,
+		// "Dependencies").
 		const dependencies = dependencyDefs();
 		if (!dependencies.ok) return dependencies;
 		return ok({ kind: "Application", packageName, dependencies: dependencies.value, def: def.value, entryPoints });
@@ -346,8 +350,8 @@ export function readTree(files: DocumentTree, profile: ProfileCodec, ctx: Ctx = 
 	// Everything under `pkg/` or `deps/` belongs to a module; a file no module
 	// manifest claimed is in the wrong package, spelled in a way the grammar
 	// does not recognize, or simply left behind, and either way the tree is not
-	// the distribution it says it is (S7.2 step 4). Only files outside those two
-	// roots are ignored.
+	// the distribution it says it is (document-tree page, "Reading a tree").
+	// Only files outside those two roots are ignored.
 	const stray = [...files.keys()].filter((p) => !consumed.has(p) && isUnderPackageRoot(p)).sort()[0];
 	if (stray !== undefined) return shape(stray, "/", strayMessage(stray, packages));
 

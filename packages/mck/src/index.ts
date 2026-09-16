@@ -1,5 +1,6 @@
-// Public surface of @finos/morphir-mck. Plan 1 exposes the case-file parser
-// and report types; the driver and coverage script arrive in plan 2.
+// Public surface of @finos/morphir-mck. finos/morphir-typescript#1 exposes
+// the case-file parser and report types; the driver and coverage script
+// arrive in #6.
 
 export { type CoverageGap, coverageGaps, formatGap } from "./coverage/coverage.ts";
 export { checkCanonical, checkRejected, checkWarnings, normalizeCanonical, type RejectedCheck } from "./driver/compare.ts";

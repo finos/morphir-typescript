@@ -1,7 +1,8 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 //
-// Tests for the run loop (spec S5.2) against a scripted Testee and in-memory
+// Tests for the run loop (kit README, "What the driver does with a case")
+// against a scripted Testee and in-memory
 // kits, one scenario per test as the brief lays them out.
 import { describe, expect, test } from "bun:test";
 import type { Kit } from "../kit/load.ts";
@@ -498,7 +499,7 @@ describe("runKit", () => {
 		expect(decodeCalls).toHaveLength(1);
 	});
 
-	test("19. (fix round 1, Ruling A) an undeclared node is skipped and the testee is never asked to decode it", async () => {
+	test("19. an undeclared node is skipped and the testee is never asked to decode it", async () => {
 		const kit = await kitFrom(
 			new Map([[`${KIT_PATH}/types.md`, ["## types-0001: t {node=Frobnicate}", "```json canonical", '{"a":1}', "```", ""].join("\n")]]),
 		);
@@ -509,7 +510,7 @@ describe("runKit", () => {
 		expect(decodeCalls).toHaveLength(0);
 	});
 
-	test("20. (fix round 1, Ruling A) a case with no node= is skipped as node unset", async () => {
+	test("20. a case with no node= is skipped as node unset", async () => {
 		const kit = await kitFrom(new Map([[`${KIT_PATH}/types.md`, ["## types-0001: t", "```json canonical", '{"a":1}', "```", ""].join("\n")]]));
 		const { testee, decodeCalls } = scriptedTestee(FULL_CAPS, () => ({ ok: true, kind: "Type", canonical: { json: '{"a":1}' }, warnings: [] }));
 		const report = await runKit(kit, testee, opts);
@@ -547,7 +548,7 @@ describe("runKit", () => {
 	});
 });
 
-// ------------------------------------------------- the tree comparison (S8)
+// ---------------------- the tree comparison (kit README, `mode=read` / file-set section)
 
 const TREE_CAPS: Capabilities = { ...FULL_CAPS, profiles: ["json", "yaml"], layouts: ["single", "tree"] };
 
@@ -621,7 +622,8 @@ describe("runKit: the tree comparison", () => {
 				{ path: "pkg/a/b/m/module", content: `${MODULE_BODY}\n` },
 			],
 		});
-		// The budget is read lexically from the manifest fence (S8).
+		// The budget is read lexically from the manifest fence (kit README,
+		// `mode=read` / file-set section).
 		expect(writeCalls[0]).toMatchObject({ policy: { profile: "yaml", pathBudget: 4000 }, input: `${TREE_CANONICAL}\n` });
 		// Records come back in fence order, canonical first.
 		expect(report.records.map((r) => r.fenceIndex)).toEqual([0, 1, 2]);

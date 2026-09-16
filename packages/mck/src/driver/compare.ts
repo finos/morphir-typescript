@@ -1,10 +1,11 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 //
-// Comparison rules (spec S5.2 step 4). A Testee answers with strings, never
-// parsed structures, so the driver compares canonicals by string equality
-// only, allowing exactly one trailing newline of slack; warnings and
-// rejections are checked structurally against what the fence declared.
+// Comparison rules (kit README, "What the driver does with a case"). A
+// Testee answers with strings, never parsed structures, so the driver
+// compares canonicals by string equality only, allowing exactly one trailing
+// newline of slack; warnings and rejections are checked structurally against
+// what the fence declared.
 import type { ReportDiagnostic } from "../report.ts";
 import type { DecodeResponse, ProtocolDiagnostic, Warning } from "../testee/testee.ts";
 
@@ -15,8 +16,9 @@ export function normalizeCanonical(s: string): string {
 }
 
 // The tree comparison needs the set's path budget, and the driver may not
-// parse either profile (S8): it reads the number lexically from the manifest
-// fence with one expression that matches both spellings.
+// parse either profile (kit README, `mode=read` / file-set section): it reads
+// the number lexically from the manifest fence with one expression that
+// matches both spellings.
 const PATH_BUDGET = /"pathBudget"\s*:\s*(\d+)|^pathBudget\s*:\s*(\d+)\s*$/m;
 
 export function pathBudgetOf(manifestText: string): number | null {

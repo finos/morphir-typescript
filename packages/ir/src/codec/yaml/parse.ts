@@ -1,7 +1,9 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 //
-// The YAML profile's reader (spec S4). The `yaml` package parses the text; this
+// The YAML profile's reader (the YAML profile page's "Reader restrictions" and
+// "Scalar resolution" sections, docs/spec/ir/schemas/v4/yaml-profile.md in
+// finos/morphir). The `yaml` package parses the text; this
 // module walks its document and admits only what the profile allows, producing
 // the same JsonValue tree the JSON reader produces. Scalars are resolved from
 // their source text with the profile's own rules rather than the package's,

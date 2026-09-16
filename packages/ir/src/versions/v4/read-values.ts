@@ -753,7 +753,8 @@ function readExternals(ctx: Ctx, m: ReadonlyMap<string, JsonValue>, near: JsonVa
 }
 
 // A specification's "doc" belongs to the Documented wrapper in modules, so the
-// plain reader drops it; Task 8 wants it back and calls the WithDoc variant.
+// plain reader drops it; a caller that needs the doc back calls the WithDoc
+// variant instead.
 export function readValueSpecificationWithDoc(
 	ctx: Ctx,
 	v: JsonValue,

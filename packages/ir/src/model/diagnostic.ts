@@ -32,7 +32,8 @@ export type DiagnosticCode =
 	| "format_version_out_of_range"
 	| "unsupported_format_version_major"
 	| "unsupported_format_version_revision"
-	// YAML profile: syntax the profile forbids (S4)
+	// YAML profile: syntax the profile forbids (the YAML profile page's "Reader
+	// restrictions" and "Scalar resolution" sections)
 	| "invalid_yaml"
 	| "unsupported_yaml_feature";
 

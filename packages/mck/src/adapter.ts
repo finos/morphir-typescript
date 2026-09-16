@@ -2,9 +2,12 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 //
-// mck-adapter-typescript: the TypeScript binding behind the adapter protocol.
-// A transport over the in-process Testee and nothing more (S6, S11) — it is
-// the reference every other adapter is checked against.
+// mck-adapter-typescript: the TypeScript binding behind the adapter protocol
+// (protocol.schema.json, contract version 1; kit README, "Running the driver
+// against a binding"). A transport over the in-process Testee and nothing
+// more — in-process and child-process are the only two transports the
+// protocol defines — and it is the reference every other adapter is checked
+// against.
 import { readLines } from "./lines.ts";
 import { inProcessTestee } from "./testee/in-process.ts";
 import { ProtocolError, parseEnvelope, parseRequest } from "./testee/protocol.ts";

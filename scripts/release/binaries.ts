@@ -19,8 +19,9 @@ export type BinaryTarget = readonly [target: string, os: string, arch: string];
 
 /**
  * Every target a release compiles, in the order it compiles them. All five
- * cross-compile from any host. Ruling S11: a target that stops cross-compiling
- * is dropped from this list with a comment and a bead, never patched around.
+ * cross-compile from any host. A target that stops cross-compiling is dropped
+ * from the matrix rather than built natively: it is removed from this list
+ * with a comment and a bead, never patched around.
  * Bun publishes no `bun-windows-arm64` build, so Windows on ARM is served by
  * the x64 binary under emulation.
  */
