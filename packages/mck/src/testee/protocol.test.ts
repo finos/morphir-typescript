@@ -162,12 +162,27 @@ test("parseCapabilities accepts a canonical formatVersions agreeing with version
 	expect(parsed.formatVersions).toBe("[4.0.0,4.1.0)");
 });
 
-// An unbounded interval names no upper major, so it is exempt from the
+// An absent *upper* bound names no last major, so it is exempt from the
 // "touches a major versions does not list" rule: `[4.0.0,)` reaches every
 // later major by construction and the adapter cannot enumerate them.
-test("parseCapabilities accepts an unbounded formatVersions", () => {
+test("parseCapabilities accepts a formatVersions unbounded above", () => {
 	const parsed = parseCapabilities(body(capabilitiesWith({ formatVersions: "[4.0.0,)", versions: [4] })));
 	expect(parsed.formatVersions).toBe("[4.0.0,)");
+});
+
+// An absent *lower* bound is not exempt. It stops at the domain floor, so the
+// majors it touches are all nameable and the adapter has to name them:
+// `(,4.1.0)` holds every 3.x release, and an adapter listing only version 4
+// has claimed those releases without saying so.
+test("parseCapabilities rejects a formatVersions unbounded below that reaches an unlisted major", () => {
+	expect(() => parseCapabilities(body(capabilitiesWith({ formatVersions: "(,4.1.0)", versions: [4] })))).toThrow(
+		'"formatVersions" "(,4.1.0)" touches major 3 but "versions" does not list it',
+	);
+});
+
+test("parseCapabilities accepts a formatVersions unbounded below when versions lists every major it reaches", () => {
+	const parsed = parseCapabilities(body(capabilitiesWith({ formatVersions: "(,4.1.0)", versions: [3, 4] })));
+	expect(parsed.formatVersions).toBe("(,4.1.0)");
 });
 
 // --- parseDecodeResponse ---

@@ -74,6 +74,25 @@ export function parseEnvelope(line: string): { readonly id: number; readonly bod
  * contains a release of that major family — so `[3.0.0,4.0.0)` does not touch
  * major 4, and the domain floor of 3.0.0 means no table touches major 2.
  */
+/**
+ * The lowest major any table can reach. An absent lower bound stops here, not
+ * at zero — mirrors `DOMAIN_FLOOR` in the IR package's support-table module,
+ * which does not export it.
+ */
+const DOMAIN_FLOOR_MAJOR = 3;
+
+/**
+ * The table a capabilities reply's `formatVersions` names, or a protocol error
+ * quoting the parser. Exported so a caller holding a `Capabilities` — which
+ * carries the string, not the table — can recover the table without writing a
+ * second failure path for a string `parseCapabilities` has already accepted.
+ */
+export function parseFormatVersions(formatVersions: string): SupportTable {
+	const parsed = parseSupportTable(formatVersions);
+	need(parsed.ok, `"formatVersions" ${JSON.stringify(formatVersions)} is not a support table${parsed.ok ? "" : `: ${parsed.error}`}`, formatVersions);
+	return (parsed as { readonly ok: true; readonly value: SupportTable }).value;
+}
+
 function touchesMajor(table: SupportTable, major: number): boolean {
 	const familyStart: Release = { major, minor: 0, patch: 0 };
 	return supportTableCompatibility(table, familyStart) !== "unsupported_format_version_major";
@@ -101,9 +120,7 @@ export function parseCapabilities(v: unknown): Capabilities {
 	// spelling goes on the wire, so two adapters claiming the same releases
 	// send the same string and a report can be compared by equality.
 	const formatVersions = str(o, "formatVersions");
-	const parsed = parseSupportTable(formatVersions);
-	need(parsed.ok, `"formatVersions" ${JSON.stringify(formatVersions)} is not a support table${parsed.ok ? "" : `: ${parsed.error}`}`, formatVersions);
-	const table = (parsed as { readonly ok: true; readonly value: SupportTable }).value;
+	const table = parseFormatVersions(formatVersions);
 	const canonical = canonicalSupportTable(table);
 	need(
 		canonical === formatVersions,
@@ -113,11 +130,13 @@ export function parseCapabilities(v: unknown): Capabilities {
 	const majors = versions as number[];
 	for (const major of majors)
 		need(touchesMajor(table, major), `"versions" lists ${major} but "formatVersions" ${JSON.stringify(formatVersions)} has no release of that major`, major);
-	// The converse, for bounded intervals only: an unbounded interval reaches
-	// majors that do not exist yet, which no "versions" list can enumerate.
+	// The converse, for intervals bounded above only: an absent upper bound
+	// reaches majors that do not exist yet, which no "versions" list can
+	// enumerate. An absent lower bound reaches no further down than the domain
+	// floor, so every major it touches is nameable and the rule still applies.
 	for (const i of table) {
-		if (i.lower === undefined || i.upper === undefined) continue;
-		for (let major = i.lower.major; major <= i.upper.major; major += 1)
+		if (i.upper === undefined) continue;
+		for (let major = i.lower?.major ?? DOMAIN_FLOOR_MAJOR; major <= i.upper.major; major += 1)
 			if (touchesMajor([i], major))
 				need(majors.includes(major), `"formatVersions" ${JSON.stringify(formatVersions)} touches major ${major} but "versions" does not list it`, major);
 	}

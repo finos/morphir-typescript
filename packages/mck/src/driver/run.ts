@@ -8,13 +8,13 @@
 // failed.
 // The relative specifier is the one in-process.ts explains; the packaging step
 // rewrites it to "@finos/morphir-ir".
-import { parseSupportTable, renderProse } from "../../../ir/src/index.ts";
+import { renderProse } from "../../../ir/src/index.ts";
 import type { KitCase, KitFence } from "../kit/case.ts";
 import { setLabel, setOf } from "../kit/info-string.ts";
 import type { Kit } from "../kit/load.ts";
 import { resolveTextFence } from "../kit/source.ts";
 import { emptyReport, type Report, type ReportProfile, type ReportRecord, type ReportRole } from "../report.ts";
-import { ProtocolError, parseCapabilities } from "../testee/protocol.ts";
+import { ProtocolError, parseCapabilities, parseFormatVersions } from "../testee/protocol.ts";
 import type { Capabilities, DecodeResponse, PathMode, Profile, Testee, WriteTreeResponse } from "../testee/testee.ts";
 import { checkCanonical, checkRejected, checkWarnings, normalizeCanonical, pathBudgetOf } from "./compare.ts";
 
@@ -118,8 +118,7 @@ export async function runKit(kit: Kit, testee: Testee, options: RunOptions): Pro
 		header = { ...header, binding: caps.binding, language: caps.language, formatVersions: caps.formatVersions };
 		// Said once, at the head of the run: which IR releases the binding under
 		// test claims, in its own notation and in words.
-		const table = parseSupportTable(caps.formatVersions);
-		if (table.ok) console.error(`${caps.binding} supports IR format versions ${caps.formatVersions} (${renderProse(table.value)})`);
+		console.error(`${caps.binding} supports IR format versions ${caps.formatVersions} (${renderProse(parseFormatVersions(caps.formatVersions))})`);
 	} catch (error) {
 		dead = error instanceof Error ? error.message : String(error);
 	}
