@@ -74,7 +74,7 @@ describe.skipIf(corpus === null)("format-version-conformance.json", () => {
 				// The strict parser rejects duplicate members (including a duplicated
 				// formatVersion) as `duplicate_member` before the formatVersion contract
 				// ever sees the document, so `duplicate_format_version` is unobservable
-				// here; the corpus case still counts as a pass. Per the task's ruling.
+				// here; the corpus case still counts as a pass.
 				if (parsed.error.code === "duplicate_member" && c.diagnostic === "duplicate_format_version") continue;
 				expect(parsed.error.code).toBe(c.diagnostic);
 				continue;

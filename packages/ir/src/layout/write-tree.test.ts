@@ -1,7 +1,8 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 //
-// Tests for writing a document tree (S7.3): the kit's `file` sets are the
+// Tests for writing a document tree (document-tree page,
+// docs/spec/ir/schemas/v4/document-tree-files.md in finos/morphir): the kit's `file` sets are the
 // bytes, the path budget decides the stems and the `fileNames` map, a Private
 // module says so, and the profile is the only thing that decides the text.
 // Run with: bun test packages/ir/src/layout/write-tree.test.ts

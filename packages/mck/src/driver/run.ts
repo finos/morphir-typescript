@@ -1,10 +1,11 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 //
-// The run loop (spec S5.2). It never parses YAML and never looks inside a
-// canonical: a Testee returns strings, and strings are compared. What a
-// binding cannot do is a capabilities question, so a fence the binding
-// declared no support for is skipped, never failed.
+// The run loop (kit README, "What the driver does with a case"). It never
+// parses YAML and never looks inside a canonical: a Testee returns strings,
+// and strings are compared. What a binding cannot do is a capabilities
+// question, so a fence the binding declared no support for is skipped, never
+// failed.
 import type { KitCase, KitFence } from "../kit/case.ts";
 import { setLabel, setOf } from "../kit/info-string.ts";
 import type { Kit } from "../kit/load.ts";
@@ -24,7 +25,7 @@ export interface RunOptions {
 
 const CURRENT_VERSION = 4;
 const KIT_ERROR_CASE = "kit-0000";
-/** The logical path of a document tree's root file (S7.1); the budget is read from it. */
+/** The logical path of a document tree's root file (document-tree page, "Distribution Manifest"); the budget is read from it. */
 const MANIFEST = "manifest";
 
 interface Target {
@@ -250,7 +251,8 @@ interface FileSetRun {
 }
 
 /**
- * The tree comparison (S8) for one set, on one path.
+ * The tree comparison (kit README, `mode=read` / file-set section) for one
+ * set, on one path.
  *
  * The set is read as a tree and the canonical it produces is held to the case's
  * canonical fence of the set's own profile — the same expectation the
@@ -421,9 +423,9 @@ function judgeAccepted(
 	return diff === null ? { result: "pass" } : { result: "fail", message: diff };
 }
 
-// The two paths must agree fence by fence (S5.2 step 5). Only this case's own
-// per-path records are in scope, so a kit-error record sharing this caseId
-// but no path is never touched.
+// The two paths must agree fence by fence (kit README, "What the driver does
+// with a case"). Only this case's own per-path records are in scope, so a
+// kit-error record sharing this caseId but no path is never touched.
 function reconcilePaths(byPath: Map<PathMode, ReportRecord[]>, c: KitCase, paths: readonly PathMode[]): void {
 	if (paths.length < 2) return;
 	for (const f of c.fences) {

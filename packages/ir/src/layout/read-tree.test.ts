@@ -1,7 +1,9 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 //
-// Tests for reading a document tree (S7.2): the kit's three `file` sets read
+// Tests for reading a document tree (document-tree page, "Reading a tree",
+// docs/spec/ir/schemas/v4/document-tree-files.md in finos/morphir): the kit's
+// three `file` sets read
 // to the same IRFile as the case's canonical document, each shape error the
 // tree can carry is reported with the logical path on its cursor, and the
 // diagnostics and warnings a file reader produced come back re-cursored onto
@@ -110,9 +112,9 @@ describe("readTree rejects a tree it cannot make a distribution of", () => {
 		expect(e.message).toContain("belongs to no module");
 	});
 
-	// S7.2 step 4: under `pkg/` and `deps/` there is nothing but modules, so a
-	// path the grammar does not recognize is an error rather than something to
-	// skip past.
+	// Document-tree page, "Reading a tree": under `pkg/` and `deps/` there is
+	// nothing but modules, so a path the grammar does not recognize is an
+	// error rather than something to skip past.
 	test("a file under pkg/ the path grammar does not recognize", () => {
 		const e = errorOf(escapeTree((f) => f.set("pkg/notes", "formatVersion: 4\n")));
 		expect(e.code).toBe("invalid_distribution_shape");
@@ -499,8 +501,8 @@ describe("dependencies whose package paths nest under one another", () => {
 // ---------------------------------------------------- an Application's deps
 
 // An application links its dependencies statically, so `deps/` holds package
-// definitions there where every other kind holds specifications (S7.3a). That
-// is the one branch the kit has no case for.
+// definitions there where every other kind holds specifications (document-tree
+// page, "Dependencies"). That is the one branch the kit has no case for.
 const APPLICATION = new Map<string, string>([
 	[
 		"manifest",

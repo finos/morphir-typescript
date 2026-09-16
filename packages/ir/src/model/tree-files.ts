@@ -22,7 +22,7 @@ export type DistributionKindName = "Library" | "Specs" | "Application";
  * The tree's root file. `pathBudget` is required (decision 0001); dependencies
  * live under `deps/<pkg path>/@<version>/…` and are listed here by name. The
  * version segment is always bare (`@`) because the v4 model carries no
- * package version (ruling S7.3a, decision 0015).
+ * package version (document-tree page, "Dependencies", decision 0015).
  */
 export interface DistributionManifestFile {
 	readonly formatVersion: FormatVersion;
@@ -47,7 +47,7 @@ export type ModuleEntries<TDef, TSpec> =
 export interface ModuleManifestFile<TA, VA> {
 	readonly formatVersion: FormatVersion;
 	readonly path: ModuleName;
-	/** "Public" when the file does not say (ruling S7.3a). */
+	/** "Public" when the file does not say (document-tree page, "access (module manifest)"). */
 	readonly access: Access;
 	readonly doc: string | null;
 	readonly types: ModuleEntries<AccessControlled<Documented<TypeDefinition<TA>>>, Documented<TypeSpecification<TA, VA>>>;

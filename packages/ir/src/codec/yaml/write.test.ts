@@ -1,9 +1,11 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 //
-// Tests for the YAML profile's canonical writer (spec S5). The kit's YAML
+// Tests for the YAML profile's canonical writer (the YAML profile page's
+// "Canonical writer" section, docs/spec/ir/schemas/v4/yaml-profile.md in
+// finos/morphir). The kit's YAML
 // canonical fences are the authority for these bytes; where a rule below
-// differs from the plan's first sketch, the fence that decided it is named.
+// differs from the first sketch, the fence that decided it is named.
 import { describe, expect, test } from "bun:test";
 import { parseJson } from "../json/value.ts";
 import { writeYaml } from "./write.ts";

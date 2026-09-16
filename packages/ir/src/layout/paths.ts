@@ -104,7 +104,7 @@ export function nodeFilePath(root: "pkg" | "deps", dir: string, stem: string, ki
 	return `${moduleDirPrefix(root, dir)}${stem}.${kind}`;
 }
 
-/** The logical path of a module's manifest, under `pkg/<pkg path>/…` or `deps/<pkg path>/@<version>/…` (ruling S7.3a, decision 0015). */
+/** The logical path of a module's manifest, under `pkg/<pkg path>/…` or `deps/<pkg path>/@<version>/…` (document-tree page, "access (module manifest)", decision 0015). */
 export function modulePath(root: "pkg" | "deps", pkg: PackageName, mod: ModuleName): LogicalPath {
 	return moduleManifestPath(root, moduleDir(root, pkg, mod));
 }

@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // The adapter protocol, contract version 1, and the Testee interface both
-// transports implement. Shapes are normative: spec S6.
+// transports implement. Shapes are normative: protocol.schema.json, contract
+// version 1 (see also the kit README's "Running the driver against a
+// binding").
 
 export type Profile = "json" | "yaml";
 export type Layout = "single" | "tree";
