@@ -17,10 +17,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - `formatVersions` in the adapter protocol's capabilities reply and the run report; the `mck` driver refuses a non-canonical support table.
+- Support tables in `@finos/morphir-ir`'s root entry point: `parseSupportTable`, `canonicalSupportTable`, `supports`, `supportTableCompatibility`, the renderers `renderCargo`, `renderElm` and `renderProse`, the constants `DOMAIN_FLOOR` and `RELEASE_COMPONENT_MAX`, and the types `SupportTable`, `Interval`, `Release` and `SupportTableCompatibility`. A table is a set of release intervals in the canonical notation (`[3.0.0,3.1.0),[4.0.0,4.1.0)`), which is what a binding declares and what a reader checks a distribution's `formatVersion` against.
+- `parseFormatVersions` in `@finos/morphir-mck`, which recovers the table from a `Capabilities` (which carries the string, not the table), and the `onHeader` option on `RunOptions`, which receives the run's header line — `runKit` no longer writes to stderr itself.
 
 ### Changed
 
-- `@finos/morphir-ir` readers check an interval support table (`[4.0.0,4.1.0)`); `unsupported_format_version_minor` replaces `unsupported_format_version_revision`; kit synced to finos/morphir 13233135 (distributions-0001 rejects 4.1.0, distributions-0008 reads 4.0.1).
+- `@finos/morphir-ir` readers check an interval support table (`[4.0.0,4.1.0)`); `unsupported_format_version_minor` replaces `unsupported_format_version_revision`; kit synced to finos/morphir e66808b8 (distributions-0001 rejects 4.1.0, distributions-0008 reads 4.0.1, and the kit README's capabilities list names `formatVersions`).
 
 ## [0.1.0] - 2026-09-16
 
