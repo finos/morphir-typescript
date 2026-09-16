@@ -55,8 +55,10 @@ const EXPORTS = {
 // The one runtime dependency: the YAML profile's reader parses through it. It
 // is external to the bundle and declared in the published manifest, as the mck
 // package declares its dependency on this one — a bundled copy would put a
-// second `yaml` in a consumer's graph and would drag that package's paths into
-// our source maps.
+// second `yaml` in a consumer's graph. (The mck driver's command-line entry is
+// different: nobody imports dist/cli.js, so it bundles its command-line
+// dependencies, and the source-map canonicalizer maps those under a virtual
+// node_modules path.)
 const DEPENDENCIES = { yaml: "2.9.1" } as const;
 const ROOT_FILES = ["package/package.json", "package/README.md", "package/LICENSE", "package/NOTICE"] as const;
 const REQUIRED_FILES = [

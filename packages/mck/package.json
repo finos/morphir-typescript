@@ -34,5 +34,13 @@
 	},
 	"dependencies": {
 		"@finos/morphir-ir": "workspace:*"
+	},
+	"devDependencies": {
+		"@effect/cli": "0.77.2",
+		"@effect/platform": "0.97.2",
+		"@effect/platform-node": "0.108.2",
+		"@effect/printer": "0.51.0",
+		"@effect/printer-ansi": "0.51.0",
+		"effect": "3.22.2"
 	}
 }

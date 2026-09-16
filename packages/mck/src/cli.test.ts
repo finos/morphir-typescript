@@ -78,7 +78,35 @@ describe("mck check", () => {
 	test("unknown command is usage error", () => {
 		const r = run(["frobnicate"]);
 		expect(r.code).toBe(2);
-		expect(r.err).toMatch(/usage: mck check <dir> \[--json\]/);
+		expect(r.err).toMatch(/Invalid subcommand for mck/);
+		expect(r.out).toBe("");
+	});
+});
+
+describe("mck", () => {
+	// The command line is built on @effect/cli: the library renders help and
+	// usage errors; the driver keeps the exit codes the README documents
+	// (0 ok, 1 failure, 2 usage error).
+	test("bare mck is a usage error naming the subcommands", () => {
+		const r = run([]);
+		expect(r.code).toBe(2);
+		expect(r.err).toMatch(/check/);
+		expect(r.err).toMatch(/coverage/);
+		expect(r.out).toBe("");
+	});
+	test("--help exits 0 and prints the usage to stdout", () => {
+		const r = run(["--help"]);
+		expect(r.code).toBe(0);
+		expect(r.out).toMatch(/USAGE/);
+		expect(r.out).toMatch(/\bcheck\b/);
+		expect(r.out).toMatch(/\brun\b/);
+		expect(r.err).toBe("");
+	});
+	test("run --help documents the run flags", () => {
+		const r = run(["run", "--help"]);
+		expect(r.code).toBe(0);
+		expect(r.out).toMatch(/--adapter-arg/);
+		expect(r.out).toMatch(/--timeout/);
 	});
 });
 
@@ -125,7 +153,14 @@ describe("mck kit", () => {
 	test("unknown kit subcommand is a usage error", () => {
 		const r = run(["kit", "frobnicate"]);
 		expect(r.code).toBe(2);
-		expect(r.err).toMatch(/usage: mck kit sync <repository-root> \[--force\]/);
+		expect(r.err).toMatch(/Invalid subcommand/);
+	});
+	test("bare kit is a usage error naming sync and status", () => {
+		const r = run(["kit"]);
+		expect(r.code).toBe(2);
+		expect(r.err).toMatch(/sync/);
+		expect(r.err).toMatch(/status/);
+		expect(r.out).toBe("");
 	});
 	test("kit sync against a repository without spec/ir/mck fails with a one-line message, not a stack trace", () => {
 		const notAKit = temp();
@@ -242,13 +277,21 @@ describe("mck run", () => {
 	test("an invalid --only regex is a usage error naming the problem", () => {
 		const r = run(["run", "--only", "("]);
 		expect(r.code).toBe(2);
-		expect(r.err).toMatch(/^usage: mck run /m);
-		expect(r.err).toMatch(/^error: invalid --only regex: /m);
+		expect(r.err).toMatch(/invalid --only regex: /);
+		expect(r.err).not.toMatch(/ at /);
 	});
+	test("a non-positive --timeout is a usage error", () => {
+		const r = run(["run", "--timeout", "0"]);
+		expect(r.code).toBe(2);
+		expect(r.err).toMatch(/--timeout/);
+		expect(r.err).not.toMatch(/ at /);
+	});
+	// @effect/cli reports a trailing flag with no operand as an argument it
+	// does not recognise; what matters is the exit code and the flag's name.
 	test("a flag missing its operand at the end of argv is a usage error", () => {
 		const r = run(["run", "--kit"]);
 		expect(r.code).toBe(2);
-		expect(r.err).toMatch(/^usage: mck run /m);
+		expect(r.err).toMatch(/'--kit'/);
 	});
 });
 
@@ -264,12 +307,12 @@ describe("mck coverage", () => {
 	test("an unknown flag is a usage error", () => {
 		const r = run(["coverage", "--frobnicate"]);
 		expect(r.code).toBe(2);
-		expect(r.err).toMatch(/^usage: mck coverage /m);
+		expect(r.err).toMatch(/Received unknown argument: '--frobnicate'/);
 	});
 	test("a flag missing its operand at the end of argv is a usage error", () => {
 		const r = run(["coverage", "--kit"]);
 		expect(r.code).toBe(2);
-		expect(r.err).toMatch(/^usage: mck coverage /m);
+		expect(r.err).toMatch(/'--kit'/);
 	});
 });
 

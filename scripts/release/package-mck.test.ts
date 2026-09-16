@@ -5,7 +5,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { buildMckArtifact, checkKitRunReport, publishMckManifest, TYPESCRIPT_SPECIFIER, validatePackageFiles } from "./package-mck.ts";
+import { buildMckArtifact, canonicalSourceMap, checkKitRunReport, publishMckManifest, TYPESCRIPT_SPECIFIER, validatePackageFiles } from "./package-mck.ts";
 import { parseStableVersion } from "./version.ts";
 
 const root = path.resolve(import.meta.dir, "../..");
@@ -39,6 +39,33 @@ function sourceManifest(): Record<string, unknown> {
 		dependencies: { "@finos/morphir-ir": "workspace:*" },
 	};
 }
+
+describe("canonicalSourceMap", () => {
+	// The driver bundles its command-line dependencies (@effect/cli and the
+	// Node platform) into dist/cli.js, so the bundle's map names sources under
+	// the workspace's node_modules. Those map to a virtual node_modules path
+	// keyed by package name, never to the checkout's store layout.
+	test("maps a bundled dependency source to a virtual node_modules path", async () => {
+		const packageRoot = path.join(root, "packages/mck");
+		const mapFile = path.join(root, "stage/dist/cli.js.map");
+		const effectSource = path.join(path.dirname(await Bun.resolve("effect", packageRoot)), "Function.js");
+		const input = JSON.stringify({ version: 3, file: "cli.js", sources: [path.relative(path.dirname(mapFile), effectSource)], mappings: "AAAA" });
+		expect(JSON.parse(canonicalSourceMap(input, mapFile, packageRoot))).toEqual({
+			version: 3,
+			file: "cli.js",
+			sources: ["morphir-mck:///node_modules/effect/dist/esm/Function.js"],
+			mappings: "AAAA",
+		});
+	});
+
+	test("still rejects a source outside both the package and node_modules", () => {
+		const packageRoot = path.join(root, "packages/mck");
+		const mapFile = path.join(root, "stage/dist/cli.js.map");
+		expect(() => canonicalSourceMap('{"version":3,"sources":["../../scripts/release/cli.ts"],"mappings":""}', mapFile, packageRoot)).toThrow(
+			"outside packages/mck",
+		);
+	});
+});
 
 describe("publishMckManifest", () => {
 	test("keeps exact public metadata and strips repository-only fields", () => {
