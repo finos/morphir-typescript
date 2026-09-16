@@ -6,12 +6,15 @@
 // and strings are compared. What a binding cannot do is a capabilities
 // question, so a fence the binding declared no support for is skipped, never
 // failed.
+// The relative specifier is the one in-process.ts explains; the packaging step
+// rewrites it to "@finos/morphir-ir".
+import { renderProse } from "../../../ir/src/index.ts";
 import type { KitCase, KitFence } from "../kit/case.ts";
 import { setLabel, setOf } from "../kit/info-string.ts";
 import type { Kit } from "../kit/load.ts";
 import { resolveTextFence } from "../kit/source.ts";
 import { emptyReport, type Report, type ReportProfile, type ReportRecord, type ReportRole } from "../report.ts";
-import { ProtocolError, parseCapabilities } from "../testee/protocol.ts";
+import { ProtocolError, parseCapabilities, parseFormatVersions } from "../testee/protocol.ts";
 import type { Capabilities, DecodeResponse, PathMode, Profile, Testee, WriteTreeResponse } from "../testee/testee.ts";
 import { checkCanonical, checkRejected, checkWarnings, normalizeCanonical, pathBudgetOf } from "./compare.ts";
 
@@ -21,6 +24,12 @@ export interface RunOptions {
 	readonly driverVersion: string;
 	readonly kitVersion: string;
 	readonly now?: () => number;
+	/**
+	 * Where the run's header line goes, if anywhere. The driver computes the
+	 * line; who prints it is the caller's business, so an embedder gets no
+	 * output it did not ask for (spec 2.5, "Publication").
+	 */
+	readonly onHeader?: (line: string) => void;
 }
 
 const CURRENT_VERSION = 4;
@@ -106,10 +115,18 @@ export async function runKit(kit: Kit, testee: Testee, options: RunOptions): Pro
 	let caps: Capabilities | null = null;
 	let dead: string | null = null; // the protocol error that ended the conversation
 	const records: ReportRecord[] = [];
-	let header = { binding: "unknown", language: "unknown", driverVersion: options.driverVersion, kitVersion: options.kitVersion };
+	// `unknown` for formatVersions is the report schema's own word for an
+	// adapter that never answered capabilities: a table it cannot be, and a
+	// report that is still valid to write and visibly wrong to read.
+	let header = { binding: "unknown", language: "unknown", formatVersions: "unknown", driverVersion: options.driverVersion, kitVersion: options.kitVersion };
 	try {
 		caps = parseCapabilities(await testee.capabilities());
-		header = { ...header, binding: caps.binding, language: caps.language };
+		header = { ...header, binding: caps.binding, language: caps.language, formatVersions: caps.formatVersions };
+		// Said once, at the head of the run (spec 2.5, "Publication"): which IR
+		// releases the binding under test claims, in its own notation and in
+		// words. Handed to the caller rather than written: the driver computes,
+		// the CLI prints.
+		options.onHeader?.(`${caps.binding} supports IR format versions ${caps.formatVersions} (${renderProse(parseFormatVersions(caps.formatVersions))})`);
 	} catch (error) {
 		dead = error instanceof Error ? error.message : String(error);
 	}

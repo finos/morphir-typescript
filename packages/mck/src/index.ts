@@ -52,7 +52,15 @@ export {
 } from "./report.ts";
 export { IN_PROCESS_CAPABILITIES, inProcessTestee, NODE_KINDS, resolveNode } from "./testee/in-process.ts";
 export { type ProcessOptions, processTestee } from "./testee/process.ts";
-export { ProtocolError, parseCapabilities, parseDecodeResponse, parseEnvelope, parseRequest, parseWriteTreeResponse } from "./testee/protocol.ts";
+export {
+	ProtocolError,
+	parseCapabilities,
+	parseDecodeResponse,
+	parseEnvelope,
+	parseFormatVersions,
+	parseRequest,
+	parseWriteTreeResponse,
+} from "./testee/protocol.ts";
 export type {
 	Capabilities,
 	DecodeRequest,

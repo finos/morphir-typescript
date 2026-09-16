@@ -5,6 +5,7 @@
 // warnings, strip behavior, diagnostics for bad requests, path agreement, and
 // the document tree read and written back.
 import { describe, expect, test } from "bun:test";
+import { SUPPORT_TABLE_TEXT } from "../../../ir/src/versions/v4/read-distribution.ts";
 import { IN_PROCESS_CAPABILITIES, inProcessTestee, resolveNode } from "./in-process.ts";
 
 const t = inProcessTestee();
@@ -14,6 +15,13 @@ const decode = (node: string, input: string, extra: Partial<{ strip: boolean; pa
 describe("inProcessTestee", () => {
 	test("capabilities", async () => {
 		expect(await t.capabilities()).toEqual(IN_PROCESS_CAPABILITIES);
+	});
+	// The capabilities reply repeats the table literal rather than importing it:
+	// `read-distribution.ts` is not one of the IR entry points the packaging step
+	// rewrites, so `in-process.ts` may not name it. This test is what keeps the
+	// copy honest — the reader and the claim must say the same releases.
+	test("capabilities declares the same support table the v4 reader enforces", async () => {
+		expect((await t.capabilities()).formatVersions).toBe(SUPPORT_TABLE_TEXT);
 	});
 	test("capabilities declares every node kind and alias it decodes", async () => {
 		const caps = await t.capabilities();

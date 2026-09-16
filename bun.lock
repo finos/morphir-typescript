@@ -4,7 +4,7 @@
   "workspaces": {
     "": {
       "name": "morphir-typescript",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "devDependencies": {
         "@biomejs/biome": "2.5.12",
         "@types/bun": "1.4.1",
@@ -16,14 +16,14 @@
     },
     "packages/ir": {
       "name": "@finos/morphir-ir",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "yaml": "2.9.1",
       },
     },
     "packages/mck": {
       "name": "@finos/morphir-mck",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "bin": {
         "mck": "./dist/cli.js",
         "mck-adapter-typescript": "./dist/adapter.js",

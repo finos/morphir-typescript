@@ -41,7 +41,7 @@ import { ok, type Result } from "../../model/result.ts";
 import { EMPTY_TYPE_ATTRIBUTES, emptyValueAttributes, type TA, type VA } from "./attributes.ts";
 import { canonicalFormatVersion, compatibility, recognize } from "./format-version.ts";
 import { readAccessControlledTypeDefinition, readAccessControlledValueDefinition, readModuleDefinition, readModuleSpecification } from "./read-definitions.ts";
-import { readIRFile, SUPPORTED_VERSIONS } from "./read-distribution.ts";
+import { readIRFile, SUPPORT_TABLE } from "./read-distribution.ts";
 import { readFQName, readName, readPath } from "./read-names.ts";
 import { readDistributionManifestFile, readModuleManifestFile, readTypeDefinitionFile, readValueDefinitionFile } from "./read-tree-files.ts";
 import { readType, readTypeDefinition, readTypeSpecification } from "./read-types.ts";
@@ -139,7 +139,7 @@ function readFormatVersionNode(ctx: Ctx, v: JsonValue): Result<model.FormatVersi
 	const recognized = recognize(ctx, v);
 	if (!recognized.ok) return recognized;
 	const fv = recognized.value.normalized;
-	const compat = compatibility(fv, SUPPORTED_VERSIONS);
+	const compat = compatibility(fv, SUPPORT_TABLE);
 	return compat === "supported" ? ok(fv) : fail(ctx, compat, `format version ${fv.major}.${fv.minor}.${fv.patch} is not supported`, v);
 }
 

@@ -28,11 +28,18 @@ describe("json.read / json.write", () => {
 		const r = json.read('{ "formatVersion": 4, "distribution": ["Library", "example/v4-test", {}, { "modules": [] }] }');
 		expect(!r.ok && r.error.code).toBe("invalid_distribution_shape");
 	});
-	test("4.1.0 is unsupported_format_version_revision; 5 is unsupported major", () => {
+	test("4.1.0 is unsupported_format_version_minor; 4.0.1 is read; 5 is unsupported major", () => {
 		expect(json.read('{ "formatVersion": "4.1.0", "distribution": { "Library": { "packageName": "x" } } }')).toMatchObject({
 			ok: false,
-			error: { code: "unsupported_format_version_revision" },
+			error: { code: "unsupported_format_version_minor" },
 		});
+		// 4.0.1 is inside this binding's table — a later patch of a supported
+		// minor reads, and the release it read is kept whole, not rounded to the
+		// minor floor.
+		const patch = json.read('{ "formatVersion": "4.0.1", "distribution": { "Library": { "packageName": "x" } } }');
+		expect(patch.ok ? "" : patch.error.message).toBe("");
+		expect(patch.ok).toBe(true);
+		if (patch.ok) expect(patch.value.formatVersion).toEqual({ major: 4, minor: 0, patch: 1 });
 		expect(json.read('{ "formatVersion": 5, "distribution": { "Library": { "packageName": "x" } } }')).toMatchObject({
 			ok: false,
 			error: { code: "unsupported_format_version_major" },

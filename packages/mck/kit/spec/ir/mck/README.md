@@ -1,8 +1,10 @@
-# Morphir Compatibility Kit (MCK)
+# Morphir Compatibility Kit (MCK): IR suite
 
-This directory is the Morphir Compatibility Kit: the executable contract for the Morphir IR serialization profiles.
+This directory is the IR suite of the [Morphir Compatibility Kit](https://github.com/finos/morphir/blob/main/spec/mck/README.md): the executable contract for the Morphir IR serialization profiles.
 Every binding (TypeScript, Gleam, Python, and later Scala and Rust) is driven through it by the mck driver in
-finos/morphir-typescript. A binding is MCK-compatible at a kit version when the driver reports no failures against it.
+finos/morphir-typescript. An IR compatibility claim names the kit version and required capabilities; every required case must pass.
+Unsupported capabilities can be reported as skipped, so a successful driver exit alone does not prove complete coverage.
+The planned MCK package suite has its own operations and compatibility requirements.
 
 The kit states meaning by example. The semantic model lives in TypeScript; the YAML profile is the reference
 text form; JSON is the second profile. When a spec page and a kit case disagree, the case wins and the page is
@@ -94,8 +96,9 @@ driver speaks the same steps against the same cases:
    document; writes it back and compares the emitted files with the fences.
 4. Reports a `pending` case as `skipped`. A case whose fences are all `rejected` is active and is checked normally.
 
-Before any of that, the driver asks the testee for its `capabilities`: the IR versions, profiles, layouts,
-paths, and node kinds it supports. A fence whose case needs a version, profile, layout, path, or node the
+Before any of that, the driver asks the testee for its `capabilities`: its `formatVersions`, the binding's
+support table in canonical interval notation (see the format-version page, Recognition and compatibility), and
+the IR versions, profiles, layouts, paths, and node kinds it supports. A fence whose case needs a version, profile, layout, path, or node the
 testee did not declare is reported `skipped` rather than run; an adapter that never learned YAML, for example,
 skips every YAML fence without failing the run. The wire shape of `capabilities` and every other exchange is
 the adapter protocol, `protocol.schema.json`, contract version 1.

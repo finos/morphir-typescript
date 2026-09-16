@@ -31,7 +31,7 @@ export type DiagnosticCode =
 	| "invalid_format_version_syntax"
 	| "format_version_out_of_range"
 	| "unsupported_format_version_major"
-	| "unsupported_format_version_revision"
+	| "unsupported_format_version_minor"
 	// YAML profile: syntax the profile forbids (the YAML profile page's "Reader
 	// restrictions" and "Scalar resolution" sections)
 	| "invalid_yaml"
