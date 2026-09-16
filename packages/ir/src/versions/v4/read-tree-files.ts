@@ -56,7 +56,7 @@ import {
 	readDocumentedValueSpecification,
 	readNamedMap,
 } from "./read-definitions.ts";
-import { readEntryPoints, SUPPORTED_VERSIONS } from "./read-distribution.ts";
+import { readEntryPoints, SUPPORT_TABLE } from "./read-distribution.ts";
 import { readModuleName, readName, readPackageName } from "./read-names.ts";
 
 type Read<T> = (ctx: Ctx, v: JsonValue) => Result<T, Diagnostic>;
@@ -91,7 +91,7 @@ function readFileFormatVersion(ctx: Ctx, o: JsonObject): Result<FormatVersion, D
 	const recognized = readFormatVersionMember(ctx, o);
 	if (!recognized.ok) return recognized;
 	const fv = recognized.value.normalized;
-	const compat = compatibility(fv, SUPPORTED_VERSIONS);
+	const compat = compatibility(fv, SUPPORT_TABLE);
 	if (compat === "supported") return ok(fv);
 	return fail(at(ctx, "formatVersion"), compat, `format version ${fv.major}.${fv.minor}.${fv.patch} is not supported`, o.members.get("formatVersion"));
 }

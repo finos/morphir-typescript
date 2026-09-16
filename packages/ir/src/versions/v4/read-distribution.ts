@@ -15,16 +15,21 @@ import type { Diagnostic } from "../../model/diagnostic.ts";
 import type { Distribution, EntryPoint, EntryPointKind, IRFile, NamedPackage, PackageDefinition, PackageSpecification } from "../../model/distribution.ts";
 import type { AccessControlled, ModuleDefinition, ModuleSpecification, NamedModule } from "../../model/modules.ts";
 import { ok, type Result } from "../../model/result.ts";
+import { parseSupportTable, type SupportTable } from "../support-table.ts";
 import type { TA, VA } from "./attributes.ts";
 import { compatibility, readFormatVersionMember } from "./format-version.ts";
 import { readAccessControlled, readModuleDefinition, readModuleSpecification } from "./read-definitions.ts";
 import { readFQName, readModuleName, readPackageName } from "./read-names.ts";
 
-// The v4 module's support table, and the only one it reads against: this
-// binding accepts exactly 4.0.0. The wider table in format-version.ts is the
-// contract's reference list, which the conformance corpus checks; the v3
+// The table this binding declares (the adapter's formatVersions): v4 only,
+// every 4.0.x patch. docs/spec/ir/format-version.md, "Recognition and
+// compatibility". The wider REFERENCE_SUPPORT_TABLE in format-version.ts is the
+// contract's reference table, which the conformance corpus checks; the v3
 // reader and its own table arrive with the cross-version plan.
-export const SUPPORTED_VERSIONS: readonly string[] = ["4.0.0"];
+export const SUPPORT_TABLE_TEXT = "[4.0.0,4.1.0)";
+const parsed = parseSupportTable(SUPPORT_TABLE_TEXT);
+if (!parsed.ok) throw new Error(parsed.error);
+export const SUPPORT_TABLE: SupportTable = parsed.value;
 
 const DISTRIBUTION_KEYS: readonly string[] = ["Library", "Specs", "Application"];
 const ENTRY_POINT_KINDS: readonly string[] = ["main", "command", "handler", "job", "policy"];
@@ -191,7 +196,7 @@ export function readIRFile(v: JsonValue, ctx: Ctx = newRoot()): Result<IRFile<TA
 	}
 	const recognized = readFormatVersionMember(ctx, o.value);
 	if (!recognized.ok) return recognized;
-	const compat = compatibility(recognized.value.normalized, SUPPORTED_VERSIONS);
+	const compat = compatibility(recognized.value.normalized, SUPPORT_TABLE);
 	if (compat !== "supported") {
 		const fv = recognized.value.normalized;
 		return fail(at(ctx, "formatVersion"), compat, `format version ${fv.major}.${fv.minor}.${fv.patch} is not supported`, o.value.members.get("formatVersion"));

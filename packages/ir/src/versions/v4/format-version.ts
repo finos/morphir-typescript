@@ -7,12 +7,21 @@ import { isNumber, type JsonObject, type JsonValue, jsonNumber } from "../../cod
 import type { Diagnostic } from "../../model/diagnostic.ts";
 import type { FormatVersion } from "../../model/distribution.ts";
 import { ok, type Result } from "../../model/result.ts";
+import { type SupportTable, type Compatibility as TableCompatibility, compatibility as tableCompatibility } from "../support-table.ts";
 
 export interface Recognized {
 	readonly normalized: FormatVersion;
 	readonly canonical: JsonValue;
 }
-export const SUPPORTED: readonly string[] = ["3.0.0", "4.0.0"];
+
+/**
+ * The contract's reference support table (docs/spec/ir/format-version.md,
+ * "Recognition and compatibility"): what the specification says is live across
+ * the ecosystem, and what the conformance corpus is checked against. It is not
+ * what this binding reads — that table is `SUPPORT_TABLE` in read-distribution.ts.
+ */
+export const REFERENCE_SUPPORT_TABLE = "[3.0.0,3.1.0),[4.0.0,4.1.0)";
+
 const MAX = 4294967295;
 const COMPONENT = /^(0|[1-9][0-9]*)$/;
 
@@ -52,12 +61,15 @@ export function recognize(ctx: Ctx, v: JsonValue): Result<Recognized, Diagnostic
 	return fail(ctx, "invalid_format_version_type", "formatVersion must be an unsigned integer or a release string");
 }
 
-export type Compatibility = "supported" | "unsupported_format_version_major" | "unsupported_format_version_revision";
+export type Compatibility = TableCompatibility;
 
-export function compatibility(fv: FormatVersion, supported: readonly string[] = SUPPORTED): Compatibility {
-	const exact = `${fv.major}.${fv.minor}.${fv.patch}`;
-	if (supported.includes(exact)) return "supported";
-	return supported.some((s) => s.startsWith(`${fv.major}.`)) ? "unsupported_format_version_revision" : "unsupported_format_version_major";
+/**
+ * The verdict for a recognized format version against a support table. A
+ * `FormatVersion` is already an exact release, so this is the table's own
+ * membership question with the arguments in reader order.
+ */
+export function compatibility(fv: FormatVersion, table: SupportTable): Compatibility {
+	return tableCompatibility(table, fv);
 }
 
 export function readFormatVersionMember(ctx: Ctx, rootObject: JsonObject): Result<Recognized, Diagnostic> {

@@ -7,7 +7,16 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { newRoot } from "../../codec/json/cursor.ts";
 import { isObject, jsonNumber, parseJson, writeJson } from "../../codec/json/value.ts";
-import { compatibility, readFormatVersionMember, recognize } from "./format-version.ts";
+import { parseSupportTable, type SupportTable } from "../support-table.ts";
+import { compatibility, REFERENCE_SUPPORT_TABLE, readFormatVersionMember, recognize } from "./format-version.ts";
+
+function table(text: string): SupportTable {
+	const parsed = parseSupportTable(text);
+	if (!parsed.ok) throw new Error(parsed.error);
+	return parsed.value;
+}
+
+const REFERENCE = table(REFERENCE_SUPPORT_TABLE);
 
 const corpusPath = path.resolve(import.meta.dir, "../../../../../../../docs/spec/ir/fixtures/format-version-conformance.json");
 // A missing corpus would quietly skip the conformance cases, so it is an error
@@ -39,14 +48,18 @@ describe("recognize", () => {
 		expect(!r.ok && r.error.code).toBe("format_version_out_of_range");
 	});
 	test("compatibility against the reference table", () => {
-		expect(compatibility({ major: 4, minor: 0, patch: 0 })).toBe("supported");
-		expect(compatibility({ major: 4, minor: 1, patch: 0 })).toBe("unsupported_format_version_revision");
-		expect(compatibility({ major: 5, minor: 0, patch: 0 })).toBe("unsupported_format_version_major");
+		expect(compatibility({ major: 4, minor: 0, patch: 0 }, REFERENCE)).toBe("supported");
+		// Every 4.0.x patch is in the table, so a patch above the one the bound
+		// names is supported, not a near miss.
+		expect(compatibility({ major: 4, minor: 0, patch: 1 }, REFERENCE)).toBe("supported");
+		expect(compatibility({ major: 4, minor: 1, patch: 0 }, REFERENCE)).toBe("unsupported_format_version_minor");
+		expect(compatibility({ major: 5, minor: 0, patch: 0 }, REFERENCE)).toBe("unsupported_format_version_major");
 	});
 });
 
 describe.skipIf(corpus === null)("format-version-conformance.json", () => {
 	test("scalarCases", () => {
+		const corpusTable = table(corpus.supportTable);
 		for (const c of corpus.scalarCases) {
 			const value = typeof c.value === "number" ? jsonNumber(String(c.value)) : c.value;
 			const r = recognize(newRoot(), value);
@@ -62,7 +75,7 @@ describe.skipIf(corpus === null)("format-version-conformance.json", () => {
 					const n = r.value.normalized;
 					expect(`${n.major}.${n.minor}.${n.patch}`).toBe(c.normalization.normalized);
 					expect(writeJson(r.value.canonical)).toBe(JSON.stringify(c.normalization.canonical));
-					expect(compatibility(n, corpus.supportedVersions)).toBe(c.compatibility);
+					expect(compatibility(n, corpusTable)).toBe(c.compatibility);
 				}
 			}
 		}
