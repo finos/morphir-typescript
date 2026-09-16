@@ -15,6 +15,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import Ajv, { type ValidateFunction } from "ajv";
+import { DOMAIN_FLOOR } from "../../../ir/src/index.ts";
 import { ProtocolError, parseCapabilities, parseDecodeResponse, parseEnvelope, parseRequest, parseWriteTreeResponse } from "./protocol.ts";
 
 type Example = { readonly direction: "request" | "response"; readonly message: Record<string, unknown> };
@@ -183,6 +184,19 @@ test("parseCapabilities rejects a formatVersions unbounded below that reaches an
 test("parseCapabilities accepts a formatVersions unbounded below when versions lists every major it reaches", () => {
 	const parsed = parseCapabilities(body(capabilitiesWith({ formatVersions: "(,4.1.0)", versions: [3, 4] })));
 	expect(parsed.formatVersions).toBe("(,4.1.0)");
+});
+
+// The floor the cross-check enumerates from is the IR module's `DOMAIN_FLOOR`,
+// not a second copy of the number 3 (the precedent is `in-process.test.ts`,
+// which binds the other duplicated constant). `protocol.ts` reads the major off
+// `DOMAIN_FLOOR`; this asserts the behaviour follows, so moving the floor in
+// the IR package moves what an unbounded-below interval is required to list.
+test("the versions cross-check enumerates from the IR package's domain floor", () => {
+	expect(() => parseCapabilities(body(capabilitiesWith({ formatVersions: "(,4.1.0)", versions: [4] })))).toThrow(
+		`touches major ${DOMAIN_FLOOR.major} but "versions" does not list it`,
+	);
+	const listed = [...new Set([DOMAIN_FLOOR.major, 4])];
+	expect(parseCapabilities(body(capabilitiesWith({ formatVersions: "(,4.1.0)", versions: listed }))).versions).toEqual(listed);
 });
 
 // --- parseDecodeResponse ---

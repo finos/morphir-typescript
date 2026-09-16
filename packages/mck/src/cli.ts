@@ -210,7 +210,15 @@ async function runRun(args: RunArgs): Promise<number> {
 	const kv = args.kit === undefined ? kitVersion(null) : kitVersion(path.resolve(args.kit));
 	const testee = args.adapter === undefined ? inProcessTestee() : processTestee([args.adapter, ...args.adapterArgs], { timeoutMs: args.timeoutMs });
 	try {
-		const report = await driveKit(kit, testee, { strict: args.strict, only: args.only, driverVersion: driverVersion(), kitVersion: kv });
+		const report = await driveKit(kit, testee, {
+			strict: args.strict,
+			only: args.only,
+			driverVersion: driverVersion(),
+			kitVersion: kv,
+			// The header goes to stderr so a piped `--report -` or the summary on
+			// stdout stays machine-readable.
+			onHeader: (line) => console.error(line),
+		});
 		if (args.report !== undefined) writeReport(report, path.resolve(args.report));
 		console.log(formatSummary(report));
 		for (const r of report.records) {

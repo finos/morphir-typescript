@@ -12,7 +12,7 @@
 // and the bindings must agree on one parser, one canonical spelling and one
 // containment rule. The relative specifier is the one in-process.ts explains;
 // the packaging step rewrites it to "@finos/morphir-ir".
-import { canonicalSupportTable, parseSupportTable, type Release, type SupportTable, supportTableCompatibility } from "../../../ir/src/index.ts";
+import { canonicalSupportTable, DOMAIN_FLOOR, parseSupportTable, type Release, type SupportTable, supportTableCompatibility } from "../../../ir/src/index.ts";
 import type { Capabilities, DecodeResponse, Layout, PathMode, Profile, Request, TreeFile, Warning, WriteTreeResponse } from "./testee.ts";
 
 export class ProtocolError extends Error {
@@ -69,17 +69,11 @@ export function parseEnvelope(line: string): { readonly id: number; readonly bod
 }
 
 /**
- * Does the table hold any release of `major`? Asked through `compatibility`,
- * which answers `unsupported_format_version_major` exactly when no interval
- * contains a release of that major family — so `[3.0.0,4.0.0)` does not touch
- * major 4, and the domain floor of 3.0.0 means no table touches major 2.
- */
-/**
  * The lowest major any table can reach. An absent lower bound stops here, not
- * at zero — mirrors `DOMAIN_FLOOR` in the IR package's support-table module,
- * which does not export it.
+ * at zero. Taken from the IR package's `DOMAIN_FLOOR` so the two cannot drift;
+ * `protocol.test.ts` pins the equality.
  */
-const DOMAIN_FLOOR_MAJOR = 3;
+const DOMAIN_FLOOR_MAJOR = DOMAIN_FLOOR.major;
 
 /**
  * The table a capabilities reply's `formatVersions` names, or a protocol error
@@ -93,6 +87,12 @@ export function parseFormatVersions(formatVersions: string): SupportTable {
 	return (parsed as { readonly ok: true; readonly value: SupportTable }).value;
 }
 
+/**
+ * Does the table hold any release of `major`? Asked through `compatibility`,
+ * which answers `unsupported_format_version_major` exactly when no interval
+ * contains a release of that major family — so `[3.0.0,4.0.0)` does not touch
+ * major 4, and the domain floor of 3.0.0 means no table touches major 2.
+ */
 function touchesMajor(table: SupportTable, major: number): boolean {
 	const familyStart: Release = { major, minor: 0, patch: 0 };
 	return supportTableCompatibility(table, familyStart) !== "unsupported_format_version_major";

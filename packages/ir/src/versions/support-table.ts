@@ -33,7 +33,7 @@ const COMPONENT = /^(0|[1-9][0-9]*)$/;
  * major 3, so an absent lower bound admits from here and not from 0.0.0: a
  * table is a set of releases the contract can name, and it names none earlier.
  */
-const DOMAIN_FLOOR: Release = { major: 3, minor: 0, patch: 0 };
+export const DOMAIN_FLOOR: Release = { major: 3, minor: 0, patch: 0 };
 
 export function compareRelease(a: Release, b: Release): number {
 	if (a.major !== b.major) return a.major < b.major ? -1 : 1;

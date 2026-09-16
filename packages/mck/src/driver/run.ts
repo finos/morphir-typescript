@@ -24,6 +24,12 @@ export interface RunOptions {
 	readonly driverVersion: string;
 	readonly kitVersion: string;
 	readonly now?: () => number;
+	/**
+	 * Where the run's header line goes, if anywhere. The driver computes the
+	 * line; who prints it is the caller's business, so an embedder gets no
+	 * output it did not ask for (spec 2.5, "Publication").
+	 */
+	readonly onHeader?: (line: string) => void;
 }
 
 const CURRENT_VERSION = 4;
@@ -116,9 +122,11 @@ export async function runKit(kit: Kit, testee: Testee, options: RunOptions): Pro
 	try {
 		caps = parseCapabilities(await testee.capabilities());
 		header = { ...header, binding: caps.binding, language: caps.language, formatVersions: caps.formatVersions };
-		// Said once, at the head of the run: which IR releases the binding under
-		// test claims, in its own notation and in words.
-		console.error(`${caps.binding} supports IR format versions ${caps.formatVersions} (${renderProse(parseFormatVersions(caps.formatVersions))})`);
+		// Said once, at the head of the run (spec 2.5, "Publication"): which IR
+		// releases the binding under test claims, in its own notation and in
+		// words. Handed to the caller rather than written: the driver computes,
+		// the CLI prints.
+		options.onHeader?.(`${caps.binding} supports IR format versions ${caps.formatVersions} (${renderProse(parseFormatVersions(caps.formatVersions))})`);
 	} catch (error) {
 		dead = error instanceof Error ? error.message : String(error);
 	}

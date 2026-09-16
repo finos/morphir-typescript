@@ -224,7 +224,11 @@ describe("release automation contract", () => {
 		const readme = await readFile(path.join(root, "README.md"), "utf8");
 		const status = markdownSection(readme, "Project status");
 		expect(status).toContain("@finos/morphir-ir");
-		expect(status).toContain("0.1.0");
+		// The suite version is read from a manifest rather than written here:
+		// a literal in this test is what let the README keep advertising the
+		// previous release after `release:prepare` bumped the packages.
+		const suiteVersion = (JSON.parse(await readFile(path.join(root, "packages/ir/package.json"), "utf8")) as { version: string }).version;
+		expect(status).toContain(suiteVersion);
 		expect(status).toContain("@finos/morphir-mck");
 		expect(status).toContain("private");
 		expect(status).toContain("suite version");

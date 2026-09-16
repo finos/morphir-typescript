@@ -33,12 +33,13 @@ describe("json.read / json.write", () => {
 			ok: false,
 			error: { code: "unsupported_format_version_minor" },
 		});
-		// 4.0.1 is inside this binding's table, so whatever the incomplete library
-		// goes on to fail with, it is not a format-version verdict.
+		// 4.0.1 is inside this binding's table — a later patch of a supported
+		// minor reads, and the release it read is kept whole, not rounded to the
+		// minor floor.
 		const patch = json.read('{ "formatVersion": "4.0.1", "distribution": { "Library": { "packageName": "x" } } }');
-		if (!patch.ok) {
-			expect(["unsupported_format_version_major", "unsupported_format_version_minor"]).not.toContain(patch.error.code);
-		}
+		expect(patch.ok ? "" : patch.error.message).toBe("");
+		expect(patch.ok).toBe(true);
+		if (patch.ok) expect(patch.value.formatVersion).toEqual({ major: 4, minor: 0, patch: 1 });
 		expect(json.read('{ "formatVersion": 5, "distribution": { "Library": { "packageName": "x" } } }')).toMatchObject({
 			ok: false,
 			error: { code: "unsupported_format_version_major" },

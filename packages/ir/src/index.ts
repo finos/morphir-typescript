@@ -11,6 +11,7 @@ export {
 	type Compatibility as SupportTableCompatibility,
 	canonicalSupportTable,
 	compatibility as supportTableCompatibility,
+	DOMAIN_FLOOR,
 	type Interval,
 	parseSupportTable,
 	RELEASE_COMPONENT_MAX,
