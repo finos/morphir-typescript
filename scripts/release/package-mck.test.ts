@@ -36,7 +36,7 @@ function sourceManifest(): Record<string, unknown> {
 		sideEffects: false,
 		publishConfig: { access: "public" },
 		scripts: { typecheck: "tsc -p tsconfig.json" },
-		dependencies: { "@finos/morphir-ir": "workspace:*" },
+		dependencies: { "@finos/morphir-ir": "workspace:*", ajv: "8.20.0" },
 	};
 }
 
@@ -85,8 +85,19 @@ describe("publishMckManifest", () => {
 			exports: exportsMap,
 			bin: binMap,
 			sideEffects: false,
-			files: ["dist", "kit", "kit.lock.json", "protocol.schema.json", "protocol.example.json", "README.md", "LICENSE", "NOTICE"],
-			dependencies: { "@finos/morphir-ir": "0.0.0" },
+			files: [
+				"dist",
+				"kit",
+				"kit.lock.json",
+				"protocol.schema.json",
+				"protocol.example.json",
+				"package-protocol.schema.json",
+				"package-report.schema.json",
+				"README.md",
+				"LICENSE",
+				"NOTICE",
+			],
+			dependencies: { "@finos/morphir-ir": "0.0.0", ajv: "8.20.0" },
 			publishConfig: { access: "public" },
 		});
 		expect(result).not.toHaveProperty("private");
@@ -109,7 +120,7 @@ describe("publishMckManifest", () => {
 	test("rewrites the workspace dependency to the exact suite version", () => {
 		const source = { ...sourceManifest(), version: "1.2.3" };
 
-		expect(publishMckManifest(source).dependencies).toEqual({ "@finos/morphir-ir": "1.2.3" });
+		expect(publishMckManifest(source).dependencies).toEqual({ "@finos/morphir-ir": "1.2.3", ajv: "8.20.0" });
 	});
 
 	test("rejects metadata that does not match the public package contract", () => {
@@ -127,6 +138,8 @@ describe("publishMckManifest", () => {
 
 		const wrongDependencies = { ...sourceManifest(), dependencies: { "@finos/morphir-ir": "^0.0.1" } };
 		expect(() => publishMckManifest(wrongDependencies)).toThrow("dependencies");
+		const missingRuntimeValidator = { ...sourceManifest(), dependencies: { "@finos/morphir-ir": "workspace:*" }, devDependencies: { ajv: "8.20.0" } };
+		expect(() => publishMckManifest(missingRuntimeValidator)).toThrow("dependencies");
 	});
 });
 
@@ -136,7 +149,12 @@ describe("validatePackageFiles", () => {
 		expect(() => validatePackageFiles([kitFile], new Set(), new Set([kitFile]))).not.toThrow();
 		expect(() => validatePackageFiles(["package/kit.lock.json"], new Set(), new Set(["package/kit.lock.json"]))).not.toThrow();
 		// The adapter protocol contract ships so an installed consumer can read it.
-		for (const contract of ["package/protocol.schema.json", "package/protocol.example.json"]) {
+		for (const contract of [
+			"package/protocol.schema.json",
+			"package/protocol.example.json",
+			"package/package-protocol.schema.json",
+			"package/package-report.schema.json",
+		]) {
 			expect(() => validatePackageFiles([contract], new Set(), new Set([contract]))).not.toThrow();
 		}
 
@@ -234,6 +252,8 @@ describe.if(canBuild)("@finos/morphir-mck artifact", () => {
 			"package/kit.lock.json",
 			"package/protocol.schema.json",
 			"package/protocol.example.json",
+			"package/package-protocol.schema.json",
+			"package/package-report.schema.json",
 			"package/kit/spec/ir/mck/types.md",
 			"package/dist/index.js",
 			"package/dist/cli.js",
@@ -255,7 +275,7 @@ describe.if(canBuild)("@finos/morphir-mck artifact", () => {
 
 		const packedManifest = JSON.parse(await Bun.$`tar -xOf ${artifact.tarball} package/package.json`.text());
 		expect(packedManifest).toEqual(publishMckManifest(JSON.parse(await readFile(path.join(root, "packages/mck/package.json"), "utf8"))));
-		expect(packedManifest.dependencies).toEqual({ "@finos/morphir-ir": repositoryVersion });
+		expect(packedManifest.dependencies).toEqual({ "@finos/morphir-ir": repositoryVersion, ajv: "8.20.0" });
 
 		for (const declaration of artifact.files.filter((file) => file.endsWith(".d.ts"))) {
 			const contents = await Bun.$`tar -xOf ${artifact.tarball} ${declaration}`.text();

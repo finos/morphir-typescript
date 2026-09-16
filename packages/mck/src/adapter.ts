@@ -9,8 +9,14 @@
 // protocol defines — and it is the reference every other adapter is checked
 // against.
 import { readLines } from "./lines.ts";
+import { runPackageAdapter } from "./package/adapter.ts";
 import { inProcessTestee } from "./testee/in-process.ts";
 import { ProtocolError, parseEnvelope, parseRequest } from "./testee/protocol.ts";
+
+if (process.argv[2] === "--suite" && process.argv[3] === "package") {
+	await runPackageAdapter();
+	process.exit(0);
+}
 
 const testee = inProcessTestee();
 const out = (o: unknown): void => {
