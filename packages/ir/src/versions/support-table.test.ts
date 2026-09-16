@@ -56,6 +56,14 @@ describe("parseSupportTable", () => {
 		expect(canonicalSupportTable(table("[4.0.0,4.0.4294967295],[4.1.0,4.2.0)"))).toBe("[4.0.0,4.2.0)");
 		expect(canonicalSupportTable(table("[4.0.4294967295],[4.1.0,4.2.0)"))).toBe("[4.0.4294967295,4.2.0)");
 	});
+	// At the patch maximum an exclusive lower bound survives canonicalisation, so
+	// two intervals can share a lower numeral and still start at different
+	// releases. The inclusive one starts earlier, so it has to sort first and its
+	// bound has to survive the merge, in either input order.
+	test("an inclusive lower bound outranks the exclusive spelling of the same release", () => {
+		expect(canonicalSupportTable(table("(4.0.4294967295,4.2.0),[4.0.4294967295]"))).toBe("[4.0.4294967295,4.2.0)");
+		expect(canonicalSupportTable(table("[4.0.4294967295],(4.0.4294967295,4.2.0)"))).toBe("[4.0.4294967295,4.2.0)");
+	});
 	test("a contained interval disappears into the ones around it", () => {
 		expect(canonicalSupportTable(table("[3.0.0,3.5.0),[3.1.0,3.2.0),[3.4.0,4.0.0)"))).toBe("[3.0.0,4.0.0)");
 	});
@@ -97,6 +105,15 @@ describe("render", () => {
 		expect(renderCargo(t)).toEqual(["<=4.0.4294967295", ">=4.2.0"]);
 		expect(renderProse(t)).toBe("4.0.4294967295 and earlier, or 4.2.0 and later");
 		expect(renderProse(table("(4.0.4294967295,4.2.0)"))).toBe("after 4.0.4294967295 up to but not including 4.2.0");
+	});
+	// "4.0.4294967295 and later" would claim the bound itself, which the
+	// exclusive spelling excludes, and there is no upper phrase to carry it.
+	test("an open-ended exclusive lower bound says after, not and later", () => {
+		const t = table("(4.0.4294967295,)");
+		expect(canonicalSupportTable(t)).toBe("(4.0.4294967295,)");
+		expect(renderCargo(t)).toEqual([">4.0.4294967295"]);
+		expect(renderElm(t).ok).toBe(false);
+		expect(renderProse(t)).toBe("after 4.0.4294967295");
 	});
 	// parseSupportTable rejects an interval with no bounds, so this shape can
 	// only be built by hand; the renderers still have to say something true.

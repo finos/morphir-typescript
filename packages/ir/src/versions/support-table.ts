@@ -184,8 +184,40 @@ export function parseSupportTable(text: string): Result<SupportTable, string> {
 	return ok(merged);
 }
 
-function lowerKey(i: Interval): Release {
-	return i.lower ?? DOMAIN_FLOOR;
+/**
+ * The sort key for a lower bound: the first release it actually admits, not the
+ * release it is spelled with. At the patch maximum an exclusive bound survives
+ * canonicalisation, so `(4.0.4294967295,..)` and `[4.0.4294967295,..)` share a
+ * numeral but not a starting release, and only the admitted release orders them.
+ * An absent lower bound reaches down to the domain floor; a bound with no
+ * successor at all admits nothing and sorts last, though `normaliseInterval`
+ * has already rejected that interval as empty.
+ */
+function lowerSortKey(i: Interval): Release | undefined {
+	return smallestAdmitted(i);
+}
+
+function compareLowerBound(a: Interval, b: Interval): number {
+	const ka = lowerSortKey(a);
+	const kb = lowerSortKey(b);
+	if (ka === undefined) return kb === undefined ? 0 : 1;
+	if (kb === undefined) return -1;
+	const c = compareRelease(ka, kb);
+	if (c !== 0) return c;
+	// Same first admitted release: the inclusive spelling comes first, so the
+	// bound the merge keeps is the one that also admits its own numeral.
+	if (a.lowerInclusive === b.lowerInclusive) return 0;
+	return a.lowerInclusive ? -1 : 1;
+}
+
+/**
+ * The lower bound of the union of two touching intervals: the one that admits
+ * the earlier release, and on a tie the more inclusive one. An absent lower
+ * bound is the most inclusive of all, reaching to the domain floor.
+ */
+function lowerMin(a: Interval, b: Interval): Pick<Interval, "lower" | "lowerInclusive"> {
+	if (a.lower === undefined || b.lower === undefined) return { lower: undefined, lowerInclusive: false };
+	return compareLowerBound(a, b) <= 0 ? { lower: a.lower, lowerInclusive: a.lowerInclusive } : { lower: b.lower, lowerInclusive: b.lowerInclusive };
 }
 
 /**
@@ -220,13 +252,13 @@ function merge(intervals: readonly Interval[]): SupportTable {
 	const sorted = [...intervals].sort((a, b) => {
 		if (a.lower === undefined) return b.lower === undefined ? 0 : -1;
 		if (b.lower === undefined) return 1;
-		return compareRelease(lowerKey(a), lowerKey(b));
+		return compareLowerBound(a, b);
 	});
 	const out: Interval[] = [];
 	for (const i of sorted) {
 		const last = out[out.length - 1];
 		if (last !== undefined && touches(last, i)) {
-			out[out.length - 1] = { lower: last.lower, lowerInclusive: last.lowerInclusive, ...upperMax(last, i) };
+			out[out.length - 1] = { ...lowerMin(last, i), ...upperMax(last, i) };
 		} else {
 			out.push(i);
 		}
@@ -314,7 +346,9 @@ export function renderProse(table: SupportTable): string {
 			// better said plainly than interpolated as "earlier than undefined".
 			if (lo === undefined && hi === undefined) return "every release";
 			if (lo === undefined) return i.upperInclusive ? `${hi} and earlier` : `earlier than ${hi}`;
-			if (hi === undefined) return `${lo} and later`;
+			// "and later" would claim `lo` itself, which an exclusive bound
+			// excludes; with no upper bound to lean on, "after" has to say it.
+			if (hi === undefined) return i.lowerInclusive ? `${lo} and later` : `after ${lo}`;
 			const start = i.lowerInclusive ? lo : `after ${lo}`;
 			return i.upperInclusive ? `${start} through ${hi}` : `${start} up to but not including ${hi}`;
 		})
