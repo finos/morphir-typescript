@@ -7,6 +7,13 @@
 // sources reach the IR by relative path inside this repository; both the
 // bundle and the declarations rewrite those paths to the `@finos/morphir-ir`
 // package specifiers the published package depends on.
+//
+// The IR is the only external dependency. The driver's command line is built
+// on @effect/cli, and those packages (declared as devDependencies) are bundled
+// into dist/cli.js rather than published as dependencies: nobody imports the
+// driver entry, and @effect/platform-node would otherwise hand every consumer
+// a dependency tree the library itself never uses. Their sources appear in
+// cli.js.map under a virtual node_modules path.
 
 import { copyFile, mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";

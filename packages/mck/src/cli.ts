@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Command-line entry for @finos/morphir-mck.
+// Command-line entry for @finos/morphir-mck, built on @effect/cli.
 //
 //   mck check <dir> [--json]
 //   mck kit sync <repository-root> [--force]
@@ -7,6 +7,7 @@
 //   mck run [--kit <dir>] [--repo-root <dir>] [--adapter <exe> [--adapter-arg <arg>]...] [--report <file>] [--strict] [--only <regex>] [--timeout <ms>]
 //   mck coverage [--kit <dir>] [--repo-root <dir>]
 //   mck --version
+//   mck --help, mck <command> --help
 //
 // finos/morphir-typescript#1 shipped `check`. #6 adds `kit sync` (vendor the
 // parent repository's kit into packages/mck/kit) and `kit status` (prove the
@@ -16,10 +17,19 @@
 // given; and `coverage` (see the kit README's coverage description), which
 // reports every v4 vocabulary entry (a variant or a member spelling) that no
 // kit case exercises.
+//
+// @effect/cli owns parsing, help, and the rendering of usage errors. The
+// driver keeps the exit codes the README documents: 0 when the command
+// succeeds, 1 when it fails or throws, 2 on a usage error. Each command's
+// handler is a plain function from its parsed input to an exit code, so the
+// Effect surface stays at this file's edges.
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { Args, Command, Options, ValidationError } from "@effect/cli";
+import { NodeContext } from "@effect/platform-node";
+import { Effect, Option, ParseResult, Schema } from "effect";
 import { VOCABULARY } from "../../ir/src/versions/v4/index.ts";
 import { coverageGaps, formatGap } from "./coverage/coverage.ts";
 import { runKit as driveKit, exitCodeFor } from "./driver/run.ts";
@@ -31,27 +41,25 @@ import { formatSummary, writeReport } from "./report.ts";
 import { inProcessTestee, resolveNode } from "./testee/in-process.ts";
 import { processTestee } from "./testee/process.ts";
 
-const USAGE =
-	"usage: mck check <dir> [--json]\n       mck kit sync <repository-root> [--force]\n       mck kit status [--remote]\n       mck run [--kit <dir>] [--repo-root <dir>] [--adapter <exe> [--adapter-arg <arg>]...] [--report <file>] [--strict] [--only <regex>] [--timeout <ms>]\n       mck coverage [--kit <dir>] [--repo-root <dir>]\n       mck --version";
-const KIT_USAGE = "usage: mck kit sync <repository-root> [--force]\n       mck kit status [--remote]";
-const RUN_USAGE =
-	"usage: mck run [--kit <dir>] [--repo-root <dir>] [--adapter <exe> [--adapter-arg <arg>]...] [--report <file>] [--strict] [--only <regex>] [--timeout <ms>]";
-const COVERAGE_USAGE = "usage: mck coverage [--kit <dir>] [--repo-root <dir>]";
+const ROOT_USAGE = "usage: mck <check | run | coverage | kit> [options]; see `mck --help`";
+const KIT_USAGE = "usage: mck kit <sync | status> [options]; see `mck kit --help`";
 
 function packageRoot(): string {
 	// `import.meta.dirname` only exists from Node 20.11; `engines.node` is `>=20`.
 	return process.env.MCK_PACKAGE_ROOT ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 }
 
-async function runCheck(rest: readonly string[]): Promise<number> {
-	const json = rest.includes("--json");
-	const dir = rest.find((a) => !a.startsWith("--"));
-	if (dir === undefined) {
-		console.error(USAGE);
-		return 2;
-	}
-	const kit = await loadKit(path.resolve(dir));
-	if (json) {
+// ---------------------------------------------------------------------------
+// check
+
+interface CheckArgs {
+	readonly dir: string;
+	readonly json: boolean;
+}
+
+async function runCheck(args: CheckArgs): Promise<number> {
+	const kit = await loadKit(path.resolve(args.dir));
+	if (args.json) {
 		console.log(
 			JSON.stringify(
 				{
@@ -70,6 +78,9 @@ async function runCheck(rest: readonly string[]): Promise<number> {
 	return kit.errors.length === 0 ? 0 : 1;
 }
 
+// ---------------------------------------------------------------------------
+// kit sync, kit status
+
 /**
  * True when the package root holds no `kit.lock.json`. `bun build --compile`
  * bundles the sources under a virtual root (`B:/~BUN`) that contains only the
@@ -82,18 +93,17 @@ function compiledWithoutCheckout(): boolean {
 	return !existsSync(path.join(packageRoot(), "kit.lock.json"));
 }
 
-async function runKitSync(rest: readonly string[]): Promise<number> {
+interface KitSyncArgs {
+	readonly repositoryRoot: string;
+	readonly force: boolean;
+}
+
+async function runKitSync(args: KitSyncArgs): Promise<number> {
 	if (compiledWithoutCheckout()) {
 		console.error(`error: kit sync needs a source checkout of @finos/morphir-mck; this binary embeds the kit at finos/morphir ${embeddedKitCommit()}`);
 		return 2;
 	}
-	const force = rest.includes("--force");
-	const repositoryRoot = rest.find((a) => !a.startsWith("--"));
-	if (repositoryRoot === undefined) {
-		console.error(KIT_USAGE);
-		return 2;
-	}
-	const lock = await syncKit(packageRoot(), path.resolve(repositoryRoot), { force });
+	const lock = await syncKit(packageRoot(), path.resolve(args.repositoryRoot), { force: args.force });
 	console.log(`kit synced to ${lock.commit} (${countSyncedFiles(packageRoot())} files, ${lock.contentHash})`);
 	return 0;
 }
@@ -112,7 +122,11 @@ function countSyncedFiles(root: string): number {
 	return count;
 }
 
-function runKitStatus(rest: readonly string[]): number {
+interface KitStatusArgs {
+	readonly remote: boolean;
+}
+
+function runKitStatus(args: KitStatusArgs): number {
 	const root = packageRoot();
 	let commit: string;
 	let code: number;
@@ -130,7 +144,7 @@ function runKitStatus(rest: readonly string[]): number {
 		}
 		code = status.ok ? 0 : 1;
 	}
-	if (rest.includes("--remote")) {
+	if (args.remote) {
 		try {
 			const out = execFileSync("git", ["ls-remote", "https://github.com/finos/morphir", "refs/heads/main"], { encoding: "utf8" }).trim();
 			const remote = out.split(/\s+/)[0] ?? "";
@@ -143,18 +157,8 @@ function runKitStatus(rest: readonly string[]): number {
 	return code;
 }
 
-async function runKitCommand(rest: readonly string[]): Promise<number> {
-	const [sub, ...rest2] = rest;
-	try {
-		if (sub === "sync") return await runKitSync(rest2);
-		if (sub === "status") return runKitStatus(rest2);
-	} catch (error) {
-		console.error(`error: ${(error as Error).message}`);
-		return 1;
-	}
-	console.error(KIT_USAGE);
-	return 2;
-}
+// ---------------------------------------------------------------------------
+// run, coverage
 
 // When `--kit` names a checkout's spec/ir/mck, the repository root three
 // levels up is the natural default for resolving `text` fences that name
@@ -168,27 +172,8 @@ function inferredRoot(kitDirectory: string): string | undefined {
 // `coverage`; both resolve the same way (embedded kit by default, a checkout
 // otherwise, with the repository root inferred from a spec/ir/mck path).
 interface KitArgs {
-	readonly kit?: string;
-	readonly repoRoot?: string;
-}
-
-type ParsedKitArgs = { readonly ok: true; readonly args: KitArgs } | { readonly ok: false };
-
-function parseKitArgs(rest: readonly string[]): ParsedKitArgs {
-	let kit: string | undefined;
-	let repoRoot: string | undefined;
-	for (let i = 0; i < rest.length; i++) {
-		const arg = rest[i];
-		if (arg === "--kit" || arg === "--repo-root") {
-			const value = rest[++i];
-			if (value === undefined) return { ok: false };
-			if (arg === "--kit") kit = value;
-			else repoRoot = value;
-		} else {
-			return { ok: false };
-		}
-	}
-	return { ok: true, args: { kit, repoRoot } };
+	readonly kit: string | undefined;
+	readonly repoRoot: string | undefined;
 }
 
 async function loadKitFor(args: KitArgs): ReturnType<typeof loadKit> {
@@ -197,13 +182,8 @@ async function loadKitFor(args: KitArgs): ReturnType<typeof loadKit> {
 		: loadKit(path.resolve(args.kit), args.repoRoot === undefined ? inferredRoot(path.resolve(args.kit)) : path.resolve(args.repoRoot));
 }
 
-async function runCoverage(rest: readonly string[]): Promise<number> {
-	const parsed = parseKitArgs(rest);
-	if (!parsed.ok) {
-		console.error(COVERAGE_USAGE);
-		return 2;
-	}
-	const kit = await loadKitFor(parsed.args);
+async function runCoverage(args: KitArgs): Promise<number> {
+	const kit = await loadKitFor(args);
 	const gaps = coverageGaps(kit, VOCABULARY, resolveNode);
 	if (gaps.length === 0) {
 		console.log("coverage: every vocabulary entry has a case");
@@ -215,80 +195,17 @@ async function runCoverage(rest: readonly string[]): Promise<number> {
 
 const DEFAULT_TIMEOUT_MS = 30000;
 
-interface RunArgs {
-	readonly kit?: string;
-	readonly repoRoot?: string;
-	readonly adapter?: string;
+interface RunArgs extends KitArgs {
+	readonly adapter: string | undefined;
 	readonly adapterArgs: readonly string[];
-	readonly report?: string;
+	readonly report: string | undefined;
 	readonly strict: boolean;
-	readonly only?: RegExp;
+	readonly only: RegExp | undefined;
 	readonly timeoutMs: number;
 }
 
-type ParsedRunArgs = { readonly ok: true; readonly args: RunArgs } | { readonly ok: false; readonly message?: string };
-
-function parseRunArgs(rest: readonly string[]): ParsedRunArgs {
-	let kit: string | undefined;
-	let repoRoot: string | undefined;
-	let adapter: string | undefined;
-	const adapterArgs: string[] = [];
-	let report: string | undefined;
-	let strict = false;
-	let only: RegExp | undefined;
-	let timeoutMs = DEFAULT_TIMEOUT_MS;
-	for (let i = 0; i < rest.length; i++) {
-		const arg = rest[i];
-		// Every flag below takes an operand; a flag at the end of argv with
-		// nothing after it is a usage error, not a silently-undefined value.
-		if (
-			arg === "--kit" ||
-			arg === "--repo-root" ||
-			arg === "--adapter" ||
-			arg === "--adapter-arg" ||
-			arg === "--report" ||
-			arg === "--only" ||
-			arg === "--timeout"
-		) {
-			const value = rest[++i];
-			if (value === undefined) return { ok: false };
-			if (arg === "--kit") kit = value;
-			else if (arg === "--repo-root") repoRoot = value;
-			else if (arg === "--adapter") adapter = value;
-			else if (arg === "--adapter-arg") adapterArgs.push(value);
-			else if (arg === "--report") report = value;
-			else if (arg === "--only") {
-				try {
-					only = new RegExp(value);
-				} catch (error) {
-					return { ok: false, message: `invalid --only regex: ${(error as Error).message}` };
-				}
-			} else if (arg === "--timeout") {
-				const ms = Number(value);
-				if (!Number.isFinite(ms) || ms <= 0) return { ok: false, message: `invalid --timeout: ${value}` };
-				timeoutMs = ms;
-			}
-		} else if (arg === "--strict") {
-			strict = true;
-		} else {
-			return { ok: false };
-		}
-	}
-	return { ok: true, args: { kit, repoRoot, adapter, adapterArgs, report, strict, only, timeoutMs } };
-}
-
-async function runRun(rest: readonly string[]): Promise<number> {
-	const parsed = parseRunArgs(rest);
-	if (!parsed.ok) {
-		console.error(RUN_USAGE);
-		if (parsed.message !== undefined) console.error(`error: ${parsed.message}`);
-		return 2;
-	}
-	const args = parsed.args;
-	const kit =
-		args.kit === undefined
-			? await loadKitFromFiles(embeddedKitFiles())
-			: await loadKit(path.resolve(args.kit), args.repoRoot === undefined ? inferredRoot(path.resolve(args.kit)) : path.resolve(args.repoRoot));
+async function runRun(args: RunArgs): Promise<number> {
+	const kit = await loadKitFor(args);
 	const kv = args.kit === undefined ? kitVersion(null) : kitVersion(path.resolve(args.kit));
 	const testee = args.adapter === undefined ? inProcessTestee() : processTestee([args.adapter, ...args.adapterArgs], { timeoutMs: args.timeoutMs });
 	try {
@@ -306,39 +223,145 @@ async function runRun(rest: readonly string[]): Promise<number> {
 	}
 }
 
-async function main(argv: readonly string[]): Promise<number> {
-	const [command, ...rest] = argv;
-	if (command === "--version") {
-		console.log(driverVersion());
-		return 0;
-	}
-	if (command === "check") {
-		try {
-			return await runCheck(rest);
-		} catch (error) {
-			console.error(`error: ${(error as Error).message}`);
-			return 1;
-		}
-	}
-	if (command === "kit") return runKitCommand(rest);
-	if (command === "run") {
-		try {
-			return await runRun(rest);
-		} catch (error) {
-			console.error(`error: ${(error as Error).message}`);
-			return 1;
-		}
-	}
-	if (command === "coverage") {
-		try {
-			return await runCoverage(rest);
-		} catch (error) {
-			console.error(`error: ${(error as Error).message}`);
-			return 1;
-		}
-	}
-	console.error(USAGE);
-	return 2;
+// ---------------------------------------------------------------------------
+// Command line
+
+/** A `--only` operand must compile as a JavaScript regular expression. */
+const RegExpFromString = Schema.transformOrFail(Schema.String, Schema.instanceOf(RegExp), {
+	strict: true,
+	decode: (source, _, ast) =>
+		ParseResult.try({
+			try: () => new RegExp(source),
+			catch: (error) => new ParseResult.Type(ast, source, `invalid --only regex: ${(error as Error).message}`),
+		}),
+	encode: (regex) => ParseResult.succeed(regex.source),
+});
+
+/** A `--timeout` operand is a positive number of milliseconds. */
+const PositiveMilliseconds = Schema.Number.pipe(Schema.positive({ message: () => "--timeout must be a positive number of milliseconds" }));
+
+const kitOption = Options.text("kit").pipe(
+	Options.withDescription("Run a checkout's spec/ir/mck instead of the embedded kit."),
+	Options.optional,
+	Options.map(Option.getOrUndefined),
+);
+const repoRootOption = Options.text("repo-root").pipe(
+	Options.withDescription("The repository root that `text` fences resolve against; inferred from a spec/ir/mck --kit path."),
+	Options.optional,
+	Options.map(Option.getOrUndefined),
+);
+
+const check = Command.make(
+	"check",
+	{
+		dir: Args.text({ name: "dir" }).pipe(Args.withDescription("A kit directory to parse.")),
+		json: Options.boolean("json").pipe(Options.withDescription("Print the files, case ids, and errors as JSON.")),
+	},
+	handler(runCheck),
+).pipe(Command.withDescription("Parse a kit directory and report its cases and errors."));
+
+const kitSync = Command.make(
+	"sync",
+	{
+		repositoryRoot: Args.text({ name: "repository-root" }).pipe(Args.withDescription("A finos/morphir checkout to vendor the kit from.")),
+		force: Options.boolean("force").pipe(Options.withDescription("Sync even when the checkout is older than the pinned commit.")),
+	},
+	handler(runKitSync),
+).pipe(Command.withDescription("Vendor the parent repository's kit into this package."));
+
+const kitStatusCommand = Command.make(
+	"status",
+	{ remote: Options.boolean("remote").pipe(Options.withDescription("Also compare the pinned commit with finos/morphir origin/main.")) },
+	handler(runKitStatus),
+).pipe(Command.withDescription("Prove the vendored kit still matches kit.lock.json."));
+
+const kit = Command.make("kit", {}, usageError(KIT_USAGE)).pipe(
+	Command.withDescription("Manage the vendored kit."),
+	Command.withSubcommands([kitSync, kitStatusCommand]),
+);
+
+const run = Command.make(
+	"run",
+	{
+		kit: kitOption,
+		repoRoot: repoRootOption,
+		adapter: Options.text("adapter").pipe(
+			Options.withDescription("Run the kit through this adapter executable instead of the in-process TypeScript binding."),
+			Options.optional,
+			Options.map(Option.getOrUndefined),
+		),
+		adapterArgs: Options.text("adapter-arg").pipe(Options.withDescription("An argument for the adapter executable; repeatable."), Options.repeated),
+		report: Options.text("report").pipe(
+			Options.withDescription("Write the conformance report to this file."),
+			Options.optional,
+			Options.map(Option.getOrUndefined),
+		),
+		strict: Options.boolean("strict").pipe(Options.withDescription("Also fail the run on skipped records.")),
+		only: Options.text("only").pipe(
+			Options.withDescription("Run only the cases whose id matches this regular expression."),
+			Options.withSchema(RegExpFromString),
+			Options.optional,
+			Options.map(Option.getOrUndefined),
+		),
+		timeoutMs: Options.integer("timeout").pipe(
+			Options.withDescription("Milliseconds to wait for an adapter answer."),
+			Options.withSchema(PositiveMilliseconds),
+			Options.withDefault(DEFAULT_TIMEOUT_MS),
+		),
+	},
+	handler(runRun),
+).pipe(Command.withDescription("Run the kit against a binding and write a conformance report."));
+
+const coverage = Command.make("coverage", { kit: kitOption, repoRoot: repoRootOption }, handler(runCoverage)).pipe(
+	Command.withDescription("Report every v4 vocabulary entry that no kit case exercises."),
+);
+
+const mck = Command.make("mck", {}, usageError(ROOT_USAGE)).pipe(
+	Command.withDescription("The Morphir Compatibility Kit driver."),
+	Command.withSubcommands([check, run, coverage, kit]),
+);
+
+/**
+ * Wraps a command's plain handler: the exit code it returns becomes the
+ * process's, and anything it throws becomes the runner's `error:` line.
+ */
+function handler<A>(command: (args: A) => number | Promise<number>): (args: A) => Effect.Effect<void, Error> {
+	return (args) =>
+		Effect.tryPromise({
+			try: async () => {
+				process.exitCode = await command(args);
+			},
+			catch: (error) => (error instanceof Error ? error : new Error(String(error))),
+		});
 }
 
-process.exit(await main(process.argv.slice(2)));
+/** A parent command given no subcommand is a usage error, like any other. */
+function usageError(usage: string): () => Effect.Effect<void> {
+	return () =>
+		Effect.sync(() => {
+			console.error(usage);
+			process.exitCode = 2;
+		});
+}
+
+const cli = Command.run(mck, { name: "mck", version: driverVersion() });
+
+// @effect/cli prints a usage error before failing with it; a thrown error is
+// ours to report. Both land on the exit codes the README documents.
+const program = cli(process.argv).pipe(
+	Effect.catchIf(ValidationError.isValidationError, () =>
+		Effect.sync(() => {
+			process.exitCode = 2;
+		}),
+	),
+	Effect.catchAll((error) =>
+		Effect.sync(() => {
+			console.error(`error: ${error.message}`);
+			process.exitCode = 1;
+		}),
+	),
+	Effect.provide(NodeContext.layer),
+);
+
+await Effect.runPromise(program);
+process.exit(process.exitCode ?? 0);

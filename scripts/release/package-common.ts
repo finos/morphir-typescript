@@ -90,12 +90,29 @@ export function canonicalSourceMapFor(
 		}
 		const relative = path.relative(sourceRoot, resolvedSource);
 		if (relative === "" || relative.startsWith(`..${path.sep}`) || relative === ".." || path.isAbsolute(relative)) {
-			throw new Error(`${mapFile} source resolves outside ${identity.sourceLabel}: ${source}`);
+			const bundled = bundledDependencySource(resolvedSource);
+			if (bundled === undefined) throw new Error(`${mapFile} source resolves outside ${identity.sourceLabel}: ${source}`);
+			return `${identity.scheme}:///node_modules/${bundled}`;
 		}
 		const prefix = identity.virtualDirectory === "" ? "" : `${identity.virtualDirectory}/`;
 		return `${identity.scheme}:///${prefix}${relative.split(path.sep).join("/")}`;
 	});
 	return `${JSON.stringify({ ...parsed, sources })}\n`;
+}
+
+/**
+ * A bundled dependency's path inside its package: the part of a real path
+ * after its last `node_modules` segment, so Bun's store layout
+ * `node_modules/.bun/effect@3.22.2/node_modules/effect/dist/esm/Function.js`
+ * becomes `effect/dist/esm/Function.js`. Undefined for a path under no
+ * `node_modules` at all, which the canonicalizer still rejects: a bundle may
+ * carry the package's own sources and its dependencies, nothing else.
+ */
+function bundledDependencySource(realPath: string): string | undefined {
+	const segments = realPath.split(path.sep);
+	const last = segments.lastIndexOf("node_modules");
+	if (last === -1 || last === segments.length - 1) return undefined;
+	return segments.slice(last + 1).join("/");
 }
 
 export type CanonicalSourceMap = (contents: string, mapFile: string, packageSourceRoot: string, sourceBase?: string) => string;

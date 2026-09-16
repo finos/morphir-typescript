@@ -26,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - `@finos/morphir-ir` now depends on `yaml`.
 - A document tree's `deps/<pkg path>/…` directories now carry an `@<version>` segment right after the package path, so a dependency's directory can never be a prefix of another's (decision 0015).
+- The `mck` command line is built on `@effect/cli`: `--help` documents every command and flag, and usage errors are rendered by the library. Exit codes are unchanged (0 ok, 1 failure, 2 usage error). The command-line dependencies are bundled into the driver entry, so the published package's dependencies are unchanged.
 
 ## [0.0.1] - 2026-09-05
 
