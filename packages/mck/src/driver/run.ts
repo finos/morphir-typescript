@@ -6,6 +6,9 @@
 // and strings are compared. What a binding cannot do is a capabilities
 // question, so a fence the binding declared no support for is skipped, never
 // failed.
+// The relative specifier is the one in-process.ts explains; the packaging step
+// rewrites it to "@finos/morphir-ir".
+import { parseSupportTable, renderProse } from "../../../ir/src/index.ts";
 import type { KitCase, KitFence } from "../kit/case.ts";
 import { setLabel, setOf } from "../kit/info-string.ts";
 import type { Kit } from "../kit/load.ts";
@@ -106,10 +109,17 @@ export async function runKit(kit: Kit, testee: Testee, options: RunOptions): Pro
 	let caps: Capabilities | null = null;
 	let dead: string | null = null; // the protocol error that ended the conversation
 	const records: ReportRecord[] = [];
-	let header = { binding: "unknown", language: "unknown", driverVersion: options.driverVersion, kitVersion: options.kitVersion };
+	// `unknown` for formatVersions is the report schema's own word for an
+	// adapter that never answered capabilities: a table it cannot be, and a
+	// report that is still valid to write and visibly wrong to read.
+	let header = { binding: "unknown", language: "unknown", formatVersions: "unknown", driverVersion: options.driverVersion, kitVersion: options.kitVersion };
 	try {
 		caps = parseCapabilities(await testee.capabilities());
-		header = { ...header, binding: caps.binding, language: caps.language };
+		header = { ...header, binding: caps.binding, language: caps.language, formatVersions: caps.formatVersions };
+		// Said once, at the head of the run: which IR releases the binding under
+		// test claims, in its own notation and in words.
+		const table = parseSupportTable(caps.formatVersions);
+		if (table.ok) console.error(`${caps.binding} supports IR format versions ${caps.formatVersions} (${renderProse(table.value)})`);
 	} catch (error) {
 		dead = error instanceof Error ? error.message : String(error);
 	}

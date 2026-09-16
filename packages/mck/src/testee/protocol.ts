@@ -8,6 +8,11 @@
 // Every guard below rejects unknown fields, matching protocol.schema.json's
 // additionalProperties: false; the contract extends only through
 // contractVersion, never through an added-but-ignored key.
+// The support table vocabulary lives in the IR package, not here: the driver
+// and the bindings must agree on one parser, one canonical spelling and one
+// containment rule. The relative specifier is the one in-process.ts explains;
+// the packaging step rewrites it to "@finos/morphir-ir".
+import { canonicalSupportTable, parseSupportTable, type Release, type SupportTable, supportTableCompatibility } from "../../../ir/src/index.ts";
 import type { Capabilities, DecodeResponse, Layout, PathMode, Profile, Request, TreeFile, Warning, WriteTreeResponse } from "./testee.ts";
 
 export class ProtocolError extends Error {
@@ -63,10 +68,21 @@ export function parseEnvelope(line: string): { readonly id: number; readonly bod
 	return { id: id as number, body };
 }
 
+/**
+ * Does the table hold any release of `major`? Asked through `compatibility`,
+ * which answers `unsupported_format_version_major` exactly when no interval
+ * contains a release of that major family — so `[3.0.0,4.0.0)` does not touch
+ * major 4, and the domain floor of 3.0.0 means no table touches major 2.
+ */
+function touchesMajor(table: SupportTable, major: number): boolean {
+	const familyStart: Release = { major, minor: 0, patch: 0 };
+	return supportTableCompatibility(table, familyStart) !== "unsupported_format_version_major";
+}
+
 export function parseCapabilities(v: unknown): Capabilities {
 	need(isRecord(v), "capabilities must be an object", v);
 	const o = v as Record<string, unknown>;
-	knownKeys(o, ["contractVersion", "binding", "language", "versions", "profiles", "layouts", "paths", "nodes"]);
+	knownKeys(o, ["contractVersion", "binding", "language", "formatVersions", "versions", "profiles", "layouts", "paths", "nodes"]);
 	need(o.contractVersion === 1, `unsupported contractVersion ${JSON.stringify(o.contractVersion)}; this driver speaks 1`, o);
 	const versions = o.versions;
 	need(Array.isArray(versions) && versions.every((n) => Number.isInteger(n) && (n as number) > 0), '"versions" must be positive integers', versions);
@@ -79,10 +95,37 @@ export function parseCapabilities(v: unknown): Capabilities {
 	need(binding.length > 0, '"binding" must be a non-empty string', binding);
 	const language = str(o, "language");
 	need(language.length > 0, '"language" must be a non-empty string', language);
+	// "formatVersions" and "versions" describe one thing — the releases this
+	// binding accepts — at two grains, so the driver refuses a pair that
+	// disagrees rather than choosing which one to believe. Only the canonical
+	// spelling goes on the wire, so two adapters claiming the same releases
+	// send the same string and a report can be compared by equality.
+	const formatVersions = str(o, "formatVersions");
+	const parsed = parseSupportTable(formatVersions);
+	need(parsed.ok, `"formatVersions" ${JSON.stringify(formatVersions)} is not a support table${parsed.ok ? "" : `: ${parsed.error}`}`, formatVersions);
+	const table = (parsed as { readonly ok: true; readonly value: SupportTable }).value;
+	const canonical = canonicalSupportTable(table);
+	need(
+		canonical === formatVersions,
+		`"formatVersions" must be canonical: got ${JSON.stringify(formatVersions)}, expected ${JSON.stringify(canonical)}`,
+		formatVersions,
+	);
+	const majors = versions as number[];
+	for (const major of majors)
+		need(touchesMajor(table, major), `"versions" lists ${major} but "formatVersions" ${JSON.stringify(formatVersions)} has no release of that major`, major);
+	// The converse, for bounded intervals only: an unbounded interval reaches
+	// majors that do not exist yet, which no "versions" list can enumerate.
+	for (const i of table) {
+		if (i.lower === undefined || i.upper === undefined) continue;
+		for (let major = i.lower.major; major <= i.upper.major; major += 1)
+			if (touchesMajor([i], major))
+				need(majors.includes(major), `"formatVersions" ${JSON.stringify(formatVersions)} touches major ${major} but "versions" does not list it`, major);
+	}
 	return {
 		contractVersion: 1,
 		binding,
 		language,
+		formatVersions,
 		versions: versions as number[],
 		profiles: list(o, "profiles", PROFILES),
 		layouts: list(o, "layouts", LAYOUTS),

@@ -14,6 +14,13 @@ export interface Capabilities {
 	readonly contractVersion: 1;
 	readonly binding: string;
 	readonly language: string;
+	/**
+	 * The IR format releases this binding accepts, as a support table in
+	 * canonical interval notation (e.g. `[4.0.0,4.1.0)`). See
+	 * docs/spec/ir/format-version.md, "Recognition and compatibility"; only the
+	 * canonical spelling is on the wire.
+	 */
+	readonly formatVersions: string;
 	readonly versions: readonly number[];
 	readonly profiles: readonly Profile[];
 	readonly layouts: readonly Layout[];

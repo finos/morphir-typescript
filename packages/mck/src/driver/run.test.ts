@@ -17,6 +17,7 @@ const FULL_CAPS: Capabilities = {
 	contractVersion: 1,
 	binding: "scripted",
 	language: "scripted",
+	formatVersions: "[4.0.0,4.1.0)",
 	versions: [4],
 	profiles: ["json"],
 	layouts: ["single"],
@@ -342,7 +343,15 @@ describe("runKit", () => {
 	});
 
 	test("13. exitCodeFor", () => {
-		const base = { contractVersion: 1 as const, binding: "b", language: "l", driverVersion: "d", kitVersion: "k", startedAt: new Date().toISOString() };
+		const base = {
+			contractVersion: 1 as const,
+			binding: "b",
+			language: "l",
+			formatVersions: "[4.0.0,4.1.0)",
+			driverVersion: "d",
+			kitVersion: "k",
+			startedAt: new Date().toISOString(),
+		};
 		const passOnly = {
 			...base,
 			records: [

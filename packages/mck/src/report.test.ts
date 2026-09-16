@@ -7,8 +7,15 @@ import path from "node:path";
 import { emptyReport, formatSummary, type Report, type ReportRecord, summarize, writeReport } from "./report.ts";
 
 test("emptyReport is a valid report skeleton", () => {
-	const report: Report = emptyReport({ binding: "morphir-typescript", language: "typescript", driverVersion: "0.0.0", kitVersion: "test" });
+	const report: Report = emptyReport({
+		binding: "morphir-typescript",
+		language: "typescript",
+		formatVersions: "[4.0.0,4.1.0)",
+		driverVersion: "0.0.0",
+		kitVersion: "test",
+	});
 	expect(report.contractVersion).toBe(1);
+	expect(report.formatVersions).toBe("[4.0.0,4.1.0)");
 	expect(report.records).toEqual([]);
 	expect(() => new Date(report.startedAt).toISOString()).not.toThrow();
 });
@@ -30,14 +37,20 @@ const threeRecords: readonly ReportRecord[] = [
 
 describe("summarize", () => {
 	test("counts each result", () => {
-		const report = { ...emptyReport({ binding: "b", language: "l", driverVersion: "d", kitVersion: "k" }), records: threeRecords };
+		const report = {
+			...emptyReport({ binding: "b", language: "l", formatVersions: "[4.0.0,4.1.0)", driverVersion: "d", kitVersion: "k" }),
+			records: threeRecords,
+		};
 		expect(summarize(report)).toEqual({ pass: 1, fail: 1, kitError: 0, skipped: 1 });
 	});
 });
 
 describe("formatSummary", () => {
 	test("formats the summary line", () => {
-		const report = { ...emptyReport({ binding: "b", language: "l", driverVersion: "d", kitVersion: "k" }), records: threeRecords };
+		const report = {
+			...emptyReport({ binding: "b", language: "l", formatVersions: "[4.0.0,4.1.0)", driverVersion: "d", kitVersion: "k" }),
+			records: threeRecords,
+		};
 		expect(formatSummary(report)).toBe("1 pass, 1 fail, 0 kit-error, 1 skipped");
 	});
 });
@@ -52,7 +65,10 @@ describe("writeReport", () => {
 		const d = mkdtempSync(path.join(tmpdir(), "mck-report-"));
 		dirs.push(d);
 		const file = path.join(d, "nested", "out.json");
-		const report = { ...emptyReport({ binding: "b", language: "l", driverVersion: "d", kitVersion: "k" }), records: threeRecords };
+		const report = {
+			...emptyReport({ binding: "b", language: "l", formatVersions: "[4.0.0,4.1.0)", driverVersion: "d", kitVersion: "k" }),
+			records: threeRecords,
+		};
 		writeReport(report, file);
 		const raw = readFileSync(file, "utf8");
 		expect(raw.endsWith("\n")).toBe(true);

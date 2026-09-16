@@ -129,6 +129,47 @@ test("parseCapabilities rejects an empty language", () => {
 	expect(schemaVerdict("Capabilities", capabilities)).not.toBe(true);
 });
 
+// --- formatVersions: the binding's support table ---
+//
+// The table is the adapter's own statement of which IR releases it accepts, so
+// the driver holds it to the canonical spelling and to agreeing with
+// `versions`: two fields describing one thing must not disagree.
+
+test("parseCapabilities rejects capabilities without formatVersions", () => {
+	expect(() => parseCapabilities(body(withoutKey(response(1), "formatVersions")))).toThrow('"formatVersions" must be a string');
+});
+
+test("parseCapabilities rejects a non-canonical formatVersions", () => {
+	expect(() => parseCapabilities(body(capabilitiesWith({ formatVersions: "[4.0.0,4.1.0]" })))).toThrow("canonical");
+});
+
+test("parseCapabilities rejects a formatVersions that is not a support table at all", () => {
+	expect(() => parseCapabilities(body(capabilitiesWith({ formatVersions: "not a table" })))).toThrow('"formatVersions" "not a table" is not a support table');
+});
+
+test("parseCapabilities rejects a formatVersions holding no release of a listed version", () => {
+	expect(() => parseCapabilities(body(capabilitiesWith({ formatVersions: "[3.0.0,3.1.0)", versions: [4] })))).toThrow("versions");
+});
+
+test("parseCapabilities rejects a formatVersions touching a major that versions does not list", () => {
+	expect(() => parseCapabilities(body(capabilitiesWith({ formatVersions: "[3.0.0,3.1.0),[4.0.0,4.1.0)", versions: [4] })))).toThrow(
+		'"formatVersions" "[3.0.0,3.1.0),[4.0.0,4.1.0)" touches major 3 but "versions" does not list it',
+	);
+});
+
+test("parseCapabilities accepts a canonical formatVersions agreeing with versions", () => {
+	const parsed = parseCapabilities(body(capabilitiesWith({ formatVersions: "[4.0.0,4.1.0)", versions: [4] })));
+	expect(parsed.formatVersions).toBe("[4.0.0,4.1.0)");
+});
+
+// An unbounded interval names no upper major, so it is exempt from the
+// "touches a major versions does not list" rule: `[4.0.0,)` reaches every
+// later major by construction and the adapter cannot enumerate them.
+test("parseCapabilities accepts an unbounded formatVersions", () => {
+	const parsed = parseCapabilities(body(capabilitiesWith({ formatVersions: "[4.0.0,)", versions: [4] })));
+	expect(parsed.formatVersions).toBe("[4.0.0,)");
+});
+
 // --- parseDecodeResponse ---
 
 test("parseDecodeResponse accepts the example ok:true decode response", () => {
@@ -350,6 +391,7 @@ const NEGATIVES: readonly Negative[] = [
 	{ what: "capabilities with an unknown profile", definition: "Capabilities", message: capabilitiesWith({ profiles: ["xml"] }), guard: parseCapabilities },
 	{ what: "capabilities with an extra field", definition: "Capabilities", message: capabilitiesWith({ extra: true }), guard: parseCapabilities },
 	{ what: "capabilities without nodes", definition: "Capabilities", message: withoutKey(response(1), "nodes"), guard: parseCapabilities },
+	{ what: "capabilities without formatVersions", definition: "Capabilities", message: withoutKey(response(1), "formatVersions"), guard: parseCapabilities },
 	{ what: "capabilities with a non-string node", definition: "Capabilities", message: capabilitiesWith({ nodes: ["Type", 42] }), guard: parseCapabilities },
 	{ what: "capabilities with no nodes at all", definition: "Capabilities", message: capabilitiesWith({ nodes: [] }), guard: parseCapabilities },
 	{ what: "a decode response without warnings", definition: "DecodeResponse", message: withoutKey(response(2, 0), "warnings"), guard: parseDecodeResponse },

@@ -43,13 +43,18 @@ export interface Report {
 	readonly contractVersion: 1;
 	readonly binding: string;
 	readonly language: string;
+	/**
+	 * The support table the adapter declared in capabilities, canonical, or
+	 * `unknown` when the adapter never answered capabilities at all.
+	 */
+	readonly formatVersions: string;
 	readonly driverVersion: string;
 	readonly kitVersion: string;
 	readonly startedAt: string;
 	readonly records: readonly ReportRecord[];
 }
 
-export function emptyReport(header: Pick<Report, "binding" | "language" | "driverVersion" | "kitVersion">): Report {
+export function emptyReport(header: Pick<Report, "binding" | "language" | "formatVersions" | "driverVersion" | "kitVersion">): Report {
 	return { contractVersion: 1, ...header, startedAt: new Date().toISOString(), records: [] };
 }
 

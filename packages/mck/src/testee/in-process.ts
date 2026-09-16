@@ -57,6 +57,10 @@ export const IN_PROCESS_CAPABILITIES: Capabilities = {
 	contractVersion: 1,
 	binding: "morphir-typescript",
 	language: "typescript",
+	// The releases the v4 reader actually accepts: `SUPPORT_TABLE_TEXT` in
+	// versions/v4/read-distribution.ts, which is not one of the entry points
+	// this file may name, so the canonical spelling is repeated here.
+	formatVersions: "[4.0.0,4.1.0)",
 	versions: [4],
 	profiles: ["json", "yaml"],
 	layouts: ["single", "tree"],
