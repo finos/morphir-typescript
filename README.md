@@ -9,7 +9,7 @@ Morphir captures business logic and domain models as language-independent data s
 
 ## Project status
 
-`@finos/morphir-ir` is published to public npm at `0.0.1`. `@finos/morphir-mck` publishes with the next suite release, whichever version `mise run release:prepare` assigns. The root workspace stays private and is never published. Every workspace uses the same repository-wide suite version, including packages that are not part of a given release, and the manifests read the last released version until release preparation bumps them.
+Both packages are published to public npm at suite version `0.1.0`. The root workspace stays private and is never published. Every workspace uses the same repository-wide suite version, including packages that are not part of a given release, and the manifests read the last released version until release preparation bumps them.
 
 The Morphir Compatibility Kit is vendored into `packages/mck/kit`, so `mise run check:conformance` runs the full kit in a standalone clone with no upstream checkout. Two corpora are still not vendored: the naming and format-version conformance fixtures, which live only in `finos/morphir` at `docs/spec/ir/fixtures/`. `mise run test` therefore sets `MORPHIR_FIXTURES_OPTIONAL=1`, which makes those two corpora — and nothing else — optional when they are absent. That opt-out goes away once they are vendored too.
 
@@ -17,8 +17,8 @@ The Morphir Compatibility Kit is vendored into `packages/mck/kit`, so `mise run 
 
 | Package | Publication | Purpose |
 | --- | --- | --- |
-| `@finos/morphir-ir` | Published to public npm at `0.0.1` | Generic Morphir IR semantic types, pinned v4 types, JSON readers and canonical writers, diagnostics, and attribute mapping. |
-| `@finos/morphir-mck` | Published with the next suite release | MCK Markdown case parser, kit loader, structural checker, the `mck` driver and its reference adapter, and the report model. Ships the vendored kit. |
+| `@finos/morphir-ir` | Published to public npm at `0.1.0` | Generic Morphir IR semantic types, pinned v4 types, JSON readers and canonical writers, diagnostics, and attribute mapping. |
+| `@finos/morphir-mck` | Published to public npm at `0.1.0` | MCK Markdown case parser, kit loader, structural checker, the `mck` driver and its reference adapter, and the report model. Ships the vendored kit. |
 
 ## Morphir specifications
 
@@ -101,7 +101,7 @@ Add `--json` for machine-readable output.
 
 ### Check a binding's conformance with `mck`
 
-`mck` is the driver for the Morphir Compatibility Kit: it runs a binding's decoder and structural checker against every kit case and reports pass, fail, or skip per fence, including JSON, YAML, and document-tree fences. Install it as the `mck` binary from `@finos/morphir-mck` (`npm install -g @finos/morphir-mck`, or `npx @finos/morphir-mck`), or download the standalone `mck` binary from a [release](https://github.com/finos/morphir-typescript/releases). `mck run` checks the in-process TypeScript binding against the kit vendored in the package; `mck run --adapter <exe> [--adapter-arg <arg>]...` runs the same kit against any binding that speaks the adapter's JSON-lines protocol (see `mck-adapter-typescript` for the reference implementation) as a child process; `mck coverage` reports every IR v4 vocabulary entry the kit does not yet exercise. Over the embedded kit, `mck run` reports `620 pass, 0 fail, 0 kit-error, 2 skipped` — the two skips are the kit's version-3 fences, which this binding's capabilities do not name.
+`mck` is the driver for the Morphir Compatibility Kit: it runs a binding's decoder and structural checker against every kit case and reports pass, fail, or skip per fence, including JSON, YAML, and document-tree fences. Install it as the `mck` binary from `@finos/morphir-mck` (`npm install -g @finos/morphir-mck`, or `npx -p @finos/morphir-mck mck` since the package ships two binaries), or download the standalone `mck` binary from a [release](https://github.com/finos/morphir-typescript/releases). `mck run` checks the in-process TypeScript binding against the kit vendored in the package; `mck run --adapter <exe> [--adapter-arg <arg>]...` runs the same kit against any binding that speaks the adapter's JSON-lines protocol (see `mck-adapter-typescript` for the reference implementation) as a child process; `mck coverage` reports every IR v4 vocabulary entry the kit does not yet exercise. Over the embedded kit, `mck run` reports `620 pass, 0 fail, 0 kit-error, 2 skipped` — the two skips are the kit's version-3 fences, which this binding's capabilities do not name.
 
 ## Development
 
