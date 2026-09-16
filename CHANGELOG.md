@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-16
+
 ### Added
 
 - The `mck` driver and its adapter protocol (contract version 1) for running the Morphir Compatibility Kit against a binding, in-process or over a child-process adapter.
@@ -37,5 +39,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Public entry points for the current version, generic model, v4 model, and JSON value codec.
 - Tag-driven npm publishing with separated artifact and publish jobs.
 
-[Unreleased]: https://github.com/finos/morphir-typescript/compare/v0.0.1...HEAD
+[Unreleased]: https://github.com/finos/morphir-typescript/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/finos/morphir-typescript/compare/v0.0.1...v0.1.0
 [0.0.1]: https://github.com/finos/morphir-typescript/releases/tag/v0.0.1
