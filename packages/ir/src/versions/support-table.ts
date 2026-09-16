@@ -28,6 +28,13 @@ export type Compatibility = "supported" | "unsupported_format_version_major" | "
 
 const COMPONENT = /^(0|[1-9][0-9]*)$/;
 
+/**
+ * The smallest release the domain has. `parseRelease` refuses a bound below
+ * major 3, so an absent lower bound admits from here and not from 0.0.0: a
+ * table is a set of releases the contract can name, and it names none earlier.
+ */
+const DOMAIN_FLOOR: Release = { major: 3, minor: 0, patch: 0 };
+
 export function compareRelease(a: Release, b: Release): number {
 	if (a.major !== b.major) return a.major < b.major ? -1 : 1;
 	if (a.minor !== b.minor) return a.minor < b.minor ? -1 : 1;
@@ -75,7 +82,7 @@ function successor(r: Release): Release | undefined {
 
 /** The smallest release an interval's lower bound admits, or undefined when there is none. */
 function smallestAdmitted(i: Interval): Release | undefined {
-	if (i.lower === undefined) return { major: 0, minor: 0, patch: 0 };
+	if (i.lower === undefined) return DOMAIN_FLOOR;
 	return i.lowerInclusive ? i.lower : successor(i.lower);
 }
 
@@ -167,21 +174,39 @@ export function parseSupportTable(text: string): Result<SupportTable, string> {
 		first = false;
 	}
 	if (intervals.length === 0) return err("a support table needs at least one interval");
-	return ok(merge(intervals));
+	const merged = merge(intervals);
+	// Each interval is bounded on at least one side, but two of them can cover
+	// each other's open side and merge into the interval with no bounds at all.
+	// That has no spelling the grammar accepts, and a table that excludes no
+	// release is not a support claim, so it is rejected here rather than written.
+	if (merged.some((i) => i.lower === undefined && i.upper === undefined))
+		return err(`"${text}": the table admits every release; a support table must exclude some release`);
+	return ok(merged);
 }
 
 function lowerKey(i: Interval): Release {
-	return i.lower ?? { major: 0, minor: 0, patch: 0 };
+	return i.lower ?? DOMAIN_FLOOR;
 }
 
-/** Does `a`'s upper reach `b`'s lower (overlap or adjacency)? Both are normalised. */
+/**
+ * Does `a`'s upper reach `b`'s lower (overlap or adjacency)? Both are normalised.
+ *
+ * Adjacency is a question about the release set, not about the numerals, so it
+ * asks `successor` the way emptiness does: nothing lies between 4.0.4294967295
+ * and 4.1.0, so `[4.0.0,4.0.4294967295]` and `[4.1.0,4.2.0)` are adjacent and
+ * merge. Without that, one release set would have two canonical spellings.
+ */
 function touches(a: Interval, b: Interval): boolean {
 	if (a.upper === undefined || b.lower === undefined) return true;
 	const c = compareRelease(b.lower, a.upper);
 	if (c < 0) return true;
-	if (c > 0) return false;
 	// equal: [x,y) then [y,..) is adjacent; [x,y] then [y,..) overlaps; (y,..) after ..,y] is adjacent
-	return a.upperInclusive || b.lowerInclusive;
+	if (c === 0) return a.upperInclusive || b.lowerInclusive;
+	// Above a's upper: an exclusive upper already stops short of its own bound,
+	// so only an inclusive one can still be adjacent, and only to its successor.
+	if (!a.upperInclusive) return false;
+	const s = successor(a.upper);
+	return s !== undefined && compareRelease(b.lower, s) <= 0;
 }
 
 function upperMax(a: Interval, b: Interval): Pick<Interval, "upper" | "upperInclusive"> {
@@ -255,6 +280,10 @@ export function compatibility(table: SupportTable, release: Release): Compatibil
 
 export function renderCargo(table: SupportTable): readonly string[] {
 	return table.map((i) => {
+		// Defensive: `parseSupportTable` rejects a bounds-free interval, so this
+		// is unreachable from parsed input. An empty comparator set would read as
+		// "any version" by accident, so say it on purpose or not at all.
+		if (i.lower === undefined && i.upper === undefined) return "*";
 		const parts: string[] = [];
 		if (i.lower !== undefined) parts.push(`${i.lowerInclusive ? ">=" : ">"}${releaseString(i.lower)}`);
 		if (i.upper !== undefined) parts.push(`${i.upperInclusive ? "<=" : "<"}${releaseString(i.upper)}`);
@@ -277,6 +306,9 @@ export function renderProse(table: SupportTable): string {
 		.map((i) => {
 			const lo = i.lower === undefined ? undefined : releaseString(i.lower);
 			const hi = i.upper === undefined ? undefined : releaseString(i.upper);
+			// Defensive, as in renderCargo: unreachable from parsed input, and
+			// better said plainly than interpolated as "earlier than undefined".
+			if (lo === undefined && hi === undefined) return "every release";
 			if (lo === undefined) return i.upperInclusive ? `${hi} and earlier` : `earlier than ${hi}`;
 			if (hi === undefined) return `${lo} and later`;
 			const start = i.lowerInclusive ? lo : `after ${lo}`;

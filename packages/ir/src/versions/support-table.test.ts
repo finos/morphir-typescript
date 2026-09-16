@@ -40,6 +40,25 @@ describe("parseSupportTable", () => {
 		expect(parseSupportTable("(4.0.4294967295,4.1.0)").ok).toBe(false);
 		expect(canonicalSupportTable(table("(4.0.4294967295,4.2.0)"))).toBe("(4.0.4294967295,4.2.0)");
 	});
+	test("a table that excludes no release is an error naming the input", () => {
+		const r = parseSupportTable("(,4.0.0),[3.0.0,)");
+		expect(r.ok).toBe(false);
+		if (!r.ok) expect(r.error).toContain("(,4.0.0),[3.0.0,)");
+	});
+	test("nothing below the domain floor, so an interval that ends at it is empty", () => {
+		expect(parseSupportTable("(,3.0.0)").ok).toBe(false);
+		expect(canonicalSupportTable(table("(,3.0.1)"))).toBe("(,3.0.1)");
+	});
+	test("an exact release at the patch maximum keeps both brackets", () => {
+		expect(canonicalSupportTable(table("[4.0.4294967295]"))).toBe("[4.0.4294967295,4.0.4294967295]");
+	});
+	test("intervals adjacent across the patch maximum merge", () => {
+		expect(canonicalSupportTable(table("[4.0.0,4.0.4294967295],[4.1.0,4.2.0)"))).toBe("[4.0.0,4.2.0)");
+		expect(canonicalSupportTable(table("[4.0.4294967295],[4.1.0,4.2.0)"))).toBe("[4.0.4294967295,4.2.0)");
+	});
+	test("a contained interval disappears into the ones around it", () => {
+		expect(canonicalSupportTable(table("[3.0.0,3.5.0),[3.1.0,3.2.0),[3.4.0,4.0.0)"))).toBe("[3.0.0,4.0.0)");
+	});
 });
 
 describe("compatibility", () => {
@@ -66,6 +85,20 @@ describe("render", () => {
 	test("elm refuses an unbounded interval", () => {
 		expect(renderElm(table("[4.0.0,)")).ok).toBe(false);
 	});
+	test("the one-sided and inclusive-upper spellings", () => {
+		const t = table("(,4.0.4294967295],[4.2.0,)");
+		expect(canonicalSupportTable(t)).toBe("(,4.0.4294967295],[4.2.0,)");
+		expect(renderCargo(t)).toEqual(["<=4.0.4294967295", ">=4.2.0"]);
+		expect(renderProse(t)).toBe("4.0.4294967295 and earlier, or 4.2.0 and later");
+		expect(renderProse(table("(4.0.4294967295,4.2.0)"))).toBe("after 4.0.4294967295 up to but not including 4.2.0");
+	});
+	// parseSupportTable rejects an interval with no bounds, so this shape can
+	// only be built by hand; the renderers still have to say something true.
+	test("the renderers are total over a bounds-free interval", () => {
+		const unbounded = [{ lowerInclusive: false, upperInclusive: false }];
+		expect(renderCargo(unbounded)).toEqual(["*"]);
+		expect(renderProse(unbounded)).toBe("every release");
+	});
 });
 
 if (corpus) {
@@ -76,7 +109,16 @@ if (corpus) {
 				if (c.invalid) expect(r.ok).toBe(false);
 				else {
 					expect(r.ok).toBe(true);
-					if (r.ok) expect(canonicalSupportTable(r.value)).toBe(c.canonical);
+					if (r.ok) {
+						const canonical = canonicalSupportTable(r.value);
+						expect(canonical).toBe(c.canonical);
+						// One canonical spelling means the canonical form parses
+						// back to itself; anything else is a form no consumer can
+						// re-read.
+						const again = parseSupportTable(canonical);
+						expect(again.ok).toBe(true);
+						if (again.ok) expect(canonicalSupportTable(again.value)).toBe(canonical);
+					}
 				}
 			});
 		}
