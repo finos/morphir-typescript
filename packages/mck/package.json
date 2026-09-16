@@ -1,6 +1,6 @@
 {
 	"name": "@finos/morphir-mck",
-	"version": "0.0.1",
+	"version": "0.1.0",
 	"type": "module",
 	"description": "The Morphir Compatibility Kit (MCK) driver: runs the kit against any binding through the adapter protocol and writes conformance reports.",
 	"license": "Apache-2.0",
