@@ -245,6 +245,10 @@ export function canonicalSupportTable(table: SupportTable): string {
 }
 
 function contains(i: Interval, r: Release): boolean {
+	// An absent lower bound reaches down to the domain floor and no further, so
+	// the floor is checked here rather than only where a bound is written: a
+	// table cannot contain a release the domain does not have.
+	if (compareRelease(r, DOMAIN_FLOOR) < 0) return false;
 	if (i.lower !== undefined) {
 		const c = compareRelease(i.lower, r);
 		if (c > 0 || (c === 0 && !i.lowerInclusive)) return false;

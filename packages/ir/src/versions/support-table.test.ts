@@ -69,6 +69,12 @@ describe("compatibility", () => {
 		expect(compatibility(ref, release("5.0.0"))).toBe("unsupported_format_version_major");
 		expect(supports(ref, release("3.0.1"))).toBe(true);
 	});
+	test("an absent lower bound stops at the domain floor", () => {
+		const below = table("(,4.1.0)");
+		expect(supports(below, release("2.0.0"))).toBe(false);
+		expect(compatibility(below, release("2.0.0"))).toBe("unsupported_format_version_major");
+		expect(supports(below, release("3.0.0"))).toBe(true);
+	});
 	test("a table must contain a release of the major to be a minor mismatch", () => {
 		expect(compatibility(table("[3.0.0,4.0.0)"), release("4.5.0"))).toBe("unsupported_format_version_major");
 		expect(compatibility(table("[3.0.0,4.0.1)"), release("4.5.0"))).toBe("unsupported_format_version_minor");
