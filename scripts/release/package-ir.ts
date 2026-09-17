@@ -59,7 +59,7 @@ const EXPORTS = {
 // in a consumer's graph. (The mck driver's command-line entry is different:
 // nobody imports dist/cli.js, so it bundles its command-line dependencies, and
 // the source-map canonicalizer maps those under a virtual node_modules path.)
-const DEPENDENCIES = { "decimal.js": "10.6.0", yaml: "2.9.1" } as const;
+export const DEPENDENCIES = { "decimal.js": "10.6.0", yaml: "2.9.1" } as const;
 const ROOT_FILES = ["package/package.json", "package/README.md", "package/LICENSE", "package/NOTICE"] as const;
 const REQUIRED_FILES = [
 	...ROOT_FILES,
@@ -209,20 +209,23 @@ const LAYOUT_EXERCISE = [
 	"",
 ].join("\n");
 
-// `--offline` cannot resolve `yaml` against a registry it must not reach (a
-// fresh CI runner has no cached manifest for it), so the consumer's own
-// `yaml` dependency has to come from a local tarball too; the override points
-// it at the very tarball packed from this workspace's own install, mirroring
-// the trick `package-mck.ts` uses for the ir tarball. `package-mck.ts` reuses
-// this packer for the same reason.
-/** The filename `bun pm pack` gives the vendored `yaml` dependency, derived from the pinned version rather than hard-coded. */
-export function yamlTarballName(): string {
-	return `yaml-${DEPENDENCIES.yaml}.tgz`;
+// `--offline` cannot resolve any of DEPENDENCIES against a registry it must
+// not reach (a fresh CI runner has no cached manifest for them), so the
+// consumer's own copy of each one has to come from a local tarball too; the
+// override points it at the very tarball packed from this workspace's own
+// install, mirroring the trick `package-mck.ts` uses for the ir tarball itself.
+// `package-mck.ts` reuses this packer for the same reason, for both `yaml`
+// (its own transitive dependency through `@finos/morphir-ir`) and `decimal.js`.
+export type RuntimeDependencyName = keyof typeof DEPENDENCIES;
+
+/** The filename `bun pm pack` gives a vendored runtime dependency, derived from its pinned version rather than hard-coded. */
+export function runtimeDependencyTarballName(name: RuntimeDependencyName): string {
+	return `${name.replace(/^@/, "").replaceAll("/", "-")}-${DEPENDENCIES[name]}.tgz`;
 }
 
-/** Packs this workspace's installed `yaml` into `packedOutput` and returns the tarball path. */
-export async function packYamlDependency(root: string, packedOutput: string): Promise<string> {
-	return packStagedPackage(path.join(root, "packages/ir/node_modules/yaml"), packedOutput, yamlTarballName());
+/** Packs one of this workspace's installed runtime dependencies (see DEPENDENCIES) into packedOutput and returns the tarball path. */
+export async function packRuntimeDependency(root: string, name: RuntimeDependencyName, packedOutput: string): Promise<string> {
+	return packStagedPackage(path.join(root, "packages/ir/node_modules", name), packedOutput, runtimeDependencyTarballName(name));
 }
 
 // Every published `.js` under `dist` except the Node adapter must stay clear
@@ -242,17 +245,22 @@ async function smokeTest(tarball: string, files: readonly string[], compiler: st
 	await assertBrowserSafe(tarball, files, root);
 
 	const consumer = await mkdtemp(path.join(tmpdir(), "morphir-ir-consumer-"));
-	const yamlWork = await mkdtemp(path.join(tmpdir(), "morphir-ir-yaml-pack-"));
+	const dependenciesWork = await mkdtemp(path.join(tmpdir(), "morphir-ir-dependency-pack-"));
 	try {
-		const yamlTarball = await packYamlDependency(root, yamlWork);
+		const dependencyNames = Object.keys(DEPENDENCIES) as readonly RuntimeDependencyName[];
+		const dependencyPacks = await Promise.all(
+			dependencyNames.map(async (name) => ({ name, tarball: await packRuntimeDependency(root, name, dependenciesWork) })),
+		);
+		const dependencyTarballs = dependencyPacks.map(({ tarball }) => tarball);
+		const overrides = Object.fromEntries(dependencyPacks.map(({ name, tarball }) => [name, `file:${tarball.split(path.sep).join("/")}`]));
 		const consumerManifest = {
 			name: "morphir-ir-artifact-consumer",
 			private: true,
 			type: "module",
-			overrides: { yaml: `file:${yamlTarball.split(path.sep).join("/")}` },
+			overrides,
 		};
 		await Bun.write(path.join(consumer, "package.json"), `${JSON.stringify(consumerManifest)}\n`);
-		await runCommand([process.execPath, "add", "--offline", "--no-save", "--ignore-scripts", "--backend=copyfile", yamlTarball, tarball], consumer);
+		await runCommand([process.execPath, "add", "--offline", "--no-save", "--ignore-scripts", "--backend=copyfile", ...dependencyTarballs, tarball], consumer);
 
 		const program = `const specifiers = ${JSON.stringify(SPECIFIERS)}; for (const specifier of specifiers) { const resolved = import.meta.resolve(specifier); if (!resolved.includes('/node_modules/@finos/morphir-ir/')) throw new Error('resolved outside installed package: ' + resolved); await import(specifier); }`;
 		await runCommand([process.execPath, "--eval", program], consumer);
@@ -279,7 +287,7 @@ async function smokeTest(tarball: string, files: readonly string[], compiler: st
 		await runCommand([compiler, "--noEmit", "--strict", "--target", "ES2022", "--module", "NodeNext", "--moduleResolution", "NodeNext", "index.ts"], consumer);
 	} finally {
 		await rm(consumer, { recursive: true, force: true });
-		await rm(yamlWork, { recursive: true, force: true });
+		await rm(dependenciesWork, { recursive: true, force: true });
 	}
 }
 

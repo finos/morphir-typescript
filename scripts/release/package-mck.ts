@@ -37,7 +37,7 @@ import {
 	runCommand,
 	verifyExtractedFiles,
 } from "./package-common.ts";
-import { packYamlDependency } from "./package-ir.ts";
+import { DEPENDENCIES as IR_DEPENDENCIES, packRuntimeDependency, type RuntimeDependencyName } from "./package-ir.ts";
 import { parseStableVersion } from "./version.ts";
 
 const ENTRYPOINTS = ["index.ts", "cli.ts", "adapter.ts"] as const;
@@ -393,12 +393,19 @@ async function writeResolutionSmokeKit(consumer: string): Promise<string> {
  */
 async function smokeTest(mckTarball: string, irTarball: string, compiler: string, root: string): Promise<void> {
 	const consumer = await mkdtemp(path.join(tmpdir(), "morphir-mck-consumer-"));
-	const yamlWork = await mkdtemp(path.join(tmpdir(), "morphir-mck-yaml-pack-"));
+	const irDependenciesWork = await mkdtemp(path.join(tmpdir(), "morphir-mck-ir-dependency-pack-"));
 	const ajvWork = await mkdtemp(path.join(tmpdir(), "morphir-mck-ajv-pack-"));
 	try {
 		// A fresh runner has no registry metadata for offline resolution. Local
-		// tarball overrides cover the IR, yaml, Ajv, and Ajv's runtime dependencies.
-		const yamlTarball = await packYamlDependency(root, yamlWork);
+		// tarball overrides cover the IR, the IR's own runtime dependencies (yaml,
+		// decimal.js — see package-ir.ts's DEPENDENCIES), Ajv, and Ajv's runtime
+		// dependencies.
+		const irDependencyNames = Object.keys(IR_DEPENDENCIES) as readonly RuntimeDependencyName[];
+		const irDependencyPacks = await Promise.all(
+			irDependencyNames.map(async (name) => ({ name, tarball: await packRuntimeDependency(root, name, irDependenciesWork) })),
+		);
+		const irDependencyTarballs = irDependencyPacks.map(({ tarball }) => tarball);
+		const irDependencyOverrides = Object.fromEntries(irDependencyPacks.map(({ name, tarball }) => [name, `file:${tarball.split(path.sep).join("/")}`]));
 		const ajvOverrides = await packAjvDependencies(root, ajvWork);
 		const consumerManifest = {
 			name: "morphir-mck-artifact-consumer",
@@ -406,13 +413,13 @@ async function smokeTest(mckTarball: string, irTarball: string, compiler: string
 			type: "module",
 			overrides: {
 				"@finos/morphir-ir": `file:${irTarball.split(path.sep).join("/")}`,
-				yaml: `file:${yamlTarball.split(path.sep).join("/")}`,
+				...irDependencyOverrides,
 				...ajvOverrides,
 			},
 		};
 		await Bun.write(path.join(consumer, "package.json"), `${JSON.stringify(consumerManifest)}\n`);
 		await runCommand(
-			[process.execPath, "add", "--offline", "--no-save", "--ignore-scripts", "--backend=copyfile", yamlTarball, irTarball, mckTarball],
+			[process.execPath, "add", "--offline", "--no-save", "--ignore-scripts", "--backend=copyfile", ...irDependencyTarballs, irTarball, mckTarball],
 			consumer,
 		);
 		const cli = "node_modules/@finos/morphir-mck/dist/cli.js";
@@ -473,7 +480,7 @@ async function smokeTest(mckTarball: string, irTarball: string, compiler: string
 		await runCommand([compiler, "--noEmit", "--strict", "--target", "ES2022", "--module", "NodeNext", "--moduleResolution", "NodeNext", "index.ts"], consumer);
 	} finally {
 		await rm(consumer, { recursive: true, force: true });
-		await rm(yamlWork, { recursive: true, force: true });
+		await rm(irDependenciesWork, { recursive: true, force: true });
 		await rm(ajvWork, { recursive: true, force: true });
 	}
 }
