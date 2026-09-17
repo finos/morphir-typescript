@@ -12,6 +12,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-17
+
 ### Changed
 
 - **Breaking:** `DecimalLiteral` in `@finos/morphir-ir` is a genuine decimal: `{ kind, lexeme, value }` where `value` is a `decimal.js` `Decimal` and `lexeme` is the text as written, which is what a writer emits. The v4 reader refuses a payload that is not a decimal lexeme (`[+-]?(digits(.digits?)?|.digits)([eE][+-]?digits)?`) with `invalid_literal`. `decimal.js` is a new dependency of `@finos/morphir-ir`.
@@ -61,7 +63,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Public entry points for the current version, generic model, v4 model, and JSON value codec.
 - Tag-driven npm publishing with separated artifact and publish jobs.
 
-[Unreleased]: https://github.com/finos/morphir-typescript/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/finos/morphir-typescript/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/finos/morphir-typescript/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/finos/morphir-typescript/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/finos/morphir-typescript/compare/v0.0.1...v0.1.0
 [0.0.1]: https://github.com/finos/morphir-typescript/releases/tag/v0.0.1

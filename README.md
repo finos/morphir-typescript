@@ -9,7 +9,7 @@ Morphir captures business logic and domain models as language-independent data s
 
 ## Project status
 
-`@finos/morphir-ir` and `@finos/morphir-mck` are published to public npm at suite version `0.2.0`. The root workspace stays private and is never published. Every workspace uses the same repository-wide suite version, including packages that are not part of a given release, and the manifests read the last released version until release preparation bumps them.
+`@finos/morphir-ir` and `@finos/morphir-mck` are published to public npm at suite version `0.3.0`. The root workspace stays private and is never published. Every workspace uses the same repository-wide suite version, including packages that are not part of a given release, and the manifests read the last released version until release preparation bumps them.
 
 The Morphir Compatibility Kit is vendored into `packages/mck/kit`, so `mise run check:conformance` runs the full kit in a standalone clone with no upstream checkout. Two corpora are still not vendored: the naming and format-version conformance fixtures, which live only in `finos/morphir` at `docs/spec/ir/fixtures/`. `mise run test` therefore sets `MORPHIR_FIXTURES_OPTIONAL=1`, which makes those two corpora — and nothing else — optional when they are absent. That opt-out goes away once they are vendored too.
 
@@ -17,8 +17,8 @@ The Morphir Compatibility Kit is vendored into `packages/mck/kit`, so `mise run 
 
 | Package | Publication | Purpose |
 | --- | --- | --- |
-| `@finos/morphir-ir` | Published to public npm at `0.2.0` | Generic Morphir IR semantic types, pinned v4 types, JSON readers and canonical writers, diagnostics, and attribute mapping. |
-| `@finos/morphir-mck` | Published to public npm at `0.2.0` | MCK Markdown case parser, kit loader, structural checker, the `mck` driver and its reference adapter, and the report model. Ships the vendored kit. |
+| `@finos/morphir-ir` | Published to public npm at `0.3.0` | Generic Morphir IR semantic types, pinned v4 types, JSON readers and canonical writers, diagnostics, and attribute mapping. |
+| `@finos/morphir-mck` | Published to public npm at `0.3.0` | MCK Markdown case parser, kit loader, structural checker, the `mck` driver and its reference adapter, and the report model. Ships the vendored kit. |
 
 ## Morphir specifications
 
