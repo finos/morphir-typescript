@@ -1,7 +1,7 @@
 // packages/ir/src/codec/json/value.test.ts
 // Run with: bun test packages/ir/src/codec/json/value.test.ts
 import { describe, expect, test } from "bun:test";
-import { isInteger, isObject, type JsonValue, jsonNumber, jsonObject, locationOf, parseJson, writeJson } from "./value.ts";
+import { isInteger, isObject, type JsonValue, jsonNumber, jsonObject, locationOf, parseJson, parseJsonWithDuplicateKeys, writeJson } from "./value.ts";
 
 describe("parseJson", () => {
 	test("keeps number lexemes and member order", () => {
@@ -34,6 +34,12 @@ describe("parseJson", () => {
 		expect(parseJson("1 2").ok).toBe(false);
 		expect(parseJson("NaN").ok).toBe(false);
 	});
+	test("accepts a leading BOM at the shared IR parser boundary", () => {
+		expect(parseJson("\uFEFFnull")).toEqual({ ok: true, value: null });
+	});
+	test("retains its legacy acceptance of unpaired surrogate escapes", () => {
+		for (const input of ['"\\ud800"', '"\\udc00"']) expect(parseJson(input).ok).toBe(true);
+	});
 	test("bounds nesting instead of exhausting the stack", () => {
 		const r = parseJson("[".repeat(20000) + "]".repeat(20000));
 		expect(r).toMatchObject({ ok: false, error: { code: "nesting_too_deep" } });
@@ -50,6 +56,33 @@ describe("parseJson", () => {
 		expect(locationOf(a[1] as JsonValue)).toEqual({ line: 2, column: 12 });
 		// Strings, booleans and null are primitives with no identity to key on.
 		expect(locationOf(r.value.members.get("s") as JsonValue)).toBeNull();
+	});
+});
+
+describe("parseJsonWithDuplicateKeys", () => {
+	test("collects decoded duplicate keys with escaped ancestor and key segments", () => {
+		const result = parseJsonWithDuplicateKeys('{"a/b~c":{"x/y~z":1,"x\\u002fy~z":2}}');
+		expect(result.ok).toBe(true);
+		if (result.ok) expect(result.value.duplicateKeys).toEqual(["/a~1b~0c/x~1y~0z"]);
+	});
+
+	test("continues through later duplicate members and their nested values", () => {
+		const result = parseJsonWithDuplicateKeys('{"a":{},"a":{"b":1,"b":2},"c":1,"c":2}');
+		expect(result.ok).toBe(true);
+		if (result.ok) expect(result.value.duplicateKeys).toEqual(["/a", "/a/b", "/c"]);
+	});
+
+	test("reports a later syntax failure instead of collected duplicates", () => {
+		const result = parseJsonWithDuplicateKeys('{"a":1,"a":2,"b":tru}');
+		expect(result).toMatchObject({ ok: false, error: { code: "invalid_json" } });
+	});
+
+	test.each(['{"\\ud800":1}', '{"a":"\\udc00"}', '{"a":1,"a":"\\ud800"}'])("rejects non-scalar decoded JSON strings in %s", (input) => {
+		expect(parseJsonWithDuplicateKeys(input)).toMatchObject({ ok: false, error: { code: "invalid_json" } });
+	});
+
+	test("accepts valid surrogate pairs in member names and values", () => {
+		expect(parseJsonWithDuplicateKeys('{"\\ud800\\udc00":"\\ud83d\\ude00"}').ok).toBe(true);
 	});
 });
 

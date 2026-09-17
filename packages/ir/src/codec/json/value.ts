@@ -48,6 +48,20 @@ export function locationOf(v: JsonValue): JsonLocation | null {
 
 const NUMBER = /^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?/;
 
+function containsOnlyUnicodeScalars(text: string): boolean {
+	for (let index = 0; index < text.length; index += 1) {
+		const codeUnit = text.charCodeAt(index);
+		if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
+			const next = text.charCodeAt(index + 1);
+			if (!(next >= 0xdc00 && next <= 0xdfff)) return false;
+			index += 1;
+		} else if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) {
+			return false;
+		}
+	}
+	return true;
+}
+
 // A reader must return a diagnostic rather than exhaust the stack, and this
 // parser descends recursively, so nesting is bounded here. 1000 is far past
 // anything a compiler emits and far short of the engine's limit.
@@ -57,7 +71,10 @@ class Parser {
 	private pos = 0;
 	private line = 1;
 	private col = 1;
-	constructor(private readonly text: string) {}
+	constructor(
+		private readonly text: string,
+		private readonly duplicateKeys: string[] | null = null,
+	) {}
 
 	private fail(message: string): Diagnostic {
 		return diagnostic("invalid_json", "syntax", "", message, { line: this.line, column: this.col });
@@ -148,12 +165,18 @@ class Parser {
 			if (this.peek() !== ":") return err(this.fail('expected ":"'));
 			this.advance(1);
 			this.ws();
-			const value = this.parseValue(`${cursor}/${name}`, depth + 1);
+			const memberCursor = `${cursor}/${this.duplicateKeys === null ? name : escapePointerSegment(name)}`;
+			const duplicate = members.has(name);
+			if (duplicate && this.duplicateKeys !== null) this.duplicateKeys.push(memberCursor);
+			const value = this.parseValue(memberCursor, depth + 1);
 			if (!value.ok) return value;
-			if (members.has(name)) {
-				return err(diagnostic("duplicate_member", "syntax", `${cursor}/${name}`, `duplicate member "${name}"`, { line: this.line, column: this.col }));
+			if (duplicate) {
+				if (this.duplicateKeys === null) {
+					return err(diagnostic("duplicate_member", "syntax", `${cursor}/${name}`, `duplicate member "${name}"`, { line: this.line, column: this.col }));
+				}
+			} else {
+				members.set(name, value.value);
 			}
-			members.set(name, value.value);
 			this.ws();
 			if (this.peek() === ",") {
 				this.advance(1);
@@ -202,6 +225,7 @@ class Parser {
 			const c = this.peek();
 			if (c === "") return err(this.fail("unterminated string"));
 			if (c === '"') {
+				if (this.duplicateKeys !== null && !containsOnlyUnicodeScalars(out)) return err(this.fail("unpaired surrogate in string"));
 				this.advance(1);
 				return ok(out);
 			}
@@ -229,8 +253,24 @@ class Parser {
 	}
 }
 
+function escapePointerSegment(segment: string): string {
+	return segment.replaceAll("~", "~0").replaceAll("/", "~1");
+}
+
 export function parseJson(text: string): Result<JsonValue, Diagnostic> {
 	return new Parser(text.startsWith("\uFEFF") ? text.slice(1) : text).parseDocument();
+}
+
+export interface DuplicateAwareJson {
+	readonly document: JsonValue;
+	readonly duplicateKeys: readonly string[];
+}
+
+/** Parses the complete document, requiring Unicode scalar strings, and reports every later occurrence of a decoded object key. */
+export function parseJsonWithDuplicateKeys(text: string): Result<DuplicateAwareJson, Diagnostic> {
+	const duplicateKeys: string[] = [];
+	const parsed = new Parser(text.startsWith("\uFEFF") ? text.slice(1) : text, duplicateKeys).parseDocument();
+	return parsed.ok ? ok({ document: parsed.value, duplicateKeys }) : parsed;
 }
 
 function writeString(s: string): string {

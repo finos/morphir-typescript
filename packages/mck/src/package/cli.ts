@@ -3,12 +3,16 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { formatSummary } from "../report.ts";
+import type { PackageContractVersion } from "./contract.ts";
 import { loadPackageKit } from "./corpus.ts";
-import { processPackageTestee } from "./process.ts";
-import { referencePackageTestee } from "./reference.ts";
-import { packageExitCode, runPackageKit } from "./run.ts";
+import { processPackageTestee, processResolutionTestee } from "./process.ts";
+import { referencePackageTestee, referenceResolutionTestee } from "./reference.ts";
+import { RESOLUTION_CONTRACT } from "./resolution/contract.ts";
+import { loadResolutionKit } from "./resolution/corpus.ts";
+import { packageExitCode, runPackageKit, runResolutionKit } from "./run.ts";
 
 export interface PackageRunArgs {
+	readonly contract: PackageContractVersion;
 	readonly kit: string;
 	readonly report: string | undefined;
 	readonly adapter: string | undefined;
@@ -18,15 +22,22 @@ export interface PackageRunArgs {
 
 /** Parsing and help belong to the shared Effect CLI command tree. */
 export async function runPackageCommand(args: PackageRunArgs): Promise<number> {
-	const { kit: directory, report: reportFile, adapter, adapterArgs, timeoutMs } = args;
+	const { contract, kit: directory, report: reportFile, adapter, adapterArgs, timeoutMs } = args;
 	if (!adapter && adapterArgs.length) {
 		console.error("--adapter-arg requires --adapter");
 		return 2;
 	}
-	const kit = loadPackageKit(path.resolve(directory));
-	const testee = adapter ? processPackageTestee([adapter, ...adapterArgs], { timeoutMs }) : referencePackageTestee();
 	try {
-		const report = await runPackageKit(kit, testee);
+		const report =
+			contract === RESOLUTION_CONTRACT
+				? await runResolutionKit(
+						loadResolutionKit(path.resolve(directory)),
+						adapter ? processResolutionTestee([adapter, ...adapterArgs], { timeoutMs }) : referenceResolutionTestee(),
+					)
+				: await runPackageKit(
+						loadPackageKit(path.resolve(directory)),
+						adapter ? processPackageTestee([adapter, ...adapterArgs], { timeoutMs }) : referencePackageTestee(),
+					);
 		if (reportFile) {
 			mkdirSync(path.dirname(path.resolve(reportFile)), { recursive: true });
 			writeFileSync(reportFile, `${JSON.stringify(report, null, "\t")}\n`);

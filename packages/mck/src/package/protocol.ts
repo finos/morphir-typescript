@@ -1,5 +1,7 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
+
+import type { PackageContractDescriptor } from "./contract.ts";
 import {
 	PACKAGE_CONTRACT,
 	PACKAGE_OPERATIONS,
@@ -97,3 +99,20 @@ export function parsePackageResponse(value: unknown, op: PackageOperation): Pack
 		}
 	}
 }
+
+export const packageContract: PackageContractDescriptor<
+	typeof PACKAGE_CONTRACT,
+	PackageOperation,
+	PackageRequest,
+	PackageResponse,
+	PackageCapabilities,
+	PackageResponse
+> = {
+	contractVersion: PACKAGE_CONTRACT,
+	operation: (request) => request.op,
+	supports: (capabilities, operation) => capabilities.operations.includes(operation),
+	parseCapabilities: parsePackageCapabilities,
+	parseRequest: parsePackageRequest,
+	parseResponse: parsePackageResponse,
+	projectResult: (value) => structuredClone(value),
+};
