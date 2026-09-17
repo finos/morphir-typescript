@@ -195,10 +195,11 @@ describe("mck run", () => {
 	// Pinned, not bounded: the embedded kit is a fixed set of bytes, so this
 	// line moves only when a kit resync deliberately moves it.
 	//
-	// The two skips are versions-0001's version-3 fence, on both paths.
+	// The eight skips are the kit's four version-3 cases (versions-0001 and
+	// versions-0006 to 0008), each on both paths.
 	test("over the embedded kit, every fence passes and only version 3 is skipped", () => {
 		const r = run(["run"]);
-		expect(r.out).toMatch(/^624 pass, 0 fail, 0 kit-error, 2 skipped$/m);
+		expect(r.out).toMatch(/^722 pass, 0 fail, 0 kit-error, 8 skipped$/m);
 		expect(r.code).toBe(0);
 	});
 	test("the embedded kit skips only version 3", () => {
@@ -208,7 +209,7 @@ describe("mck run", () => {
 		const failing = report.records.filter((rec) => rec.result === "fail");
 		const skipped = report.records.filter((rec) => rec.result === "skipped");
 		expect(failing).toHaveLength(0);
-		expect(skipped).toHaveLength(2);
+		expect(skipped).toHaveLength(8);
 		for (const rec of skipped) expect(rec.message).toBe("version 3 not in capabilities");
 	});
 	test("--only restricts the report to matching case ids", () => {

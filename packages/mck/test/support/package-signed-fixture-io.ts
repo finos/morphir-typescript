@@ -48,7 +48,11 @@ export async function readFixtureInputs(source: string): Promise<ReadonlyMap<str
 			INPUT_PATHS.map(async (path) => {
 				const input = resolve(source, path);
 				await rejectSymlinks(input);
-				if (!(await lstat(input)).isFile()) throw new Error(`Expected fixture input file: ${path}`);
+				// The OS spells the missing path its own way (backslashes on Windows); name the input as the corpus does.
+				const stats = await lstat(input).catch((cause: unknown) => {
+					throw new Error(`Missing fixture input file: ${path}`, { cause });
+				});
+				if (!stats.isFile()) throw new Error(`Expected fixture input file: ${path}`);
 				return [path, new Uint8Array(await readFile(input))] as const;
 			}),
 		),

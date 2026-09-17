@@ -50,7 +50,7 @@ describe("the canonical YAML writer against every YAML fence of the embedded kit
 		console.log(`yaml canonical fences written from json: ${compared}`);
 		// Pinned, not bounded: the embedded kit is a fixed set of bytes, so this
 		// number moves only when a kit resync deliberately moves it.
-		expect(compared).toBe(85);
+		expect(compared).toBe(98);
 	});
 
 	test("the reader reads the YAML canonical fence to the JSON canonical fence's value", () => {
@@ -65,7 +65,7 @@ describe("the canonical YAML writer against every YAML fence of the embedded kit
 		console.log(`yaml canonical fences read against json: ${compared}`);
 		// Same set the writer compares above: every YAML canonical fence with a
 		// JSON twin now round-trips byte for byte.
-		expect(compared).toBe(85);
+		expect(compared).toBe(98);
 	});
 
 	test("the writer is idempotent on every canonical YAML fence, including the document-tree files", () => {
@@ -79,9 +79,9 @@ describe("the canonical YAML writer against every YAML fence of the embedded kit
 			}
 		}
 		console.log(`yaml fences the writer reproduces byte for byte: ${checked}`);
-		// 85 canonical with a JSON twin, plus canonical fences without one and
+		// 97 canonical with a JSON twin, plus canonical fences without one and
 		// `file` fences.
-		expect(checked).toBe(103);
+		expect(checked).toBe(121);
 	});
 
 	test("the writer reproduces the kit's complete-example.yaml document byte for byte", () => {

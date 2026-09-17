@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **Breaking:** `DecimalLiteral` in `@finos/morphir-ir` is a genuine decimal: `{ kind, lexeme, value }` where `value` is a `decimal.js` `Decimal` and `lexeme` is the text as written, which is what a writer emits. The v4 reader refuses a payload that is not a decimal lexeme (`[+-]?(digits(.digits?)?|.digits)([eE][+-]?digits)?`) with `invalid_literal`. `decimal.js` is a new dependency of `@finos/morphir-ir`.
 
+- The embedded kit is synced to finos/morphir 2bab57ea: it gains the decimal lexeme grammar and arbitrary-precision integer cases (patterns-and-literals-0016 to 0020), closed attribute members (types-0012), annotations, partial bodies, hole reasons, bare input types, string documentation, empty `inputs`, native hints and access spellings (definitions-0020 to 0031), a single document's `$meta` and an application's definition dependencies (distributions-0009, 0010), an application's dependencies laid out as definitions under `deps/` (document-tree-0009), and three version-3 cases pinned against morphir-elm's codecs (versions-0006 to 0008). `mck run` over the embedded kit now reports 722 pass, 0 fail, 8 skipped.
+
 ### Added
 
 - `parseDecimal`, `decimalLiteral`, `isDecimalLexeme`, `DECIMAL_LEXEME` and the types `DecimalLiteral` and `DecimalParseError` in `@finos/morphir-ir/model`. `parseDecimal` returns a `Result` whose error is a value naming the offending lexeme; `decimalLiteral` is the throwing convenience for a lexeme known to be good.
