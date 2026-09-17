@@ -45,6 +45,7 @@ describe("a distribution written as a tree and read back is the same distributio
 			"distributions-0005",
 			"distributions-0006",
 			"distributions-0007",
+			"distributions-0010",
 			"document-tree-0006",
 			"document-tree-0007",
 			"document-tree-0008",

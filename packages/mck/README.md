@@ -25,12 +25,18 @@ mck run --adapter my-binding-adapter --adapter-arg --profile=json --report repor
 The driver checks JSON, YAML, and document-tree fences alike: a YAML fence round-trips through the binding's YAML codec the same way a JSON fence does, and a `file` set of fences checks the binding's document-tree reader and writer against a whole directory of files. A set marked `mode=read` only exercises the read half: for input a canonical writer never reproduces itself, such as a `$meta` member the kit carries for a read-only case. Run against the embedded kit, `mck run` currently reports:
 
 ```text
-624 pass, 0 fail, 0 kit-error, 2 skipped
+708 pass, 0 fail, 0 kit-error, 8 skipped
 skipped versions-0001 fence 0 [current]: version 3 not in capabilities
 skipped versions-0001 fence 0 [pinned]: version 3 not in capabilities
+skipped versions-0006 fence 0 [current]: version 3 not in capabilities
+skipped versions-0006 fence 0 [pinned]: version 3 not in capabilities
+skipped versions-0007 fence 0 [current]: version 3 not in capabilities
+skipped versions-0007 fence 0 [pinned]: version 3 not in capabilities
+skipped versions-0008 fence 0 [current]: version 3 not in capabilities
+skipped versions-0008 fence 0 [pinned]: version 3 not in capabilities
 ```
 
-The two skips are the kit's version-3 fences, which the TypeScript binding's capabilities do not name.
+The eight skips are the kit's version-3 fences, which the TypeScript binding's capabilities do not name; a binding that declares version 3 answers them.
 
 Report which vocabulary entries — variants and member spellings — no case exercises:
 
