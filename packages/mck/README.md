@@ -49,6 +49,33 @@ A report validates against [`spec/ir/mck/report.schema.json`](https://github.com
 Copyright 2026 FINOS. Licensed under Apache-2.0.
 ## Experimental package suite
 
+Draft.3 local Library definitions can be inspected through the library API:
+
+```ts
+import { inspectLocalRegistryRepository, admitLocalRegistryRepository } from "@finos/morphir-mck";
+
+const summary = inspectLocalRegistryRepository("/path/to/finos/morphir");
+// { kind: "definition-summary", caseCount, boundAssetCount, pendingAssetCount, errors }
+const admission = admitLocalRegistryRepository("/path/to/finos/morphir");
+if (admission.kind === "kit-error") throw new Error(admission.errors.join("\n"));
+// admission.value contains constructed cases and the executable corpus contentHash.
+```
+
+Definition inspection permits declared pending assets and returns no compatibility
+report, pass count or executable hash. Full admission validates every asset and complete
+expectation before returning an executable kit. Pending assets are kit errors.
+Both functions also have `FromFiles` variants taking a map of repository-relative
+slash-separated paths to exact bytes, including `spec/package/mck/...` and local schemas.
+Filesystem loading expects a trusted static repository checkout and rejects path escapes.
+This admission API does not execute a testee, restore packages, verify signatures or
+claim runtime compatibility. Draft.1, draft.2 and IR v1 execution remain separate.
+
+The explicit integration check requires the parent source and fails if it is absent:
+
+```sh
+bun packages/mck/test/support/local-registry-parent-integration.ts --source /path/to/finos/morphir
+```
+
 `mck package run --contract 0.1.0-draft.1 --kit /path/to/finos/morphir/spec/package/mck --report package.json`
 runs the draft package corpus owned by finos/morphir. The package corpus is not embedded;
 the existing embedded kit and `kit.lock.json` still identify only the IR suite.
