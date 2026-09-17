@@ -255,7 +255,9 @@ describe("mck run", () => {
 			"--adapter-arg",
 			path.join(packageRoot, "src", "adapter.ts"),
 			"--adapter-arg",
-			"extra-ignored-arg",
+			"--suite",
+			"--adapter-arg",
+			"ir",
 		]);
 		expect(r.code).toBe(0);
 	});

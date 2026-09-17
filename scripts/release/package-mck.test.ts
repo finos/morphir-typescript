@@ -93,6 +93,8 @@ describe("publishMckManifest", () => {
 				"protocol.example.json",
 				"package-protocol.schema.json",
 				"package-report.schema.json",
+				"package-resolution-protocol.schema.json",
+				"package-resolution-report.schema.json",
 				"README.md",
 				"LICENSE",
 				"NOTICE",
@@ -154,6 +156,8 @@ describe("validatePackageFiles", () => {
 			"package/protocol.example.json",
 			"package/package-protocol.schema.json",
 			"package/package-report.schema.json",
+			"package/package-resolution-protocol.schema.json",
+			"package/package-resolution-report.schema.json",
 		]) {
 			expect(() => validatePackageFiles([contract], new Set(), new Set([contract]))).not.toThrow();
 		}
@@ -254,6 +258,8 @@ describe.if(canBuild)("@finos/morphir-mck artifact", () => {
 			"package/protocol.example.json",
 			"package/package-protocol.schema.json",
 			"package/package-report.schema.json",
+			"package/package-resolution-protocol.schema.json",
+			"package/package-resolution-report.schema.json",
 			"package/kit/spec/ir/mck/types.md",
 			"package/dist/index.js",
 			"package/dist/cli.js",

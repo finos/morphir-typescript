@@ -6,6 +6,10 @@ import { strictJson } from "./json.ts";
 import { verifyLibrarySet } from "./library.ts";
 import { normalizedPackageDigests, packageFileDigest } from "./metadata.ts";
 import { parsePackageRequest } from "./protocol.ts";
+import type { ResolutionTestee } from "./resolution/contract.ts";
+import { RESOLUTION_CONTRACT, RESOLUTION_OPERATIONS, RESOLUTION_PROFILES } from "./resolution/contract.ts";
+import { resolveLibrary } from "./resolution/index.ts";
+import { parseResolutionRequest } from "./resolution/protocol.ts";
 import { compilePackageSchemas } from "./schemas.ts";
 
 export { canonicalizePackageDocument, packageFileDigest } from "./metadata.ts";
@@ -45,6 +49,24 @@ export function referencePackageTestee(): PackageTestee {
 				case "verify-library-set":
 					return { ok: true, valid: verifyLibrarySet(request) };
 			}
+		},
+		close: async () => {},
+	};
+}
+
+export function referenceResolutionTestee(): ResolutionTestee {
+	return {
+		capabilities: async () => ({
+			suite: "package",
+			contractVersion: RESOLUTION_CONTRACT,
+			implementation: "morphir-typescript",
+			implementationVersion: driverVersion(),
+			operations: RESOLUTION_OPERATIONS,
+			profiles: RESOLUTION_PROFILES,
+		}),
+		execute: async (request) => {
+			parseResolutionRequest(request);
+			return resolveLibrary(request.input);
 		},
 		close: async () => {},
 	};

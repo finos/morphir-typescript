@@ -32,3 +32,50 @@ export interface PackageTestee {
 	execute(request: PackageRequest): Promise<PackageResponse>;
 	close(): Promise<void>;
 }
+
+export type PackageContractVersion = typeof PACKAGE_CONTRACT | "0.1.0-draft.2";
+
+/** Shared execution shape used by every package contract revision. */
+export interface PackageContractTestee<Capabilities, Request, Response> {
+	capabilities(): Promise<Capabilities>;
+	execute(request: Request): Promise<Response>;
+	close(): Promise<void>;
+}
+
+export interface PackageContractCase<Request, Expected> {
+	readonly id: string;
+	readonly request: Request;
+	readonly expected: Expected;
+}
+
+export interface PackageContractKit<Version extends PackageContractVersion, Request, Expected> {
+	readonly formatVersion: Version;
+	readonly contentHash: string;
+	readonly cases: readonly PackageContractCase<Request, Expected>[];
+	readonly errors: readonly string[];
+}
+
+/**
+ * Contract-specific parsing and projection around the one package runner.
+ * Transport, lifecycle, comparison, and reporting stay contract-independent.
+ */
+export interface PackageContractDescriptor<
+	Version extends PackageContractVersion,
+	Operation extends string,
+	Request extends { readonly op: Operation },
+	Response,
+	Capabilities extends {
+		readonly suite: "package";
+		readonly contractVersion: Version;
+		readonly operations: readonly Operation[];
+	},
+	Projection,
+> {
+	readonly contractVersion: Version;
+	operation(request: Request): Operation;
+	supports(capabilities: Capabilities, operation: Operation): boolean;
+	parseCapabilities(value: unknown): Capabilities;
+	parseRequest(value: unknown): Request | { readonly op: "capabilities" } | { readonly op: "exit" };
+	parseResponse(value: unknown, operation: Operation): Response;
+	projectResult(value: Response): Projection;
+}

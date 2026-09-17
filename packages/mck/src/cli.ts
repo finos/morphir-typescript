@@ -38,6 +38,8 @@ import { embeddedKitCommit, embeddedKitFiles } from "./kit/embedded-source.ts";
 import { loadKit, loadKitFromFiles } from "./kit/load.ts";
 import { kitStatus, readLock, syncKit } from "./kit/sync.ts";
 import { runPackageCommand } from "./package/cli.ts";
+import { PACKAGE_CONTRACT } from "./package/contract.ts";
+import { RESOLUTION_CONTRACT } from "./package/resolution/contract.ts";
 import { formatSummary, writeReport } from "./report.ts";
 import { inProcessTestee, resolveNode } from "./testee/in-process.ts";
 import { processTestee } from "./testee/process.ts";
@@ -328,6 +330,11 @@ const coverage = Command.make("coverage", { kit: kitOption, repoRoot: repoRootOp
 const packageRun = Command.make(
 	"run",
 	{
+		contract: Options.text("contract").pipe(
+			Options.withDescription("Package contract revision to run."),
+			Options.withSchema(Schema.Literal(PACKAGE_CONTRACT, RESOLUTION_CONTRACT)),
+			Options.withDefault(PACKAGE_CONTRACT),
+		),
 		kit: Options.text("kit").pipe(Options.withDescription("The draft spec/package/mck corpus directory.")),
 		adapter: Options.text("adapter").pipe(Options.optional, Options.map(Option.getOrUndefined)),
 		adapterArgs: Options.text("adapter-arg").pipe(Options.withDescription("An argument for the package adapter; repeatable."), Options.repeated),

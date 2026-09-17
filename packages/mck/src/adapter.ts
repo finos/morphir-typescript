@@ -10,11 +10,30 @@
 // against.
 import { readLines } from "./lines.ts";
 import { runPackageAdapter } from "./package/adapter.ts";
+import { PACKAGE_CONTRACT, type PackageContractVersion } from "./package/contract.ts";
+import { RESOLUTION_CONTRACT } from "./package/resolution/contract.ts";
 import { inProcessTestee } from "./testee/in-process.ts";
 import { ProtocolError, parseEnvelope, parseRequest } from "./testee/protocol.ts";
 
-if (process.argv[2] === "--suite" && process.argv[3] === "package") {
-	await runPackageAdapter();
+type AdapterSelection = { readonly suite: "ir" } | { readonly suite: "package"; readonly contract: PackageContractVersion };
+
+function parseSelection(args: readonly string[]): AdapterSelection {
+	if (args.length === 0 || (args.length === 2 && args[0] === "--suite" && args[1] === "ir")) return { suite: "ir" };
+	if (args.length === 2 && args[0] === "--suite" && args[1] === "package") return { suite: "package", contract: PACKAGE_CONTRACT };
+	if (
+		args.length === 4 &&
+		args[0] === "--suite" &&
+		args[1] === "package" &&
+		args[2] === "--contract" &&
+		(args[3] === PACKAGE_CONTRACT || args[3] === RESOLUTION_CONTRACT)
+	)
+		return { suite: "package", contract: args[3] };
+	throw new Error(`usage: mck-adapter-typescript [--suite ir | --suite package [--contract ${PACKAGE_CONTRACT} | ${RESOLUTION_CONTRACT}]]`);
+}
+
+const selection = parseSelection(process.argv.slice(2));
+if (selection.suite === "package") {
+	await runPackageAdapter(selection.contract);
 	process.exit(0);
 }
 

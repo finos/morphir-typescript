@@ -62,7 +62,14 @@ const WORKSPACE_DEPENDENCIES = { "@finos/morphir-ir": "workspace:*", ...RUNTIME_
 // The adapter protocol's schema and worked example ship beside the kit: an
 // installed consumer writing an adapter needs the contract it is held to, and
 // the README points at both by name.
-const CONTRACT_FILES = ["protocol.schema.json", "protocol.example.json", "package-protocol.schema.json", "package-report.schema.json"] as const;
+const CONTRACT_FILES = [
+	"protocol.schema.json",
+	"protocol.example.json",
+	"package-protocol.schema.json",
+	"package-report.schema.json",
+	"package-resolution-protocol.schema.json",
+	"package-resolution-report.schema.json",
+] as const;
 
 const ROOT_FILES = [
 	"package/package.json",
@@ -97,6 +104,7 @@ const EMBEDDED_KIT_MODULE = "embedded.ts";
 function irPackageSpecifier(specifier: string): string {
 	const normalized = specifier.split(path.sep).join("/");
 	if (normalized.endsWith("/ir/src/index.ts")) return "@finos/morphir-ir";
+	if (normalized.endsWith("/ir/src/model/index.ts")) return "@finos/morphir-ir/model";
 	if (normalized.endsWith("/ir/src/versions/v4/index.ts") || normalized.endsWith("/ir/src/versions/v4/vocabulary.ts")) return "@finos/morphir-ir/v4";
 	if (normalized.endsWith("/ir/src/layout/index.ts")) return "@finos/morphir-ir/layout";
 	if (normalized.endsWith("/ir/src/codec/json/value.ts")) return "@finos/morphir-ir/codec/json";
@@ -105,6 +113,7 @@ function irPackageSpecifier(specifier: string): string {
 
 const DECLARATION_REWRITES: readonly DeclarationRewrite[] = [
 	[/(["'])(?:\.\.\/)+ir\/src\/index\.ts\1/g, '"@finos/morphir-ir"'],
+	[/(["'])(?:\.\.\/)+ir\/src\/model\/index\.ts\1/g, '"@finos/morphir-ir/model"'],
 	[/(["'])(?:\.\.\/)+ir\/src\/versions\/v4\/(?:index|vocabulary)\.ts\1/g, '"@finos/morphir-ir/v4"'],
 	[/(["'])(?:\.\.\/)+ir\/src\/layout\/index\.ts\1/g, '"@finos/morphir-ir/layout"'],
 	[/(["'])(?:\.\.\/)+ir\/src\/codec\/json\/value\.ts\1/g, '"@finos/morphir-ir/codec/json"'],
@@ -272,6 +281,108 @@ for (const testee of [referencePackageTestee(), processTestee]) {
 assert.equal(exitCode, 0);
 `;
 
+const RESOLUTION_SMOKE = `
+import assert from "node:assert/strict";
+import { processResolutionTestee, referenceResolutionTestee } from "@finos/morphir-mck";
+const digest = "sha256:" + "0".repeat(64);
+const id = (packagePath, version = "1.0.0") => ({ packagePath, version });
+const requirement = (irPackageName, packagePath, minimumInclusive, maximumExclusive) => ({ irPackageName, packagePath, versionRange: { minimumInclusive, maximumExclusive } });
+const record = (packagePath, version, irPackageName, dependencies = []) => ({ release: id(packagePath, version), irPackageName, manifestDigest: digest, contentDigest: digest, dependencies });
+const binding = (metadata) => ({ irPackageName: metadata.irPackageName, target: metadata.release });
+const node = (metadata, bindings = []) => ({ release: metadata.release, irPackageName: metadata.irPackageName, manifestDigest: metadata.manifestDigest, contentDigest: metadata.contentDigest, bindings });
+const targetPath = "example.com/lib/target";
+const keeperPath = "example.com/lib/keeper";
+const existingPath = "example.com/lib/existing";
+const existing10 = record(existingPath, "1.0.0", "example/existing");
+const existing15 = record(existingPath, "1.5.0", "example/existing");
+const target10 = record(targetPath, "1.0.0", "example/target");
+const target20 = record(targetPath, "2.0.0", "example/target", [requirement("example/existing", existingPath, "1.5.0", "2.0.0")]);
+const keeper = record(keeperPath, "1.0.0", "example/keeper", [requirement("example/existing", existingPath, "1.0.0", "2.0.0")]);
+const root = record("example.com/app/root", "1.0.0", "example/app", [requirement("example/target", targetPath, "1.0.0", "3.0.0"), requirement("example/keeper", keeperPath, "1.0.0", "2.0.0")]);
+const input = JSON.stringify({ formatVersion: "0.1.0-draft.2", capability: "flat-library", root, mode: "update", catalogs: [{ packagePath: targetPath, releases: [target10, target20] }, { packagePath: keeperPath, releases: [keeper] }, { packagePath: existingPath, releases: [existing10, existing15] }], lock: { root: root.release, nodes: [node(root, [binding(target10), binding(keeper)]), node(target10), node(keeper, [binding(existing10)]), node(existing10)] }, targets: [{ kind: "exact", packagePath: targetPath, version: "2.0.0" }] });
+let exitCode;
+const processTestee = processResolutionTestee([process.execPath, "node_modules/@finos/morphir-mck/dist/adapter.js", "--suite", "package", "--contract", "0.1.0-draft.2"], { timeoutMs: 5000, onExit: (code) => { exitCode = code; } });
+for (const testee of [referenceResolutionTestee(), processTestee]) {
+	try {
+		assert.deepEqual((await testee.capabilities()).profiles, ["flat-library"]);
+		const result = await testee.execute({ op: "resolve-library", input });
+		assert.equal(result.ok, false);
+		assert.equal(result.diagnostic.code, "update-scope-conflict");
+		assert.deepEqual(result.diagnostic.changedPins, [{ kind: "changed", previous: existing10.release, selected: existing15.release }]);
+	} finally { await testee.close(); }
+}
+assert.equal(exitCode, 0);
+`;
+
+async function writeResolutionSmokeKit(consumer: string): Promise<string> {
+	const root = path.join(consumer, "resolution-kit");
+	const mck = path.join(root, "mck");
+	const schemas = path.join(root, "schemas");
+	await mkdir(path.join(mck, "fixtures/resolution"), { recursive: true });
+	await mkdir(schemas, { recursive: true });
+	const version = "0.1.0-draft.2";
+	const expected = { ok: false, diagnostic: { code: "invalid-input", violations: [{ pointer: "", rule: "malformed-json" }] } };
+	const resultSchema = {
+		$schema: "https://json-schema.org/draft/2020-12/schema",
+		$id: "https://morphir.finos.org/spec/package/0.1.0-draft.2/resolution-result.schema.json",
+		const: expected,
+	};
+	const caseSchema = {
+		$schema: "https://json-schema.org/draft/2020-12/schema",
+		$id: "https://morphir.finos.org/spec/package/0.1.0-draft.2/resolution-case.schema.json",
+		oneOf: [
+			{
+				type: "object",
+				required: ["formatVersion", "fixtures"],
+				additionalProperties: false,
+				properties: { formatVersion: { const: version }, fixtures: { type: "array", minItems: 1, items: { type: "string" } } },
+			},
+			{
+				type: "object",
+				required: ["formatVersion", "cases"],
+				additionalProperties: false,
+				properties: {
+					formatVersion: { const: version },
+					cases: {
+						type: "array",
+						minItems: 1,
+						items: {
+							type: "object",
+							required: ["id", "family", "description", "input", "expected"],
+							additionalProperties: false,
+							properties: {
+								id: { type: "string" },
+								family: { type: "string" },
+								description: { type: "string" },
+								input: { type: "string" },
+								expected: { $ref: resultSchema.$id },
+							},
+						},
+					},
+				},
+			},
+		],
+	};
+	const schema = (id: string): JsonRecord => ({ $schema: "https://json-schema.org/draft/2020-12/schema", $id: id, type: "object" });
+	const files: ReadonlyArray<readonly [string, unknown]> = [
+		[path.join(mck, "resolution-cases.json"), { formatVersion: version, fixtures: ["fixtures/resolution/smoke.json"] }],
+		[
+			path.join(mck, "fixtures/resolution/smoke.json"),
+			{
+				formatVersion: version,
+				cases: [{ id: "resolution.smoke.malformed", family: "profile-boundaries", description: "Packed Node 20 resolve-library smoke", input: "{", expected }],
+			},
+		],
+		[path.join(schemas, "library-manifest.schema.json"), schema("https://morphir.finos.org/spec/package/0.1.0-draft.1/library-manifest.schema.json")],
+		[path.join(schemas, "lock-core.schema.json"), schema("https://morphir.finos.org/spec/package/0.1.0-draft.1/lock-core.schema.json")],
+		[path.join(schemas, "resolution-input.schema.json"), schema("https://morphir.finos.org/spec/package/0.1.0-draft.2/resolution-input.schema.json")],
+		[path.join(schemas, "resolution-result.schema.json"), resultSchema],
+		[path.join(schemas, "resolution-case.schema.json"), caseSchema],
+	];
+	await Promise.all(files.map(([file, value]) => Bun.write(file, `${JSON.stringify(value)}\n`)));
+	return mck;
+}
+
 /**
  * Runs the packed driver the way a user does: `--version`, an embedded-kit run,
  * and the same run over the packed adapter as a child process.
@@ -326,6 +437,37 @@ async function smokeTest(mckTarball: string, irTarball: string, compiler: string
 		await expectKitRun(["node", cli, "run", "--report", "r.json"], consumer, "r.json");
 		await expectKitRun(["node", cli, "run", "--adapter", "node", "--adapter-arg", adapter, "--report", "a.json"], consumer, "a.json");
 		await runCommand(["node", "--input-type=module", "--eval", PACKAGE_SMOKE], consumer);
+		await runCommand(["node", "--input-type=module", "--eval", RESOLUTION_SMOKE], consumer);
+
+		const resolutionKit = await writeResolutionSmokeKit(consumer);
+		await runCommand(["node", cli, "package", "run", "--contract", "0.1.0-draft.2", "--kit", resolutionKit, "--report", "resolution.json"], consumer);
+		await runCommand(
+			[
+				"node",
+				cli,
+				"package",
+				"run",
+				"--contract",
+				"0.1.0-draft.2",
+				"--kit",
+				resolutionKit,
+				"--adapter",
+				"node",
+				"--adapter-arg",
+				adapter,
+				"--adapter-arg",
+				"--suite",
+				"--adapter-arg",
+				"package",
+				"--adapter-arg",
+				"--contract",
+				"--adapter-arg",
+				"0.1.0-draft.2",
+				"--report",
+				"resolution-adapter.json",
+			],
+			consumer,
+		);
 
 		await Bun.write(path.join(consumer, "index.ts"), ['import * as mck from "@finos/morphir-mck";', "void mck;", ""].join("\n"));
 		await runCommand([compiler, "--noEmit", "--strict", "--target", "ES2022", "--module", "NodeNext", "--moduleResolution", "NodeNext", "index.ts"], consumer);

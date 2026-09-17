@@ -1,0 +1,299 @@
+{
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"$id": "https://morphir.finos.org/mck/package-resolution-protocol/0.1.0-draft.2",
+	"title": "MCK package resolution JSON-lines protocol, experimental 0.1.0-draft.2",
+	"oneOf": [
+		{
+			"type": "object",
+			"required": ["id", "op"],
+			"additionalProperties": false,
+			"properties": { "id": { "$ref": "#/$defs/Id" }, "op": { "enum": ["capabilities", "exit"] } }
+		},
+		{
+			"type": "object",
+			"required": ["id", "op", "input"],
+			"additionalProperties": false,
+			"properties": { "id": { "$ref": "#/$defs/Id" }, "op": { "const": "resolve-library" }, "input": { "type": "string" } }
+		},
+		{ "$ref": "#/$defs/CapabilitiesEnvelope" },
+		{ "$ref": "#/$defs/SuccessEnvelope" },
+		{ "$ref": "#/$defs/FailureEnvelope" }
+	],
+	"$defs": {
+		"Id": { "type": "integer", "minimum": 1 },
+		"PackagePath": {
+			"type": "string",
+			"pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*(?:\\.[a-z0-9]+(?:-[a-z0-9]+)*)+/[a-z0-9]+(?:-[a-z0-9]+)*(?:/[a-z0-9]+(?:-[a-z0-9]+)*)*$"
+		},
+		"IRPath": {
+			"type": "string",
+			"pattern": "^(?:[a-z0-9]+|[A-Z0-9]+)(?:-(?:[a-z0-9]+|[A-Z0-9]+))*(?:/(?:[a-z0-9]+|[A-Z0-9]+)(?:-(?:[a-z0-9]+|[A-Z0-9]+))*)*$"
+		},
+		"StableVersion": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$" },
+		"Digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+		"ReleaseId": {
+			"type": "object",
+			"required": ["packagePath", "version"],
+			"additionalProperties": false,
+			"properties": { "packagePath": { "$ref": "#/$defs/PackagePath" }, "version": { "$ref": "#/$defs/StableVersion" } }
+		},
+		"VersionRange": {
+			"type": "object",
+			"required": ["minimumInclusive", "maximumExclusive"],
+			"additionalProperties": false,
+			"properties": {
+				"minimumInclusive": { "$ref": "#/$defs/StableVersion" },
+				"maximumExclusive": { "$ref": "#/$defs/StableVersion" }
+			}
+		},
+		"Requirement": {
+			"type": "object",
+			"required": ["irPackageName", "packagePath", "versionRange"],
+			"additionalProperties": false,
+			"properties": {
+				"irPackageName": { "$ref": "#/$defs/IRPath" },
+				"packagePath": { "$ref": "#/$defs/PackagePath" },
+				"versionRange": { "$ref": "#/$defs/VersionRange" }
+			}
+		},
+		"ReleaseRecord": {
+			"type": "object",
+			"required": ["release", "irPackageName", "manifestDigest", "contentDigest", "dependencies"],
+			"additionalProperties": false,
+			"properties": {
+				"release": { "$ref": "#/$defs/ReleaseId" },
+				"irPackageName": { "$ref": "#/$defs/IRPath" },
+				"manifestDigest": { "$ref": "#/$defs/Digest" },
+				"contentDigest": { "$ref": "#/$defs/Digest" },
+				"dependencies": { "type": "array", "items": { "$ref": "#/$defs/Requirement" } }
+			}
+		},
+		"Binding": {
+			"type": "object",
+			"required": ["irPackageName", "target"],
+			"additionalProperties": false,
+			"properties": { "irPackageName": { "$ref": "#/$defs/IRPath" }, "target": { "$ref": "#/$defs/ReleaseId" } }
+		},
+		"LockedNode": {
+			"type": "object",
+			"required": ["release", "irPackageName", "manifestDigest", "contentDigest", "bindings"],
+			"additionalProperties": false,
+			"properties": {
+				"release": { "$ref": "#/$defs/ReleaseId" },
+				"irPackageName": { "$ref": "#/$defs/IRPath" },
+				"manifestDigest": { "$ref": "#/$defs/Digest" },
+				"contentDigest": { "$ref": "#/$defs/Digest" },
+				"bindings": { "type": "array", "items": { "$ref": "#/$defs/Binding" } }
+			}
+		},
+		"LockedGraph": {
+			"type": "object",
+			"required": ["root", "nodes"],
+			"additionalProperties": false,
+			"properties": {
+				"root": { "$ref": "#/$defs/ReleaseId" },
+				"nodes": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/LockedNode" } }
+			}
+		},
+		"Catalog": {
+			"type": "object",
+			"required": ["packagePath", "releases"],
+			"additionalProperties": false,
+			"properties": { "packagePath": { "$ref": "#/$defs/PackagePath" }, "releases": { "type": "array", "items": { "$ref": "#/$defs/ReleaseRecord" } } }
+		},
+		"UpdateTarget": {
+			"oneOf": [
+				{
+					"type": "object",
+					"required": ["kind", "packagePath"],
+					"additionalProperties": false,
+					"properties": { "kind": { "const": "eligible" }, "packagePath": { "$ref": "#/$defs/PackagePath" } }
+				},
+				{
+					"type": "object",
+					"required": ["kind", "packagePath", "version"],
+					"additionalProperties": false,
+					"properties": {
+						"kind": { "const": "exact" },
+						"packagePath": { "$ref": "#/$defs/PackagePath" },
+						"version": { "$ref": "#/$defs/StableVersion" }
+					}
+				}
+			]
+		},
+		"Violation": {
+			"type": "object",
+			"required": ["pointer", "rule"],
+			"additionalProperties": false,
+			"properties": {
+				"pointer": { "type": "string" },
+				"rule": {
+					"enum": [
+						"malformed-json",
+						"duplicate-key",
+						"unknown-field",
+						"missing-field",
+						"invalid-type",
+						"invalid-value",
+						"invalid-name",
+						"invalid-version",
+						"invalid-interval",
+						"invalid-digest",
+						"duplicate-identity",
+						"identity-mismatch",
+						"missing-root",
+						"dangling-binding",
+						"binding-mismatch",
+						"requirement-mismatch",
+						"digest-mismatch",
+						"unreachable-node",
+						"cycle",
+						"unsupported-flat-binding"
+					]
+				}
+			}
+		},
+		"MissingItem": {
+			"oneOf": [
+				{
+					"type": "object",
+					"required": ["kind", "packagePath"],
+					"additionalProperties": false,
+					"properties": { "kind": { "const": "catalog" }, "packagePath": { "$ref": "#/$defs/PackagePath" } }
+				},
+				{
+					"type": "object",
+					"required": ["kind", "release"],
+					"additionalProperties": false,
+					"properties": { "kind": { "const": "release" }, "release": { "$ref": "#/$defs/ReleaseId" } }
+				}
+			]
+		},
+		"ChangedPin": {
+			"oneOf": [
+				{
+					"type": "object",
+					"required": ["kind", "previous", "selected"],
+					"additionalProperties": false,
+					"properties": { "kind": { "const": "changed" }, "previous": { "$ref": "#/$defs/ReleaseId" }, "selected": { "$ref": "#/$defs/ReleaseId" } }
+				},
+				{
+					"type": "object",
+					"required": ["kind", "previous"],
+					"additionalProperties": false,
+					"properties": { "kind": { "const": "removed" }, "previous": { "$ref": "#/$defs/ReleaseId" } }
+				}
+			]
+		},
+		"Occurrence": { "type": "array", "items": { "$ref": "#/$defs/IRPath" } },
+		"Witness": {
+			"type": "object",
+			"required": ["nodes"],
+			"additionalProperties": false,
+			"properties": {
+				"nodes": {
+					"type": "array",
+					"minItems": 1,
+					"items": {
+						"type": "object",
+						"required": ["occurrence", "release", "bindings"],
+						"additionalProperties": false,
+						"properties": {
+							"occurrence": { "$ref": "#/$defs/Occurrence" },
+							"release": { "$ref": "#/$defs/ReleaseId" },
+							"bindings": {
+								"type": "array",
+								"items": {
+									"type": "object",
+									"required": ["irPackageName", "targetOccurrence"],
+									"additionalProperties": false,
+									"properties": {
+										"irPackageName": { "$ref": "#/$defs/IRPath" },
+										"targetOccurrence": { "$ref": "#/$defs/Occurrence" }
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"Diagnostic": {
+			"oneOf": [
+				{
+					"type": "object",
+					"required": ["code", "violations"],
+					"additionalProperties": false,
+					"properties": {
+						"code": { "enum": ["invalid-input", "invalid-lock"] },
+						"violations": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/Violation" } }
+					}
+				},
+				{
+					"type": "object",
+					"required": ["code", "missing"],
+					"additionalProperties": false,
+					"properties": { "code": { "const": "incomplete-input" }, "missing": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/MissingItem" } } }
+				},
+				{
+					"type": "object",
+					"required": ["code", "changedPins", "witness"],
+					"additionalProperties": false,
+					"properties": {
+						"code": { "const": "update-scope-conflict" },
+						"changedPins": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/ChangedPin" } },
+						"witness": { "$ref": "#/$defs/Witness" }
+					}
+				},
+				{
+					"type": "object",
+					"required": ["code", "requiredCapabilities", "changedPins", "witness"],
+					"additionalProperties": false,
+					"properties": {
+						"code": { "const": "unsupported-capability" },
+						"requiredCapabilities": { "const": ["graph-aware-coexistence"] },
+						"changedPins": { "type": "array", "items": { "$ref": "#/$defs/ChangedPin" } },
+						"witness": { "$ref": "#/$defs/Witness" }
+					}
+				},
+				{
+					"type": "object",
+					"required": ["code", "root", "catalogs", "targets"],
+					"additionalProperties": false,
+					"properties": {
+						"code": { "const": "unsatisfiable-requirements" },
+						"root": { "$ref": "#/$defs/ReleaseRecord" },
+						"catalogs": { "type": "array", "items": { "$ref": "#/$defs/Catalog" } },
+						"targets": { "type": "array", "items": { "$ref": "#/$defs/UpdateTarget" } }
+					}
+				}
+			]
+		},
+		"CapabilitiesEnvelope": {
+			"type": "object",
+			"required": ["id", "suite", "contractVersion", "implementation", "implementationVersion", "operations", "profiles"],
+			"additionalProperties": false,
+			"properties": {
+				"id": { "$ref": "#/$defs/Id" },
+				"suite": { "const": "package" },
+				"contractVersion": { "const": "0.1.0-draft.2" },
+				"implementation": { "type": "string", "minLength": 1 },
+				"implementationVersion": { "type": "string", "minLength": 1 },
+				"operations": { "type": "array", "uniqueItems": true, "items": { "const": "resolve-library" } },
+				"profiles": { "type": "array", "uniqueItems": true, "items": { "const": "flat-library" } }
+			}
+		},
+		"SuccessEnvelope": {
+			"type": "object",
+			"required": ["id", "ok", "graph"],
+			"additionalProperties": false,
+			"properties": { "id": { "$ref": "#/$defs/Id" }, "ok": { "const": true }, "graph": { "$ref": "#/$defs/LockedGraph" } }
+		},
+		"FailureEnvelope": {
+			"type": "object",
+			"required": ["id", "ok", "diagnostic"],
+			"additionalProperties": false,
+			"properties": { "id": { "$ref": "#/$defs/Id" }, "ok": { "const": false }, "diagnostic": { "$ref": "#/$defs/Diagnostic" } }
+		}
+	}
+}

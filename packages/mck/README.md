@@ -49,14 +49,14 @@ A report validates against [`spec/ir/mck/report.schema.json`](https://github.com
 Copyright 2026 FINOS. Licensed under Apache-2.0.
 ## Experimental package suite
 
-`mck package run --kit /path/to/finos/morphir/spec/package/mck --report package.json`
+`mck package run --contract 0.1.0-draft.1 --kit /path/to/finos/morphir/spec/package/mck --report package.json`
 runs the draft package corpus owned by finos/morphir. The package corpus is not embedded;
 the existing embedded kit and `kit.lock.json` still identify only the IR suite.
 
 Use an executable implementation with:
 
 ```shell
-mck package run --kit /path/to/spec/package/mck \
+mck package run --contract 0.1.0-draft.1 --kit /path/to/spec/package/mck \
   --adapter mck-adapter-typescript --adapter-arg --suite --adapter-arg package \
   --report package-adapter.json
 ```
@@ -68,6 +68,21 @@ Requests and responses use the existing JSON-lines envelope with incrementing po
 `capabilities` returns implementation name, version and supported operations; `exit` ends the process
 without a response. Protocol or infrastructure errors terminate the reference adapter with a nonzero exit.
 Only a valid operation result can satisfy an expected rejection.
+
+Omitting `--contract` preserves `0.1.0-draft.1`. Select Library resolution explicitly:
+
+```shell
+mck package run --contract 0.1.0-draft.2 --kit /path/to/spec/package/mck \
+  --adapter mck-adapter-typescript --adapter-arg --suite --adapter-arg package \
+  --adapter-arg --contract --adapter-arg 0.1.0-draft.2 \
+  --report package-resolution.json
+```
+
+Draft.2 has the single `resolve-library` operation and requires the `flat-library` profile.
+Its raw string input preserves malformed JSON and duplicate keys as domain cases. Its installed
+wire and report schemas are `package-resolution-protocol.schema.json` and
+`package-resolution-report.schema.json`. Unknown contracts fail before corpus loading. Invoking
+the adapter without package arguments still selects the unchanged IR v1 protocol.
 
 | Operation | Input | Result |
 | --- | --- | --- |
@@ -85,6 +100,10 @@ Library-set verification checks exact content membership and bytes, metadata nor
 release identities, binding targets, stable-version intervals, v4 codec acceptance, IR package/dependency names,
 and public export targets. It does not implement version selection, public-specification compatibility,
 trust, archive extraction, or installation. A successful run is evidence for this bounded draft only.
+
+`resolveLibrary` is the validated draft.2 boundary. The exported low-level search and update
+functions require a value already returned by `parseResolutionInput`; raw or otherwise
+unvalidated JSON-shaped values are outside their contract.
 
 All loaded cases are required. A missing capability, failed comparison, kit/adapter error, or empty corpus
 causes a nonzero exit. Reports include testee capabilities and a hash of every consumed schema, case and fixture.

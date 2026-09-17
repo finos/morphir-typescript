@@ -33,10 +33,37 @@ export {
 	type PackageTestee,
 } from "./package/contract.ts";
 export { loadPackageKit, loadPackageKitFromFiles, type PackageCase, type PackageKit } from "./package/corpus.ts";
-export { processPackageTestee } from "./package/process.ts";
+export { processPackageTestee, processResolutionTestee } from "./package/process.ts";
 export { parsePackageCapabilities, parsePackageRequest, parsePackageResponse } from "./package/protocol.ts";
-export { canonicalizePackageDocument, packageFileDigest, referencePackageTestee } from "./package/reference.ts";
-export { type PackageRecord, type PackageReport, packageExitCode, runPackageKit } from "./package/run.ts";
+export { canonicalizePackageDocument, packageFileDigest, referencePackageTestee, referenceResolutionTestee } from "./package/reference.ts";
+export {
+	RESOLUTION_CONTRACT,
+	RESOLUTION_OPERATIONS,
+	RESOLUTION_PROFILES,
+	type ResolutionCapabilities,
+	type ResolutionKit,
+	type ResolutionOperation,
+	type ResolutionProfile,
+	type ResolutionRequest,
+	type ResolutionResponse,
+	type ResolutionTestee,
+} from "./package/resolution/contract.ts";
+export { loadResolutionKit, loadResolutionKitFromFiles } from "./package/resolution/corpus.ts";
+export { ResolutionExecutionError, resolveLibrary } from "./package/resolution/index.ts";
+export * from "./package/resolution/model.ts";
+export * from "./package/resolution/order.ts";
+export { parseResolutionInput, resolutionInputToWire } from "./package/resolution/parse.ts";
+export { parseResolutionCapabilities, parseResolutionRequest, parseResolutionResponse, projectResolutionResult } from "./package/resolution/protocol.ts";
+export { type InitialSearchResult, searchInitialLibrary } from "./package/resolution/search.ts";
+export {
+	type PackageContractRecord,
+	type PackageContractReport,
+	type PackageRecord,
+	type PackageReport,
+	packageExitCode,
+	runPackageKit,
+	runResolutionKit,
+} from "./package/run.ts";
 export {
 	emptyReport,
 	formatSummary,
