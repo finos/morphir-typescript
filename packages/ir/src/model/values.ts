@@ -2,6 +2,7 @@
 //
 // Literals, patterns, value expressions, value specifications and value
 // definitions, generic over type attributes TA and value attributes VA.
+import type { Decimal } from "decimal.js";
 import type { Json } from "./attributes.ts";
 import type { FQName, Name } from "./names.ts";
 import type { Annotation, HoleReason, Incompleteness, Type } from "./types.ts";
@@ -12,7 +13,9 @@ export type Literal =
 	| { readonly kind: "StringLiteral"; readonly value: string }
 	| { readonly kind: "IntegerLiteral"; readonly value: bigint }
 	| { readonly kind: "FloatLiteral"; readonly value: number }
-	| { readonly kind: "DecimalLiteral"; readonly value: string }
+	// A genuine decimal: the value computes, the lexeme is what is written.
+	// See model/decimal.ts for the grammar and why both are carried.
+	| { readonly kind: "DecimalLiteral"; readonly lexeme: string; readonly value: Decimal }
 	// Decision 0013: a schema-less JSON-like tree carried verbatim, typed
 	// morphir/SDK:document#document. Json is the codec's own value tree, so a
 	// number keeps the lexeme it was spelled with and an object keeps its order.

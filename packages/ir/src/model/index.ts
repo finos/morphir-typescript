@@ -3,6 +3,7 @@
 
 export * from "./attributes.ts";
 export * from "./attributes-map.ts";
+export * from "./decimal.ts";
 export * from "./diagnostic.ts";
 export * from "./distribution.ts";
 export * from "./modules.ts";

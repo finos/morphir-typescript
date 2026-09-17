@@ -12,8 +12,8 @@ import {
 	promoteVerifiedArtifact,
 	publishManifest,
 	runCommand,
+	runtimeDependencyTarballName,
 	validatePackageFiles,
-	yamlTarballName,
 } from "./package-ir.ts";
 import { parseStableVersion } from "./version.ts";
 
@@ -50,7 +50,7 @@ function sourceManifest(): Record<string, unknown> {
 		exports: structuredClone(exportsMap),
 		sideEffects: false,
 		publishConfig: { access: "public" },
-		dependencies: { yaml: "2.9.1" },
+		dependencies: { "decimal.js": "10.6.0", yaml: "2.9.1" },
 		scripts: { typecheck: "tsc -p tsconfig.json" },
 		devDependencies: { "@finos/morphir-mck": "workspace:*" },
 	};
@@ -74,7 +74,7 @@ describe("publishManifest", () => {
 			exports: exportsMap,
 			sideEffects: false,
 			files: ["dist", "README.md", "LICENSE", "NOTICE"],
-			dependencies: { yaml: "2.9.1" },
+			dependencies: { "decimal.js": "10.6.0", yaml: "2.9.1" },
 			publishConfig: { access: "public" },
 		});
 		expect(result).not.toHaveProperty("private");
@@ -105,11 +105,12 @@ describe("publishManifest", () => {
 	});
 });
 
-describe("yamlTarballName", () => {
-	test("derives the packed yaml tarball name from the pinned dependency version, not a hard-coded literal", () => {
+describe("runtimeDependencyTarballName", () => {
+	test("derives each packed runtime dependency's tarball name from its pinned version, not a hard-coded literal", () => {
 		const source = sourceManifest();
-		const pinned = publishManifest(source).dependencies.yaml;
-		expect(yamlTarballName()).toBe(`yaml-${pinned}.tgz`);
+		const pinned = publishManifest(source).dependencies;
+		expect(runtimeDependencyTarballName("yaml")).toBe(`yaml-${pinned.yaml}.tgz`);
+		expect(runtimeDependencyTarballName("decimal.js")).toBe(`decimal.js-${pinned["decimal.js"]}.tgz`);
 	});
 });
 

@@ -12,6 +12,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** `DecimalLiteral` in `@finos/morphir-ir` is a genuine decimal: `{ kind, lexeme, value }` where `value` is a `decimal.js` `Decimal` and `lexeme` is the text as written, which is what a writer emits. The v4 reader refuses a payload that is not a decimal lexeme (`[+-]?(digits(.digits?)?|.digits)([eE][+-]?digits)?`) with `invalid_literal`. `decimal.js` is a new dependency of `@finos/morphir-ir`.
+
+### Added
+
+- `parseDecimal`, `decimalLiteral`, `isDecimalLexeme`, `DECIMAL_LEXEME` and the types `DecimalLiteral` and `DecimalParseError` in `@finos/morphir-ir/model`. `parseDecimal` returns a `Result` whose error is a value naming the offending lexeme; `decimalLiteral` is the throwing convenience for a lexeme known to be good.
+
 ## [0.2.0] - 2026-09-16
 
 ### Added
