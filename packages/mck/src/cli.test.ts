@@ -199,7 +199,7 @@ describe("mck run", () => {
 	// versions-0006 to 0008), each on both paths.
 	test("over the embedded kit, every fence passes and only version 3 is skipped", () => {
 		const r = run(["run"]);
-		expect(r.out).toMatch(/^708 pass, 0 fail, 0 kit-error, 8 skipped$/m);
+		expect(r.out).toMatch(/^722 pass, 0 fail, 0 kit-error, 8 skipped$/m);
 		expect(r.code).toBe(0);
 	});
 	test("the embedded kit skips only version 3", () => {
