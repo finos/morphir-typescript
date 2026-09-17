@@ -82,6 +82,21 @@ The explicit integration check requires the parent source and fails if it is abs
 bun packages/mck/test/support/local-registry-parent-integration.ts --source /path/to/finos/morphir
 ```
 
+Internal draft.3 decoders validate raw locks, canonical records and statement payloads,
+and explicit trust policies. They preserve exact TUF integer lexemes and keep DSSE's
+JSON domain separate from Morphir metadata. Policy helpers match complete namespace
+components and select the most specific publisher rule without fallback.
+These modules are not public package exports. A decoded value proves neither signatures
+nor authorization; no authenticated restore or qualified filesystem provider is supplied.
+
+The decoder integration check compares fixed rejection diagnostics and the signed
+fixture's document shapes. It does not execute pending scenarios or produce a
+compatibility report:
+
+```sh
+bun packages/mck/test/support/local-registry-decode-parent-integration.ts --source /path/to/finos/morphir
+```
+
 `mck package run --contract 0.1.0-draft.1 --kit /path/to/finos/morphir/spec/package/mck --report package.json`
 runs the draft package corpus owned by finos/morphir. The package corpus is not embedded;
 the existing embedded kit and `kit.lock.json` still identify only the IR suite.
