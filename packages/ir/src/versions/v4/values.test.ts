@@ -55,10 +55,31 @@ describe("literals", () => {
 			const r = readLiteral(newRoot(), json(s));
 			expect(r.ok && writeJson(writeLiteral(r.value))).toBe('{ "IntegerLiteral": 42 }');
 		}
-		const d = readLiteral(newRoot(), json('{ "DecimalLiteral": "10.50" }'));
-		expect(d.ok && writeJson(writeLiteral(d.value))).toBe('{ "DecimalLiteral": "10.50" }');
 		const f = readLiteral(newRoot(), json('{ "FloatLiteral": 0.0 }'));
 		expect(f.ok && writeJson(writeLiteral(f.value))).toBe('{ "FloatLiteral": 0.0 }');
+	});
+	test("a DecimalLiteral is a decimal lexeme kept as written (kit patterns-and-literals-0002, 0016, 0017, 0018)", () => {
+		for (const s of [
+			'{ "DecimalLiteral": "10.50" }',
+			'{ "DecimalLiteral": "-0.00" }',
+			'{ "DecimalLiteral": "1e-7" }',
+			'{ "DecimalLiteral": ".5" }',
+			'{ "DecimalLiteral": "+12." }',
+		]) {
+			rtLiteral(s);
+		}
+		for (const s of [
+			'{ "DecimalLiteral": "ten" }',
+			'{ "DecimalLiteral": "" }',
+			'{ "DecimalLiteral": "1_000" }',
+			'{ "DecimalLiteral": "NaN" }',
+			'{ "DecimalLiteral": 10.5 }',
+		]) {
+			const bad = readLiteral(newRoot(), json(s));
+			expect(!bad.ok && bad.error.code).toBe("invalid_literal");
+		}
+		const d = readLiteral(newRoot(), json('{ "DecimalLiteral": "10.50" }'));
+		expect(d.ok && d.value.kind === "DecimalLiteral" && d.value.value.toFixed(2)).toBe("10.50");
 	});
 	test("a non-integer lexeme is not an IntegerLiteral", () => {
 		expect(readLiteral(newRoot(), json('{ "IntegerLiteral": 4.5 }')).ok).toBe(false);

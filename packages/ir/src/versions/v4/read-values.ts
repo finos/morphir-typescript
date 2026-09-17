@@ -45,6 +45,7 @@ import {
 	windowed,
 } from "../../codec/json/cursor.ts";
 import { isInteger, isNumber, isObject, type JsonObject, type JsonValue } from "../../codec/json/value.ts";
+import { parseDecimal } from "../../model/decimal.ts";
 import type { Diagnostic } from "../../model/diagnostic.ts";
 import type { Name } from "../../model/names.ts";
 import { ok, type Result } from "../../model/result.ts";
@@ -183,9 +184,13 @@ export function readLiteral(ctx: Ctx, v: JsonValue): Result<Literal, Diagnostic>
 			return isNumber(p) && isInteger(p) ? ok({ kind: "IntegerLiteral", value: BigInt(p.text) }) : wrong("an integer lexeme");
 		case "FloatLiteral":
 			return isNumber(p) ? floatLiteral(inner, p.text) : wrong("a number");
-		case "DecimalLiteral":
-			// Carried as text so no binding rounds it into a float.
-			return typeof p === "string" ? ok({ kind: "DecimalLiteral", value: p }) : wrong("a string");
+		case "DecimalLiteral": {
+			// A genuine decimal: the lexeme must spell one (v4 schema page, "Literals").
+			// parseDecimal's error is a value; the reader gives it the cursor.
+			if (typeof p !== "string") return wrong("a decimal lexeme");
+			const d = parseDecimal(p);
+			return d.ok ? d : fail(inner, "invalid_literal", d.error.message, p);
+		}
 		default:
 			return fail(ctx, "invalid_literal", `unknown literal "${key}"`, v);
 	}

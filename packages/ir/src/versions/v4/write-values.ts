@@ -56,7 +56,7 @@ export function writeLiteral(l: Literal): JsonValue {
 		case "FloatLiteral":
 			return wrap("FloatLiteral", jsonNumber(floatText(l.value)));
 		case "DecimalLiteral":
-			return wrap("DecimalLiteral", l.value);
+			return wrap("DecimalLiteral", l.lexeme);
 		// The payload is the document, so there is nothing to encode.
 		case "DocumentLiteral":
 			return wrap("DocumentLiteral", l.value);

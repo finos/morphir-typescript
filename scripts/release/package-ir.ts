@@ -52,14 +52,14 @@ const EXPORTS = {
 	"./layout": { types: "./dist/layout/index.d.ts", import: "./dist/layout/index.js" },
 	"./layout/node": { types: "./dist/layout/node.d.ts", import: "./dist/layout/node.js" },
 } as const;
-// The one runtime dependency: the YAML profile's reader parses through it. It
-// is external to the bundle and declared in the published manifest, as the mck
-// package declares its dependency on this one — a bundled copy would put a
-// second `yaml` in a consumer's graph. (The mck driver's command-line entry is
-// different: nobody imports dist/cli.js, so it bundles its command-line
-// dependencies, and the source-map canonicalizer maps those under a virtual
-// node_modules path.)
-const DEPENDENCIES = { yaml: "2.9.1" } as const;
+// The runtime dependencies: the YAML profile's reader parses through `yaml`,
+// and the DecimalLiteral model carries a `decimal.js` value. Both are external
+// to the bundle and declared in the published manifest, as the mck package
+// declares its dependency on `yaml` — a bundled copy would put a second copy
+// in a consumer's graph. (The mck driver's command-line entry is different:
+// nobody imports dist/cli.js, so it bundles its command-line dependencies, and
+// the source-map canonicalizer maps those under a virtual node_modules path.)
+const DEPENDENCIES = { "decimal.js": "10.6.0", yaml: "2.9.1" } as const;
 const ROOT_FILES = ["package/package.json", "package/README.md", "package/LICENSE", "package/NOTICE"] as const;
 const REQUIRED_FILES = [
 	...ROOT_FILES,
