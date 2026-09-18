@@ -141,7 +141,7 @@ afterEach(async () => {
 });
 
 describe("prepareSuiteRelease", () => {
-	test("updates the three manifests, lockfile, and changelog", async () => {
+	test("updates the four manifests, lockfile, and changelog", async () => {
 		const root = await fixture();
 
 		const version = await prepareSuiteRelease(root, "0.0.1", "2026-09-05");
@@ -152,7 +152,7 @@ describe("prepareSuiteRelease", () => {
 			expect(parsed.version).toBe("0.0.1");
 		}
 		const lock = Bun.JSONC.parse(await readFile(path.join(root, "bun.lock"), "utf8")) as { workspaces: Record<string, { version: string }> };
-		expect(Object.values(lock.workspaces).map((workspace) => workspace.version)).toEqual(["0.0.1", "0.0.1", "0.0.1"]);
+		expect(Object.values(lock.workspaces).map((workspace) => workspace.version)).toEqual(["0.0.1", "0.0.1", "0.0.1", "0.0.1"]);
 		expect(await readFile(path.join(root, "CHANGELOG.md"), "utf8")).toContain("## [0.0.1] - 2026-09-05");
 	});
 
@@ -221,7 +221,7 @@ describe("prepareSuiteRelease", () => {
 	});
 
 	test("rejects an older target version without changing files", async () => {
-		const root = await fixture({ versions: ["1.0.0", "1.0.0", "1.0.0"], lock: lockfile("1.0.0") });
+		const root = await fixture({ versions: ["1.0.0", "1.0.0", "1.0.0", "1.0.0"], lock: lockfile("1.0.0") });
 		await expectRejectedWithoutWrites(root, () => prepareSuiteRelease(root, "0.9.0", "2026-09-05"), "must be newer");
 	});
 
