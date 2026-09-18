@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - `@finos/morphir-sdk`, a new workspace package holding the TypeScript Morphir SDK runtime: the `Basics`, `Char`, `String`, `List`, `Dict`, `Set`, `Maybe`, `Result`, `Tuple`, `Decimal`, `Int` and `Number` modules of the `Morphir.SDK` specification as Elm-named functions in Elm argument order over plain immutable data. `Dict` and `Set` order keys with the SDK's structural `compare`, `Decimal` is a `decimal.js` value and `Number` is a rational over `bigint`. The package is registered with the suite version but is not published yet.
 
+- The remaining modules of the `Morphir.SDK` package specification in `@finos/morphir-sdk`: `LocalDate`, `LocalTime`, `Instant`, `UUID`, `Regex`, `Aggregate`, `Rule`, `Key`, `StatefulApp` and `ResultList`, each as a namespace on the root entry and a kebab-case subpath export. `LocalDate` is a time-zone-free calendar date over integer day arithmetic; `LocalTime` is milliseconds from the epoch, as the Elm alias of `Time.Posix` is; `UUID.forName` is version 5 over a built-in synchronous SHA-1, so the package stays runtime-neutral and free of new dependencies. `Aggregate` omits the IR-inspection part of the Elm module, which the specification does not list.
+
 ## [0.3.0] - 2026-09-17
 
 ### Changed

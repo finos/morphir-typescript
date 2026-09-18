@@ -19,7 +19,7 @@ The Morphir Compatibility Kit is vendored into `packages/mck/kit`, so `mise run 
 | --- | --- | --- |
 | `@finos/morphir-ir` | Published to public npm at `0.3.0` | Generic Morphir IR semantic types, pinned v4 types, JSON readers and canonical writers, diagnostics, and attribute mapping. |
 | `@finos/morphir-mck` | Published to public npm at `0.3.0` | MCK Markdown case parser, kit loader, structural checker, the `mck` driver and its reference adapter, and the report model. Ships the vendored kit. |
-| `@finos/morphir-sdk` | Not yet published | The Morphir SDK runtime: Elm-named functions over plain immutable data for Basics, Char, String, List, Dict, Set, Maybe, Result, Tuple, Decimal, Int and Number, mirroring the `Morphir.SDK` specification. |
+| `@finos/morphir-sdk` | Not yet published | The Morphir SDK runtime: Elm-named functions over plain immutable data for every module of the `Morphir.SDK` specification, from Basics, List and Dict to LocalDate, UUID, Regex and Aggregate. |
 
 ## Morphir specifications
 

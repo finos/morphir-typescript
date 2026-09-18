@@ -6,7 +6,7 @@ The Morphir SDK runtime for TypeScript: the standard library that Morphir models
 npm install @finos/morphir-sdk
 ```
 
-Modules: `Basics`, `Char`, `String`, `List`, `Dict`, `Set`, `Maybe`, `Result`, `Tuple`, `Decimal`, `Int` and `Number`. Each is a subpath export (`@finos/morphir-sdk/list`) and a namespace on the root entry.
+Modules: every module of the `Morphir.SDK` package specification. `Basics`, `Char`, `String`, `List`, `Dict`, `Set`, `Maybe`, `Result`, `Tuple`, `Decimal`, `Int`, `Number`, `LocalDate`, `LocalTime`, `Instant`, `UUID`, `Regex`, `Aggregate`, `Rule`, `Key`, `StatefulApp` and `ResultList`. Each is a subpath export in kebab case (`@finos/morphir-sdk/list`, `@finos/morphir-sdk/local-date`) and a namespace on the root entry.
 
 ```ts
 import { Dict, List, Maybe } from "@finos/morphir-sdk";
@@ -31,7 +31,16 @@ const label = Maybe.withDefault("none", Maybe.map((p: number) => `${p}`, Dict.ge
 | `Dict k v`, `Set a` | Sorted entry arrays ordered by the SDK's structural `compare` |
 | `Decimal` | `decimal.js` `Decimal` |
 | `Number` | A rational over `bigint` |
+| `LocalDate` | `{ kind: "LocalDate", year, month, day }`, proleptic Gregorian, no time zone |
+| `LocalTime` | Milliseconds from the epoch, as Elm's `Time.Posix` alias is; it does not wrap at midnight |
+| `Instant` | A branded epoch-millisecond `number` |
+| `UUID` | A branded canonical lower-case `string`; `forName` is version 5 over a built-in synchronous SHA-1 |
+| `Regex` | `{ kind: "Regex", source, flags }` over the JavaScript engine that Elm also uses |
+| `ResultList e a` | `readonly Result<e, a>[]` |
+| `Key2` to `Key16` | Flat readonly tuples, so they work as `Dict` keys |
 
 `Basics.equal` is structural, as Elm's `==` is, and `Basics.compare` orders numbers, strings, and tuples or lists of them. Where Elm's runtime raises (`modBy 0`, comparing functions), these functions throw.
+
+`Aggregate` leaves out the parts of the Elm module that inspect Morphir IR values (`constructAggregationCall` and its types); they belong to tooling, not to the runtime, and the specification does not list them. `Aggregate.aggregate` yields its rows in ascending key order.
 
 Copyright 2026 FINOS. Licensed under Apache-2.0.
