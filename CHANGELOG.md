@@ -12,6 +12,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `@finos/morphir-sdk`, a new workspace package holding the TypeScript Morphir SDK runtime: the `Basics`, `Char`, `String`, `List`, `Dict`, `Set`, `Maybe`, `Result`, `Tuple`, `Decimal`, `Int` and `Number` modules of the `Morphir.SDK` specification as Elm-named functions in Elm argument order over plain immutable data. `Dict` and `Set` order keys with the SDK's structural `compare`, `Decimal` is a `decimal.js` value and `Number` is a rational over `bigint`. The package is registered with the suite version but is not published yet.
+
 ## [0.3.0] - 2026-09-17
 
 ### Changed

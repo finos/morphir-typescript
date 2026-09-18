@@ -12,6 +12,7 @@ const MANIFESTS = [
 	{ path: "package.json", workspace: "", name: "morphir-typescript", private: true },
 	{ path: "packages/ir/package.json", workspace: "packages/ir", name: "@finos/morphir-ir", private: false },
 	{ path: "packages/mck/package.json", workspace: "packages/mck", name: "@finos/morphir-mck", private: false },
+	{ path: "packages/sdk/package.json", workspace: "packages/sdk", name: "@finos/morphir-sdk", private: false },
 ] as const;
 
 const LOCK_PATH = "bun.lock";
