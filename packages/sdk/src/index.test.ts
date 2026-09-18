@@ -6,7 +6,30 @@ import { Dict, List, Maybe } from "./index.ts";
 describe("index", () => {
 	test("exposes every module namespace", async () => {
 		const sdk = await import("./index.ts");
-		expect(Object.keys(sdk).sort()).toEqual(["Basics", "Char", "Decimal", "Dict", "Int", "List", "Maybe", "Number", "Result", "Set", "String", "Tuple"]);
+		expect(Object.keys(sdk).sort()).toEqual([
+			"Aggregate",
+			"Basics",
+			"Char",
+			"Decimal",
+			"Dict",
+			"Instant",
+			"Int",
+			"Key",
+			"List",
+			"LocalDate",
+			"LocalTime",
+			"Maybe",
+			"Number",
+			"Regex",
+			"Result",
+			"ResultList",
+			"Rule",
+			"Set",
+			"StatefulApp",
+			"String",
+			"Tuple",
+			"UUID",
+		]);
 	});
 	test("README example", () => {
 		const prices = Dict.fromList([

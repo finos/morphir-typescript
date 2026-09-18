@@ -67,6 +67,46 @@
 		"./number": {
 			"types": "./dist/number.d.ts",
 			"import": "./dist/number.js"
+		},
+		"./local-date": {
+			"types": "./dist/local-date.d.ts",
+			"import": "./dist/local-date.js"
+		},
+		"./local-time": {
+			"types": "./dist/local-time.d.ts",
+			"import": "./dist/local-time.js"
+		},
+		"./instant": {
+			"types": "./dist/instant.d.ts",
+			"import": "./dist/instant.js"
+		},
+		"./uuid": {
+			"types": "./dist/uuid.d.ts",
+			"import": "./dist/uuid.js"
+		},
+		"./regex": {
+			"types": "./dist/regex.d.ts",
+			"import": "./dist/regex.js"
+		},
+		"./aggregate": {
+			"types": "./dist/aggregate.d.ts",
+			"import": "./dist/aggregate.js"
+		},
+		"./rule": {
+			"types": "./dist/rule.d.ts",
+			"import": "./dist/rule.js"
+		},
+		"./key": {
+			"types": "./dist/key.d.ts",
+			"import": "./dist/key.js"
+		},
+		"./stateful-app": {
+			"types": "./dist/stateful-app.d.ts",
+			"import": "./dist/stateful-app.js"
+		},
+		"./result-list": {
+			"types": "./dist/result-list.d.ts",
+			"import": "./dist/result-list.js"
 		}
 	},
 	"sideEffects": false,
