@@ -97,6 +97,30 @@ compatibility report:
 bun packages/mck/test/support/local-registry-decode-parent-integration.ts --source /path/to/finos/morphir
 ```
 
+The internal `restore-filesystem-assurance` preflight profile, version `0.1.0-draft.1`,
+guards a callback with explicit trusted-host `portable` or `hardened` selection.
+Unqualified providers and unavailable modes return rejection before the callback;
+malformed inputs throw. Successful selection supplies a copied, deeply immutable context.
+Callback failures propagate without retry or downgrade.
+
+Provider qualification metadata records identity, mode, environment, assumptions and
+evidence references. Parsing it does not verify evidence or qualify a provider. The
+selected receipt is neither authentication success nor a compatibility result and cannot
+authorize another invocation. Callers must provide trusted host policy on each invocation.
+No real provider or platform is qualified here.
+
+`package-restore-assurance-protocol.schema.json` and
+`package-restore-assurance-report.schema.json` describe the closed request and preflight
+receipt. They are source-only internal contracts, not published adapter transports or
+additions to the existing executable package protocols. Full portable execution, its
+complete required-case set, authentication, durable state and platform qualification
+remain separate work. The following check compares six parent-owned synthetic expectations
+without executing or relabeling any draft.3 case:
+
+```sh
+bun packages/mck/test/support/local-registry-assurance-parent-integration.ts --source /path/to/finos/morphir
+```
+
 `mck package run --contract 0.1.0-draft.1 --kit /path/to/finos/morphir/spec/package/mck --report package.json`
 runs the draft package corpus owned by finos/morphir. The package corpus is not embedded;
 the existing embedded kit and `kit.lock.json` still identify only the IR suite.
