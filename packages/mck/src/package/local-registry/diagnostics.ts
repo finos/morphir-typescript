@@ -48,6 +48,7 @@ export type DecodeResource =
 	| "publisher-rules"
 	| "namespace-grants"
 	| "publisher-keys"
+	| "signatures"
 	| "path-bytes"
 	| "path-components"
 	| "component-bytes";

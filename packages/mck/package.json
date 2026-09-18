@@ -12,7 +12,7 @@
 	"homepage": "https://github.com/finos/morphir-typescript#readme",
 	"bugs": "https://github.com/finos/morphir-typescript/issues",
 	"engines": {
-		"node": ">=20",
+		"node": ">=24",
 		"bun": ">=1.2"
 	},
 	"exports": {
@@ -34,10 +34,10 @@
 	},
 	"dependencies": {
 		"@finos/morphir-ir": "workspace:*",
+		"@noble/curves": "2.4.0",
 		"ajv": "8.20.0"
 	},
 	"devDependencies": {
-		"@noble/curves": "2.4.0",
 		"@tufjs/canonical-json": "2.0.0",
 		"@effect/cli": "0.77.2",
 		"@effect/platform": "0.97.2",

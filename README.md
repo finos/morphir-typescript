@@ -105,7 +105,7 @@ Add `--json` for machine-readable output.
 
 ## Development
 
-TypeScript is the implementation language. Bun supplies the runtime, package manager, task runtime, and default `bun:test` testing framework. The npm artifact uses `Bun.build` to compile unminified ESM and TypeScript to emit declarations. Node.js 20 only runs an installed-package compatibility check. Biome handles linting and formatting.
+TypeScript is the implementation language. Bun supplies the runtime, package manager, task runtime, and default `bun:test` testing framework. The npm artifact uses `Bun.build` to compile unminified ESM and TypeScript to emit declarations. Node.js 24 is the development runtime and runs the installed MCK compatibility check. The IR package retains Node.js 20 support and its artifact check explicitly runs pinned Node.js 20.20.2 through mise. Biome handles linting and formatting.
 
 Effect is the preferred foundation for future service and integration work. It is not currently a dependency and must remain outside the core `@finos/morphir-ir` package; add it to a specific non-core package when that package begins using it.
 

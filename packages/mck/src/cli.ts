@@ -48,7 +48,7 @@ const ROOT_USAGE = "usage: mck <check | run | coverage | kit | package> [options
 const KIT_USAGE = "usage: mck kit <sync | status> [options]; see `mck kit --help`";
 
 function packageRoot(): string {
-	// `import.meta.dirname` only exists from Node 20.11; `engines.node` is `>=20`.
+	// Resolve relative assets from the installed module under both Node and Bun.
 	return process.env.MCK_PACKAGE_ROOT ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 }
 

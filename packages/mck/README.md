@@ -1,6 +1,6 @@
 # @finos/morphir-mck
 
-The Morphir Compatibility Kit driver. The IR kit is a set of Markdown case files whose fenced blocks state what every Morphir binding must decode, reject, and write back; this package runs those cases against a binding and writes a conformance report. A copy of the IR kit ships inside the package, so an IR run needs no checkout. The experimental package suite uses a separately supplied corpus. The package is ESM-only and runs on Node 20 or later.
+The Morphir Compatibility Kit driver. The IR kit is a set of Markdown case files whose fenced blocks state what every Morphir binding must decode, reject, and write back; this package runs those cases against a binding and writes a conformance report. A copy of the IR kit ships inside the package, so an IR run needs no checkout. The experimental package suite uses a separately supplied corpus. The package is ESM-only and runs on Node 24 or later.
 
 ```sh
 npm install -g @finos/morphir-mck

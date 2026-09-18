@@ -265,7 +265,7 @@ async function smokeTest(tarball: string, files: readonly string[], compiler: st
 		const program = `const specifiers = ${JSON.stringify(SPECIFIERS)}; for (const specifier of specifiers) { const resolved = import.meta.resolve(specifier); if (!resolved.includes('/node_modules/@finos/morphir-ir/')) throw new Error('resolved outside installed package: ' + resolved); await import(specifier); }`;
 		await runCommand([process.execPath, "--eval", program], consumer);
 		const nodeProgram = `if (process.versions.node.split('.')[0] !== '20') throw new Error('expected Node 20, received ' + process.versions.node); ${program}`;
-		await runCommand(["node", "--input-type=module", "--eval", nodeProgram], consumer);
+		await runCommand(["mise", "exec", "node@20.20.2", "--", "node", "--input-type=module", "--eval", nodeProgram], consumer);
 
 		await Bun.write(path.join(consumer, "layout-exercise.mjs"), LAYOUT_EXERCISE);
 		await runCommand([process.execPath, "layout-exercise.mjs"], consumer);

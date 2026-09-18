@@ -39,5 +39,7 @@ jobs:
           restore-keys: |
             bun-${{ runner.os }}-${{ runner.arch }}-
 
+      # check:package verifies installed IR on pinned Node 20 and MCK on Node 24.
+      # Both runtimes are installed from mise.toml by the setup action above.
       - name: Run local CI mirror
         run: mise run ci

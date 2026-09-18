@@ -31,6 +31,7 @@
       },
       "dependencies": {
         "@finos/morphir-ir": "workspace:*",
+        "@noble/curves": "2.4.0",
         "ajv": "8.20.0",
       },
       "devDependencies": {
@@ -39,7 +40,6 @@
         "@effect/platform-node": "0.108.2",
         "@effect/printer": "0.51.0",
         "@effect/printer-ansi": "0.51.0",
-        "@noble/curves": "2.4.0",
         "@tufjs/canonical-json": "2.0.0",
         "effect": "3.22.2",
         "tuf-js": "5.0.1",
