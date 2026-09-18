@@ -30,13 +30,13 @@ function sourceManifest(): Record<string, unknown> {
 		},
 		homepage: "https://github.com/finos/morphir-typescript#readme",
 		bugs: "https://github.com/finos/morphir-typescript/issues",
-		engines: { node: ">=20", bun: ">=1.2" },
+		engines: { node: ">=24", bun: ">=1.2" },
 		exports: structuredClone(exportsMap),
 		bin: structuredClone(binMap),
 		sideEffects: false,
 		publishConfig: { access: "public" },
 		scripts: { typecheck: "tsc -p tsconfig.json" },
-		dependencies: { "@finos/morphir-ir": "workspace:*", ajv: "8.20.0" },
+		dependencies: { "@finos/morphir-ir": "workspace:*", "@noble/curves": "2.4.0", ajv: "8.20.0" },
 	};
 }
 
@@ -81,7 +81,7 @@ describe("publishMckManifest", () => {
 			repository: source.repository,
 			homepage: "https://github.com/finos/morphir-typescript#readme",
 			bugs: "https://github.com/finos/morphir-typescript/issues",
-			engines: { node: ">=20", bun: ">=1.2" },
+			engines: { node: ">=24", bun: ">=1.2" },
 			exports: exportsMap,
 			bin: binMap,
 			sideEffects: false,
@@ -99,7 +99,7 @@ describe("publishMckManifest", () => {
 				"LICENSE",
 				"NOTICE",
 			],
-			dependencies: { "@finos/morphir-ir": "0.0.0", ajv: "8.20.0" },
+			dependencies: { "@finos/morphir-ir": "0.0.0", "@noble/curves": "2.4.0", ajv: "8.20.0" },
 			publishConfig: { access: "public" },
 		});
 		expect(result).not.toHaveProperty("private");
@@ -122,7 +122,7 @@ describe("publishMckManifest", () => {
 	test("rewrites the workspace dependency to the exact suite version", () => {
 		const source = { ...sourceManifest(), version: "1.2.3" };
 
-		expect(publishMckManifest(source).dependencies).toEqual({ "@finos/morphir-ir": "1.2.3", ajv: "8.20.0" });
+		expect(publishMckManifest(source).dependencies).toEqual({ "@finos/morphir-ir": "1.2.3", "@noble/curves": "2.4.0", ajv: "8.20.0" });
 	});
 
 	test("rejects metadata that does not match the public package contract", () => {
@@ -281,7 +281,7 @@ describe.if(canBuild)("@finos/morphir-mck artifact", () => {
 
 		const packedManifest = JSON.parse(await Bun.$`tar -xOf ${artifact.tarball} package/package.json`.text());
 		expect(packedManifest).toEqual(publishMckManifest(JSON.parse(await readFile(path.join(root, "packages/mck/package.json"), "utf8"))));
-		expect(packedManifest.dependencies).toEqual({ "@finos/morphir-ir": repositoryVersion, ajv: "8.20.0" });
+		expect(packedManifest.dependencies).toEqual({ "@finos/morphir-ir": repositoryVersion, "@noble/curves": "2.4.0", ajv: "8.20.0" });
 
 		for (const declaration of artifact.files.filter((file) => file.endsWith(".d.ts"))) {
 			const contents = await Bun.$`tar -xOf ${artifact.tarball} ${declaration}`.text();

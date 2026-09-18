@@ -119,8 +119,17 @@ describe("release automation contract", () => {
 	test("pins the required toolchain versions", async () => {
 		const config = Bun.TOML.parse(await readFile(path.join(root, "mise.toml"), "utf8")) as { tools: Record<string, string> };
 		expect(config.tools.bun).toBe("1.4.2");
-		expect(config.tools.node).toBe("20.20.2");
+		expect(config.tools.node).toEqual(["24.20.0", "20.20.2"]);
 		expect(config.tools.actionlint).toBe("1.7.12");
+	});
+
+	test("IR artifact smoke explicitly retains pinned Node 20 while MCK requires Node 24", async () => {
+		const ir = await readFile(path.join(root, "scripts/release/package-ir.ts"), "utf8");
+		const mck = await readFile(path.join(root, "scripts/release/package-mck.ts"), "utf8");
+		expect(ir).toContain('["mise", "exec", "node@20.20.2", "--", "node", "--input-type=module", "--eval", nodeProgram]');
+		expect(ir).toContain("expected Node 20, received");
+		expect(mck).toContain("expected Node 24, received");
+		expect(mck).toContain("NOBLE_SMOKE");
 	});
 
 	test("registers executable package, workflow, and artifact tasks in the CI graph", async () => {
@@ -244,6 +253,7 @@ describe("release automation contract", () => {
 		])
 			expect(development).toContain(command);
 		expect(development).toContain("Bun.build");
+		expect(development).toContain("Node.js 24");
 		expect(development).toContain("Node.js 20");
 	});
 

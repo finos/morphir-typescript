@@ -5,7 +5,7 @@ min_version = "2026.9.1"
 
 [tools]
 bun = "1.4.2"
-node = "20.20.2"
+node = ["24.20.0", "20.20.2"]
 actionlint = "1.7.12"
 
 [task_config]

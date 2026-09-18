@@ -8,7 +8,7 @@
 // bundle and the declarations rewrite those paths to the `@finos/morphir-ir`
 // package specifiers the published package depends on.
 //
-// The IR and Ajv validator are external dependencies. The command line is built
+// The IR, Ajv validator and Noble curves are external dependencies. The command line is built
 // on @effect/cli, and those packages (declared as devDependencies) are bundled
 // into dist/cli.js rather than published as dependencies: nobody imports the
 // driver entry, and @effect/platform-node would otherwise hand every consumer
@@ -56,7 +56,7 @@ const REPOSITORY = {
 } as const;
 const EXPORTS = { ".": { types: "./dist/index.d.ts", import: "./dist/index.js" } } as const;
 const BIN = { mck: "./dist/cli.js", "mck-adapter-typescript": "./dist/adapter.js" } as const;
-const RUNTIME_DEPENDENCIES = { ajv: "8.20.0" } as const;
+const RUNTIME_DEPENDENCIES = { "@noble/curves": "2.4.0", ajv: "8.20.0" } as const;
 const WORKSPACE_DEPENDENCIES = { "@finos/morphir-ir": "workspace:*", ...RUNTIME_DEPENDENCIES } as const;
 
 // The adapter protocol's schema and worked example ship beside the kit: an
@@ -134,7 +134,7 @@ export function publishMckManifest(source: JsonRecord): JsonRecord & { readonly 
 	expectExact(source.repository, REPOSITORY, "repository");
 	expectExact(source.homepage, "https://github.com/finos/morphir-typescript#readme", "homepage");
 	expectExact(source.bugs, "https://github.com/finos/morphir-typescript/issues", "bugs");
-	expectExact(source.engines, { node: ">=20", bun: ">=1.2" }, "engines");
+	expectExact(source.engines, { node: ">=24", bun: ">=1.2" }, "engines");
 	expectExact(source.exports, EXPORTS, "exports");
 	expectExact(source.bin, BIN, "bin");
 	expectExact(source.sideEffects, false, "sideEffects");
@@ -150,7 +150,7 @@ export function publishMckManifest(source: JsonRecord): JsonRecord & { readonly 
 		repository: structuredClone(REPOSITORY),
 		homepage: source.homepage,
 		bugs: source.bugs,
-		engines: { node: ">=20", bun: ">=1.2" },
+		engines: { node: ">=24", bun: ">=1.2" },
 		exports: structuredClone(EXPORTS),
 		bin: structuredClone(BIN),
 		sideEffects: false,
@@ -213,18 +213,24 @@ async function copyTree(from: string, to: string): Promise<void> {
 	});
 }
 
-/** Packs the installed validator and its runtime dependency tree for an offline consumer. */
-async function packAjvDependencies(root: string, packedOutput: string): Promise<Readonly<Record<string, string>>> {
+/** Packs installed runtime dependencies and their dependency trees for an offline consumer. */
+async function packMckDependencies(root: string, packedOutput: string): Promise<Readonly<Record<string, string>>> {
 	const packed = new Map<string, { readonly version: string; readonly tarball: string }>();
 	async function pack(name: string, from: string): Promise<void> {
-		const manifestPath = createRequire(from).resolve(`${name}/package.json`);
+		const require = createRequire(from);
+		// Noble exports its algorithm entries, but intentionally hides package.json.
+		const entry = name === "@noble/curves" ? "ed25519.js" : name === "@noble/hashes" ? "sha2.js" : undefined;
+		const manifestPath =
+			entry === undefined ? require.resolve(`${name}/package.json`) : path.join(path.dirname(require.resolve(`${name}/${entry}`)), "package.json");
 		const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as { name: string; version: string; dependencies?: Record<string, string> };
 		const previous = packed.get(name);
 		if (previous !== undefined) {
-			if (previous.version !== manifest.version) throw new Error(`offline validator dependencies require multiple versions of ${name}`);
+			if (previous.version !== manifest.version) throw new Error(`offline runtime dependencies require multiple versions of ${name}`);
 			return;
 		}
-		if (name === "ajv" && manifest.version !== RUNTIME_DEPENDENCIES.ajv) throw new Error("installed Ajv does not match the publishing contract");
+		const expected = ({ ...RUNTIME_DEPENDENCIES, "@noble/hashes": "2.4.0" } as Readonly<Record<string, string>>)[name];
+		if (manifest.name !== name || (expected !== undefined && manifest.version !== expected))
+			throw new Error(`installed ${name} does not match the publishing contract`);
 		const tarball = await packStagedPackage(
 			path.dirname(manifestPath),
 			packedOutput,
@@ -233,9 +239,33 @@ async function packAjvDependencies(root: string, packedOutput: string): Promise<
 		packed.set(name, { version: manifest.version, tarball });
 		for (const dependency of Object.keys(manifest.dependencies ?? {})) await pack(dependency, manifestPath);
 	}
-	await pack("ajv", path.join(root, "packages/mck/package.json"));
+	for (const name of Object.keys(RUNTIME_DEPENDENCIES)) await pack(name, path.join(root, "packages/mck/package.json"));
 	return Object.fromEntries([...packed].map(([name, { tarball }]) => [name, `file:${tarball.split(path.sep).join("/")}`]));
 }
+
+// Internal publisher verification is source-only. This checks its declared math dependency
+// from an isolated installed MCK package without adding a public publisher entry point.
+const NOBLE_SMOKE = `
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+import { realpathSync } from "node:fs";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+const require = createRequire(path.resolve("node_modules/@finos/morphir-mck/package.json"));
+const curves = require.resolve("@noble/curves/ed25519.js");
+const hashes = createRequire(curves).resolve("@noble/hashes/sha2.js");
+const installed = realpathSync("node_modules") + path.sep;
+for (const entry of [curves, hashes]) {
+  assert(realpathSync(entry).startsWith(installed), "crypto dependency resolved outside isolated consumer");
+  const manifest = JSON.parse(require("node:fs").readFileSync(path.join(path.dirname(entry), "package.json"), "utf8"));
+  assert.equal(manifest.version, "2.4.0");
+}
+const { ed25519 } = await import(pathToFileURL(curves).href);
+const key = Buffer.from("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", "hex");
+const sig = Buffer.from("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b", "hex");
+assert(ed25519.verify(sig, new Uint8Array(), key, { zip215: false }));
+assert(!ed25519.verify(sig, new Uint8Array([0]), key, { zip215: false }));
+`;
 
 const PACKAGE_SMOKE = String.raw`
 import assert from "node:assert/strict";
@@ -370,7 +400,7 @@ async function writeResolutionSmokeKit(consumer: string): Promise<string> {
 			path.join(mck, "fixtures/resolution/smoke.json"),
 			{
 				formatVersion: version,
-				cases: [{ id: "resolution.smoke.malformed", family: "profile-boundaries", description: "Packed Node 20 resolve-library smoke", input: "{", expected }],
+				cases: [{ id: "resolution.smoke.malformed", family: "profile-boundaries", description: "Packed Node 24 resolve-library smoke", input: "{", expected }],
 			},
 		],
 		[path.join(schemas, "library-manifest.schema.json"), schema("https://morphir.finos.org/spec/package/0.1.0-draft.1/library-manifest.schema.json")],
@@ -394,19 +424,19 @@ async function writeResolutionSmokeKit(consumer: string): Promise<string> {
 async function smokeTest(mckTarball: string, irTarball: string, compiler: string, root: string): Promise<void> {
 	const consumer = await mkdtemp(path.join(tmpdir(), "morphir-mck-consumer-"));
 	const irDependenciesWork = await mkdtemp(path.join(tmpdir(), "morphir-mck-ir-dependency-pack-"));
-	const ajvWork = await mkdtemp(path.join(tmpdir(), "morphir-mck-ajv-pack-"));
+	const runtimeWork = await mkdtemp(path.join(tmpdir(), "morphir-mck-runtime-pack-"));
 	try {
 		// A fresh runner has no registry metadata for offline resolution. Local
 		// tarball overrides cover the IR, the IR's own runtime dependencies (yaml,
-		// decimal.js — see package-ir.ts's DEPENDENCIES), Ajv, and Ajv's runtime
-		// dependencies.
+		// decimal.js, see package-ir.ts's DEPENDENCIES), Ajv, Noble curves,
+		// and their runtime dependencies, including Noble hashes.
 		const irDependencyNames = Object.keys(IR_DEPENDENCIES) as readonly RuntimeDependencyName[];
 		const irDependencyPacks = await Promise.all(
 			irDependencyNames.map(async (name) => ({ name, tarball: await packRuntimeDependency(root, name, irDependenciesWork) })),
 		);
 		const irDependencyTarballs = irDependencyPacks.map(({ tarball }) => tarball);
 		const irDependencyOverrides = Object.fromEntries(irDependencyPacks.map(({ name, tarball }) => [name, `file:${tarball.split(path.sep).join("/")}`]));
-		const ajvOverrides = await packAjvDependencies(root, ajvWork);
+		const runtimeOverrides = await packMckDependencies(root, runtimeWork);
 		const consumerManifest = {
 			name: "morphir-mck-artifact-consumer",
 			private: true,
@@ -414,7 +444,7 @@ async function smokeTest(mckTarball: string, irTarball: string, compiler: string
 			overrides: {
 				"@finos/morphir-ir": `file:${irTarball.split(path.sep).join("/")}`,
 				...irDependencyOverrides,
-				...ajvOverrides,
+				...runtimeOverrides,
 			},
 		};
 		await Bun.write(path.join(consumer, "package.json"), `${JSON.stringify(consumerManifest)}\n`);
@@ -425,14 +455,14 @@ async function smokeTest(mckTarball: string, irTarball: string, compiler: string
 		const cli = "node_modules/@finos/morphir-mck/dist/cli.js";
 		const adapter = "node_modules/@finos/morphir-mck/dist/adapter.js";
 
-		// `engines.node` is `>=20`, so the compatibility check has to be Node 20
+		// `engines.node` is `>=24`, so the compatibility check has to be Node 24
 		// itself and not whichever newer Node happens to be first on PATH.
 		await runCommand(
 			[
 				"node",
 				"--input-type=module",
 				"--eval",
-				"if (process.versions.node.split('.')[0] !== '20') throw new Error('expected Node 20, received ' + process.versions.node);",
+				"if (process.versions.node.split('.')[0] !== '24') throw new Error('expected Node 24, received ' + process.versions.node);",
 			],
 			consumer,
 		);
@@ -444,6 +474,7 @@ async function smokeTest(mckTarball: string, irTarball: string, compiler: string
 		await expectKitRun(["node", cli, "run", "--report", "r.json"], consumer, "r.json");
 		await expectKitRun(["node", cli, "run", "--adapter", "node", "--adapter-arg", adapter, "--report", "a.json"], consumer, "a.json");
 		await runCommand(["node", "--input-type=module", "--eval", PACKAGE_SMOKE], consumer);
+		await runCommand(["node", "--input-type=module", "--eval", NOBLE_SMOKE], consumer);
 		await runCommand(["node", "--input-type=module", "--eval", RESOLUTION_SMOKE], consumer);
 
 		const resolutionKit = await writeResolutionSmokeKit(consumer);
@@ -481,7 +512,7 @@ async function smokeTest(mckTarball: string, irTarball: string, compiler: string
 	} finally {
 		await rm(consumer, { recursive: true, force: true });
 		await rm(irDependenciesWork, { recursive: true, force: true });
-		await rm(ajvWork, { recursive: true, force: true });
+		await rm(runtimeWork, { recursive: true, force: true });
 	}
 }
 
