@@ -1,0 +1,82 @@
+{
+	"name": "@finos/morphir-sdk",
+	"version": "0.3.0",
+	"type": "module",
+	"description": "The Morphir SDK runtime for TypeScript: the standard library that Morphir models compile against.",
+	"license": "Apache-2.0",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/finos/morphir-typescript.git",
+		"directory": "packages/sdk"
+	},
+	"homepage": "https://github.com/finos/morphir-typescript#readme",
+	"bugs": "https://github.com/finos/morphir-typescript/issues",
+	"engines": {
+		"node": ">=20",
+		"bun": ">=1.2"
+	},
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./basics": {
+			"types": "./dist/basics.d.ts",
+			"import": "./dist/basics.js"
+		},
+		"./char": {
+			"types": "./dist/char.d.ts",
+			"import": "./dist/char.js"
+		},
+		"./string": {
+			"types": "./dist/string.d.ts",
+			"import": "./dist/string.js"
+		},
+		"./list": {
+			"types": "./dist/list.d.ts",
+			"import": "./dist/list.js"
+		},
+		"./dict": {
+			"types": "./dist/dict.d.ts",
+			"import": "./dist/dict.js"
+		},
+		"./set": {
+			"types": "./dist/set.d.ts",
+			"import": "./dist/set.js"
+		},
+		"./maybe": {
+			"types": "./dist/maybe.d.ts",
+			"import": "./dist/maybe.js"
+		},
+		"./result": {
+			"types": "./dist/result.d.ts",
+			"import": "./dist/result.js"
+		},
+		"./tuple": {
+			"types": "./dist/tuple.d.ts",
+			"import": "./dist/tuple.js"
+		},
+		"./decimal": {
+			"types": "./dist/decimal.d.ts",
+			"import": "./dist/decimal.js"
+		},
+		"./int": {
+			"types": "./dist/int.d.ts",
+			"import": "./dist/int.js"
+		},
+		"./number": {
+			"types": "./dist/number.d.ts",
+			"import": "./dist/number.js"
+		}
+	},
+	"sideEffects": false,
+	"dependencies": {
+		"decimal.js": "10.6.0"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"scripts": {
+		"typecheck": "tsc -p tsconfig.json"
+	}
+}

@@ -4,7 +4,6 @@
   "workspaces": {
     "": {
       "name": "morphir-typescript",
-      "version": "0.3.0",
       "devDependencies": {
         "@biomejs/biome": "2.5.12",
         "@types/bun": "1.4.1",
@@ -43,6 +42,13 @@
         "@tufjs/canonical-json": "2.0.0",
         "effect": "3.22.2",
         "tuf-js": "5.0.1",
+      },
+    },
+    "packages/sdk": {
+      "name": "@finos/morphir-sdk",
+      "version": "0.3.0",
+      "dependencies": {
+        "decimal.js": "10.6.0",
       },
     },
   },
@@ -92,6 +98,8 @@
     "@finos/morphir-ir": ["@finos/morphir-ir@workspace:packages/ir"],
 
     "@finos/morphir-mck": ["@finos/morphir-mck@workspace:packages/mck"],
+
+    "@finos/morphir-sdk": ["@finos/morphir-sdk@workspace:packages/sdk"],
 
     "@gar/promise-retry": ["@gar/promise-retry@1.0.3", "", {}, "sha512-GmzA9ckNokPypTg10pgpeHNQe7ph+iIKKmhKu3Ob9ANkswreCx7R3cKmY781K8QK3AqVL3xVh9A42JvIAbkkSA=="],
 

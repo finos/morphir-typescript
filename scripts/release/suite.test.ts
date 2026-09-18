@@ -10,7 +10,7 @@ import { prepareSuiteRelease, validateSuiteRelease } from "./suite.ts";
 
 const temporaryDirectories: string[] = [];
 
-const manifestPaths = ["package.json", "packages/ir/package.json", "packages/mck/package.json"] as const;
+const manifestPaths = ["package.json", "packages/ir/package.json", "packages/mck/package.json", "packages/sdk/package.json"] as const;
 const malformedVisibilityCases = [
 	["package.json", "true", "root package must be private"],
 	["package.json", 1, "root package must be private"],
@@ -27,6 +27,11 @@ const malformedVisibilityCases = [
 	["packages/mck/package.json", null, "@finos/morphir-mck must be public"],
 	["packages/mck/package.json", {}, "@finos/morphir-mck must be public"],
 	["packages/mck/package.json", [], "@finos/morphir-mck must be public"],
+	["packages/sdk/package.json", "false", "@finos/morphir-sdk must be public"],
+	["packages/sdk/package.json", 0, "@finos/morphir-sdk must be public"],
+	["packages/sdk/package.json", null, "@finos/morphir-sdk must be public"],
+	["packages/sdk/package.json", {}, "@finos/morphir-sdk must be public"],
+	["packages/sdk/package.json", [], "@finos/morphir-sdk must be public"],
 ] as const;
 
 function manifest(name: string, privatePackage: boolean, version = "0.0.0"): string {
@@ -52,11 +57,17 @@ function lockfile(version = "0.0.0"): string {
       "name": "@finos/morphir-mck",
       "version": "${version}",
     },
+    "packages/sdk": {
+      "name": "@finos/morphir-sdk",
+      "version": "${version}",
+    },
   },
   "packages": {
     "@finos/morphir-ir": ["@finos/morphir-ir@workspace:packages/ir"],
 
     "@finos/morphir-mck": ["@finos/morphir-mck@workspace:packages/mck"],
+
+    "@finos/morphir-sdk": ["@finos/morphir-sdk@workspace:packages/sdk"],
   },
 }
 `;
@@ -79,12 +90,13 @@ function changelog(eol = "\n"): string {
 	].join(eol);
 }
 
-async function fixture(options: { changelog?: string; lock?: string; versions?: readonly [string, string, string] } = {}): Promise<string> {
+async function fixture(options: { changelog?: string; lock?: string; versions?: readonly [string, string, string, string] } = {}): Promise<string> {
 	const root = await mkdtemp(path.join(tmpdir(), "morphir-release-"));
 	temporaryDirectories.push(root);
 	await Bun.write(path.join(root, "package.json"), manifest("morphir-typescript", true, options.versions?.[0]));
 	await Bun.write(path.join(root, "packages/ir/package.json"), manifest("@finos/morphir-ir", false, options.versions?.[1]));
 	await Bun.write(path.join(root, "packages/mck/package.json"), manifest("@finos/morphir-mck", false, options.versions?.[2]));
+	await Bun.write(path.join(root, "packages/sdk/package.json"), manifest("@finos/morphir-sdk", false, options.versions?.[3]));
 	await Bun.write(path.join(root, "bun.lock"), options.lock ?? lockfile());
 	await Bun.write(path.join(root, "CHANGELOG.md"), options.changelog ?? changelog());
 	return root;
@@ -114,7 +126,7 @@ async function changeJson(root: string, relativePath: string, change: (value: Re
 }
 
 async function transientReleaseFiles(root: string): Promise<string[]> {
-	const directories = ["", "packages/ir", "packages/mck"];
+	const directories = ["", "packages/ir", "packages/mck", "packages/sdk"];
 	return (
 		await Promise.all(
 			directories.map(async (directory) =>
@@ -129,7 +141,7 @@ afterEach(async () => {
 });
 
 describe("prepareSuiteRelease", () => {
-	test("updates the three manifests, lockfile, and changelog", async () => {
+	test("updates the four manifests, lockfile, and changelog", async () => {
 		const root = await fixture();
 
 		const version = await prepareSuiteRelease(root, "0.0.1", "2026-09-05");
@@ -140,7 +152,7 @@ describe("prepareSuiteRelease", () => {
 			expect(parsed.version).toBe("0.0.1");
 		}
 		const lock = Bun.JSONC.parse(await readFile(path.join(root, "bun.lock"), "utf8")) as { workspaces: Record<string, { version: string }> };
-		expect(Object.values(lock.workspaces).map((workspace) => workspace.version)).toEqual(["0.0.1", "0.0.1", "0.0.1"]);
+		expect(Object.values(lock.workspaces).map((workspace) => workspace.version)).toEqual(["0.0.1", "0.0.1", "0.0.1", "0.0.1"]);
 		expect(await readFile(path.join(root, "CHANGELOG.md"), "utf8")).toContain("## [0.0.1] - 2026-09-05");
 	});
 
@@ -156,7 +168,7 @@ describe("prepareSuiteRelease", () => {
 	});
 
 	test("rejects package version drift without changing files", async () => {
-		const root = await fixture({ versions: ["0.0.0", "0.0.1", "0.0.0"] });
+		const root = await fixture({ versions: ["0.0.0", "0.0.1", "0.0.0", "0.0.0"] });
 		await expectRejectedWithoutWrites(root, () => prepareSuiteRelease(root, "0.0.2", "2026-09-05"), "suite package versions do not match");
 	});
 
@@ -164,6 +176,7 @@ describe("prepareSuiteRelease", () => {
 		["package.json", false, "root package must be private"],
 		["packages/ir/package.json", true, "@finos/morphir-ir must be public"],
 		["packages/mck/package.json", true, "@finos/morphir-mck must be public"],
+		["packages/sdk/package.json", true, "@finos/morphir-sdk must be public"],
 	] as const)("rejects invalid visibility in %s", async (relativePath, privatePackage, expectedMessage) => {
 		const root = await fixture();
 		await changeJson(root, relativePath, (value) => {
@@ -208,7 +221,7 @@ describe("prepareSuiteRelease", () => {
 	});
 
 	test("rejects an older target version without changing files", async () => {
-		const root = await fixture({ versions: ["1.0.0", "1.0.0", "1.0.0"], lock: lockfile("1.0.0") });
+		const root = await fixture({ versions: ["1.0.0", "1.0.0", "1.0.0", "1.0.0"], lock: lockfile("1.0.0") });
 		await expectRejectedWithoutWrites(root, () => prepareSuiteRelease(root, "0.9.0", "2026-09-05"), "must be newer");
 	});
 
@@ -278,6 +291,7 @@ describe("prepareSuiteRelease", () => {
 		expect(JSON.parse(await readFile(path.join(root, "package.json"), "utf8")).private).toBe(true);
 		expect(JSON.parse(await readFile(path.join(root, "packages/ir/package.json"), "utf8")).private).toBe(false);
 		expect(JSON.parse(await readFile(path.join(root, "packages/mck/package.json"), "utf8")).private).toBe(false);
+		expect(JSON.parse(await readFile(path.join(root, "packages/sdk/package.json"), "utf8")).private).toBe(false);
 	});
 
 	test("removes every staged file when a temporary write fails", async () => {
