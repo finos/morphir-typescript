@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { binaryNames, buildBinaries, hostTarget, selectedTargets, TARGETS } from "./binaries.ts";
+import { runReleaseCli } from "./cli.ts";
 
 const root = path.resolve(import.meta.dir, "../..");
 const version = JSON.parse(await readFile(path.join(root, "packages/mck/package.json"), "utf8")).version as string;
@@ -75,6 +76,90 @@ describe("selectedTargets", () => {
 });
 
 describe("buildBinaries", () => {
+	test("the adapter builds without driver or kit modules", async () => {
+		const build = await Bun.build({
+			entrypoints: [path.join(root, "packages/mck/src/adapter.ts")],
+			target: "bun",
+			plugins: [
+				{
+					name: "adapter-boundary",
+					setup(builder) {
+						builder.onLoad({ filter: /[/\\]mck[/\\](?:kit[/\\]|src[/\\](?:driver|kit|coverage)[/\\])/ }, (args) => {
+							throw new Error(`adapter depends on retired tooling: ${args.path}`);
+						});
+					},
+				},
+			],
+		});
+		expect(build.logs).toEqual([]);
+		expect(build.success).toBe(true);
+	});
+
+	test("the adapter-only route runs IR and package protocols without tool runtimes", async () => {
+		const output = await workspace();
+		const previous = process.env.MCK_BINARY_TARGETS;
+		process.env.MCK_BINARY_TARGETS = "host";
+		const built: string[] = [];
+		try {
+			await runReleaseCli(["adapter-binaries", output], { root, stdout: (binary) => built.push(binary) });
+		} finally {
+			if (previous === undefined) delete process.env.MCK_BINARY_TARGETS;
+			else process.env.MCK_BINARY_TARGETS = previous;
+		}
+		const [, os, arch] = selectedTargets("host")[0] as [string, string, string];
+		const name = `mck-adapter-typescript-${version}-${os}-${arch}${os === "windows" ? ".exe" : ""}`;
+		expect(await readdir(output)).toEqual([name]);
+		expect(built).toEqual([path.join(output, name)]);
+		const home = path.join(output, "home");
+		await mkdir(home);
+		const env = {
+			PATH: "",
+			HOME: home,
+			USERPROFILE: home,
+			LOCALAPPDATA: home,
+			APPDATA: home,
+			TMPDIR: home,
+			TMP: home,
+			TEMP: home,
+			...(process.env.SystemRoot ? { SystemRoot: process.env.SystemRoot } : {}),
+		};
+		for (const args of [[], ["--suite", "package"], ["--suite", "package", "--contract", "0.1.0-draft.2"]]) {
+			const child = Bun.spawn([built[0] as string, ...args], {
+				cwd: output,
+				env,
+				stdin: new Response('{"id":1,"op":"capabilities"}\n{"id":2,"op":"exit"}\n'),
+				stdout: "pipe",
+				stderr: "pipe",
+			});
+			const [stdout, stderr, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
+			expect({ stderr, code }).toEqual({ stderr: "", code: 0 });
+			const capabilities = JSON.parse(stdout);
+			expect(capabilities.id).toBe(1);
+			if (args.length === 0) expect(capabilities.binding).toBe("morphir-typescript");
+			else expect(capabilities.implementationVersion).toBe(version);
+		}
+
+		// Opt in with an absolute released/native CLI path. A supplied bad path
+		// fails; this never substitutes the frozen TypeScript driver.
+		const native = process.env.MORPHIR_MCK_NATIVE_CLI;
+		if (native !== undefined) {
+			expect(path.isAbsolute(native)).toBe(true);
+			const run = async (args: string[]) => {
+				const child = Bun.spawn([native, ...args], { cwd: output, env: { ...env, MORPHIR_LOG_FILE: "false" }, stdout: "pipe", stderr: "pipe" });
+				const [stdout, stderr, code] = await Promise.all([new Response(child.stdout).text(), new Response(child.stderr).text(), child.exited]);
+				expect(code, `${stdout}\n${stderr}`).toBe(0);
+				return stdout;
+			};
+			await run(["mck", "kit", "vendor", "--source", "embedded", "--dest", "kit"]);
+			await run(["mck", "run", "--adapter", built[0] as string, "--kit", "kit", "--report", "report.json"]);
+			const report = JSON.parse(await readFile(path.join(output, "report.json"), "utf8"));
+			expect(report.execution.session.status).toBe("finished");
+			expect(report.records.filter((record: { result: string }) => record.result === "pass").length).toBeGreaterThan(0);
+			await writeFile(path.join(output, "allowed.json"), '{"cases":[]}');
+			await run(["mck", "report", "check", "report.json", "allowed.json", "--kit", "kit"]);
+		}
+	}, 600_000);
+
 	test("compiles a self-contained driver and adapter for the host target", async () => {
 		const output = await workspace();
 		const previous = process.env.MCK_BINARY_TARGETS;

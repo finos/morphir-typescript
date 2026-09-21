@@ -1,6 +1,6 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
-import { driverVersion } from "../driver/version.ts";
+import { bindingVersion } from "../binding-version.ts";
 import { PACKAGE_CONTRACT, PACKAGE_OPERATIONS, type PackageTestee } from "./contract.ts";
 import { strictJson } from "./json.ts";
 import { verifyLibrarySet } from "./library.ts";
@@ -20,7 +20,7 @@ export function referencePackageTestee(): PackageTestee {
 			suite: "package",
 			contractVersion: PACKAGE_CONTRACT,
 			implementation: "morphir-typescript",
-			implementationVersion: driverVersion(),
+			implementationVersion: bindingVersion(),
 			operations: PACKAGE_OPERATIONS,
 		}),
 		execute: async (request) => {
@@ -60,7 +60,7 @@ export function referenceResolutionTestee(): ResolutionTestee {
 			suite: "package",
 			contractVersion: RESOLUTION_CONTRACT,
 			implementation: "morphir-typescript",
-			implementationVersion: driverVersion(),
+			implementationVersion: bindingVersion(),
 			operations: RESOLUTION_OPERATIONS,
 			profiles: RESOLUTION_PROFILES,
 		}),

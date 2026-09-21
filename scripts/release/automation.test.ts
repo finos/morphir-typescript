@@ -141,11 +141,12 @@ describe("release automation contract", () => {
 		expect(byName.get("check:conformance")?.depends).toEqual(["setup"]);
 		expect(byName.get("release:artifact")?.depends).toEqual(["setup"]);
 		expect(byName.get("release:binaries")?.depends).toEqual(["setup"]);
+		expect(byName.get("release:adapter-binaries")?.depends).toEqual(["setup"]);
 		for (const dependency of ["check:lint", "check:typecheck", "check:kit", "test", "check:package", "check:workflows", "check:conformance"])
 			expect(byName.get("ci")?.depends).toContain(dependency);
 
 		const sources = new Map<string, string>();
-		for (const name of ["check:package", "check:workflows", "release:artifact", "release:binaries"]) {
+		for (const name of ["check:package", "check:workflows", "release:artifact", "release:binaries", "release:adapter-binaries"]) {
 			const file = byName.get(name)?.file;
 			expect(file).toBeString();
 			await access(file as string, constants.X_OK);
@@ -161,6 +162,9 @@ describe("release automation contract", () => {
 		);
 		expect(taskInvocation(sources.get("release:binaries") as string)).toBe(
 			'await exec(["bun", "scripts/release/cli.ts", "binaries", ...process.argv.slice(2)]);',
+		);
+		expect(taskInvocation(sources.get("release:adapter-binaries") as string)).toBe(
+			'await exec(["bun", "scripts/release/cli.ts", "adapter-binaries", ...process.argv.slice(2)]);',
 		);
 
 		const conformanceFile = byName.get("check:conformance")?.file;
