@@ -4,7 +4,7 @@ import { afterEach, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { checkNativeKit, type NativeContext, nativeCli, runNativeConformance } from "./native.ts";
+import { checkNativeConformance, checkNativeKit, type NativeContext, nativeCli, runNativeConformance } from "./native.ts";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -35,6 +35,19 @@ test("no production pin or local override never falls back to the old driver", a
 	await expect(nativeCli(root, {})).rejects.toThrow("mck-cli.json");
 	await expect(nativeCli(root, { MORPHIR_MCK_NATIVE_CLI: "relative" })).rejects.toThrow("absolute");
 	await expect(nativeCli(root, { MORPHIR_MCK_NATIVE_CLI: path.join(root, "missing") })).rejects.toThrow();
+});
+
+test("CLI acquisition failures remove previous successful reports", async () => {
+	for (const env of [{}, { MORPHIR_MCK_NATIVE_CLI: "relative" }]) {
+		const { root, report } = fixture();
+		const html = path.join(path.dirname(report), "native.html");
+		mkdirSync(path.dirname(report), { recursive: true });
+		writeFileSync(report, "stale success");
+		writeFileSync(html, "stale success");
+		await expect(checkNativeConformance(root, env)).rejects.toThrow();
+		expect(existsSync(report)).toBe(false);
+		expect(existsSync(html)).toBe(false);
+	}
 });
 
 test("kit verification requires a generated native manifest and invokes native authoring gates", async () => {

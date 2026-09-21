@@ -27,8 +27,18 @@ export async function nativeCli(root: string, env: Readonly<Record<string, strin
 	return installCli({ root, version: pin.version, target, sha256: pin.sha256[target.triple] as string });
 }
 
-export async function nativeContext(root: string): Promise<NativeContext> {
-	return { root, cli: await nativeCli(root), kit: path.resolve(root, process.env.MORPHIR_MCK_KIT ?? "vendor/morphir-mck") };
+export async function nativeContext(root: string, env: Readonly<Record<string, string | undefined>> = process.env): Promise<NativeContext> {
+	return { root, cli: await nativeCli(root, env), kit: path.resolve(root, env.MORPHIR_MCK_KIT ?? "vendor/morphir-mck") };
+}
+
+export async function checkNativeConformance(root: string, env: Readonly<Record<string, string | undefined>> = process.env): Promise<void> {
+	await clearNativeEvidence(root);
+	await runNativeConformance(await nativeContext(root, env));
+}
+
+async function clearNativeEvidence(root: string): Promise<void> {
+	const directory = path.join(root, ".dev/out/conformance");
+	await Promise.all(["native.json", "native.html"].map((name) => rm(path.join(directory, name), { force: true })));
 }
 
 function execute(context: NativeContext): (args: readonly string[]) => Promise<number> {
@@ -69,7 +79,7 @@ export async function runNativeConformance(context: NativeContext): Promise<void
 	await mkdir(directory, { recursive: true });
 	const report = path.join(directory, "native.json");
 	const html = path.join(directory, "native.html");
-	await Promise.all([rm(report, { force: true }), rm(html, { force: true })]);
+	await clearNativeEvidence(context.root);
 	await checkNativeKit(context);
 	const run = execute(context);
 	const status = await run([
