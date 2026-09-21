@@ -1,18 +1,13 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 //
-// Builds the publishable `@finos/morphir-mck` tarball: three Node bundles
-// (the package library, package CLI, TypeScript adapter) and declarations. The mck
+// Builds the publishable `@finos/morphir-mck` tarball: the package library,
+// TypeScript adapter, and declarations. The mck
 // sources reach the IR by relative path inside this repository; both the
 // bundle and the declarations rewrite those paths to the `@finos/morphir-ir`
 // package specifiers the published package depends on.
 //
-// The IR, Ajv validator and Noble curves are external dependencies. The command line is built
-// on @effect/cli, and those packages (declared as devDependencies) are bundled
-// into dist/cli.js rather than published as dependencies: nobody imports the
-// driver entry, and @effect/platform-node would otherwise hand every consumer
-// a dependency tree the library itself never uses. Their sources appear in
-// cli.js.map under a virtual node_modules path.
+// The IR, Ajv validator and Noble curves are external dependencies.
 
 import { copyFile, mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -38,21 +33,21 @@ import {
 import { DEPENDENCIES as IR_DEPENDENCIES, packRuntimeDependency, type RuntimeDependencyName } from "./package-ir.ts";
 import { parseStableVersion } from "./version.ts";
 
-const ENTRYPOINTS = ["index.ts", "cli.ts", "adapter.ts"] as const;
+const ENTRYPOINTS = ["index.ts", "adapter.ts"] as const;
 
 // Package metadata and sources share the package root in source maps.
 const IDENTITY: PackageIdentity = { scheme: "morphir-mck", sourceLabel: "packages/mck", virtualDirectory: "" };
 
 export const canonicalSourceMap = canonicalSourceMapper(IDENTITY);
 
-const DESCRIPTION = "Morphir package compatibility tooling and the TypeScript IR adapter. IR compatibility runs through the native Morphir CLI.";
+const DESCRIPTION = "Morphir package implementation helpers and TypeScript adapters. Compatibility runs through the native Morphir CLI.";
 const REPOSITORY = {
 	type: "git",
 	url: "git+https://github.com/finos/morphir-typescript.git",
 	directory: "packages/mck",
 } as const;
 const EXPORTS = { ".": { types: "./dist/index.d.ts", import: "./dist/index.js" } } as const;
-const BIN = { mck: "./dist/cli.js", "mck-adapter-typescript": "./dist/adapter.js" } as const;
+const BIN = { "mck-adapter-typescript": "./dist/adapter.js" } as const;
 const RUNTIME_DEPENDENCIES = { "@noble/curves": "2.4.0", ajv: "8.20.0" } as const;
 const WORKSPACE_DEPENDENCIES = { "@finos/morphir-ir": "workspace:*", ...RUNTIME_DEPENDENCIES } as const;
 
@@ -79,12 +74,9 @@ const REQUIRED_FILES = [
 	...ROOT_FILES,
 	"package/dist/index.js",
 	"package/dist/index.js.map",
-	"package/dist/cli.js",
-	"package/dist/cli.js.map",
 	"package/dist/adapter.js",
 	"package/dist/adapter.js.map",
 	"package/dist/index.d.ts",
-	"package/dist/cli.d.ts",
 	"package/dist/adapter.d.ts",
 ] as const;
 
@@ -155,6 +147,7 @@ export function publishMckManifest(source: JsonRecord): JsonRecord & { readonly 
 
 export const validatePackageFiles = packageFileValidator({
 	rootFiles: [...ROOT_FILES],
+	denied: ["package/dist/cli.js", "package/dist/cli.js.map", "package/dist/cli.d.ts", "package/dist/cli.d.ts.map"],
 	defaultExpected: new Set(REQUIRED_FILES),
 });
 
@@ -246,82 +239,43 @@ assert(ed25519.verify(sig, new Uint8Array(), key, { zip215: false }));
 assert(!ed25519.verify(sig, new Uint8Array([0]), key, { zip215: false }));
 `;
 
-const PACKAGE_SMOKE = String.raw`
-import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
-import { referencePackageTestee, processPackageTestee } from "@finos/morphir-mck";
-
-const digest = (text) => "sha256:" + createHash("sha256").update(text).digest("hex");
-const canonical = '{"a":"first","z":"last"}';
-const expected = {
-	ok: true,
-	canonical,
-	manifestDigest: digest(canonical),
-	packageContentDigest: digest("morphir-package-content:0.1.0-draft.1\n" + canonical),
-};
-const schemas = {
-	manifest: {
-		$schema: "https://json-schema.org/draft/2020-12/schema",
-		$id: "https://example.invalid/package-manifest",
-		type: "object",
-		required: ["name"],
-		properties: { name: { type: "string" } },
-		additionalProperties: false,
-	},
-	lock: { $ref: "https://example.invalid/package-manifest" },
-};
-let exitCode;
-const processTestee = processPackageTestee(
-	[process.execPath, "node_modules/@finos/morphir-mck/dist/adapter.js", "--suite", "package"],
-	{ timeoutMs: 5000, onExit: (code) => { exitCode = code; } },
-);
-for (const testee of [referencePackageTestee(), processTestee]) {
-	try {
-		assert.equal((await testee.capabilities()).suite, "package");
-		assert.deepEqual(await testee.execute({ op: "normalize", input: '{ "z": "last", "a": "first" }' }), expected);
-		for (const artifact of ["manifest", "lock"]) {
-			assert.deepEqual(await testee.execute({ op: "validate", artifact, input: '{"name":"sample"}', schemas }), { ok: true, valid: true });
-			assert.deepEqual(await testee.execute({ op: "validate", artifact, input: '{"name":123}', schemas }), { ok: true, valid: false });
-		}
-	} finally {
-		await testee.close();
-	}
+async function writeIntegritySmokeKit(consumer: string): Promise<string> {
+	const root = path.join(consumer, "integrity-kit");
+	const mck = path.join(root, "mck");
+	const schemas = path.join(root, "schemas");
+	const fixtures = path.join(mck, "fixtures/two-libraries");
+	await Promise.all([
+		mkdir(path.join(fixtures, "eligibility"), { recursive: true }),
+		mkdir(path.join(fixtures, "loan-rules"), { recursive: true }),
+		mkdir(schemas, { recursive: true }),
+	]);
+	const version = "0.1.0-draft.1";
+	const schema = (id: string): JsonRecord => ({ $schema: "https://json-schema.org/draft/2020-12/schema", $id: id, type: "object" });
+	const files: ReadonlyArray<readonly [string, unknown]> = [
+		[
+			path.join(mck, "digest-vectors.json"),
+			{
+				formatVersion: version,
+				cases: [{ id: "integrity.smoke.invalid-document", input: "null", error: "invalid-document" }],
+				byteCases: [{ id: "integrity.smoke.empty-bytes", hex: "", digest: "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" }],
+			},
+		],
+		[
+			path.join(mck, "schema-cases.json"),
+			{ formatVersion: version, cases: [{ id: "integrity.smoke.schema", schema: "manifest", fixture: "eligibility", expected: "accept" }] },
+		],
+		[path.join(mck, "library-cases.json"), { formatVersion: version, cases: [{ id: "integrity.smoke.library", expected: "reject", lockText: "{}" }] }],
+		[path.join(fixtures, "eligibility/manifest.json"), {}],
+		[path.join(fixtures, "loan-rules/manifest.json"), {}],
+		[path.join(fixtures, "lock-core.json"), {}],
+		[path.join(fixtures, "eligibility/ir.json"), {}],
+		[path.join(fixtures, "loan-rules/ir.json"), {}],
+		[path.join(schemas, "library-manifest.schema.json"), schema("https://morphir.finos.org/spec/package/0.1.0-draft.1/library-manifest.schema.json")],
+		[path.join(schemas, "lock-core.schema.json"), schema("https://morphir.finos.org/spec/package/0.1.0-draft.1/lock-core.schema.json")],
+	];
+	await Promise.all(files.map(([file, value]) => Bun.write(file, `${JSON.stringify(value)}\n`)));
+	return mck;
 }
-assert.equal(exitCode, 0);
-`;
-
-const RESOLUTION_SMOKE = `
-import assert from "node:assert/strict";
-import { processResolutionTestee, referenceResolutionTestee } from "@finos/morphir-mck";
-const digest = "sha256:" + "0".repeat(64);
-const id = (packagePath, version = "1.0.0") => ({ packagePath, version });
-const requirement = (irPackageName, packagePath, minimumInclusive, maximumExclusive) => ({ irPackageName, packagePath, versionRange: { minimumInclusive, maximumExclusive } });
-const record = (packagePath, version, irPackageName, dependencies = []) => ({ release: id(packagePath, version), irPackageName, manifestDigest: digest, contentDigest: digest, dependencies });
-const binding = (metadata) => ({ irPackageName: metadata.irPackageName, target: metadata.release });
-const node = (metadata, bindings = []) => ({ release: metadata.release, irPackageName: metadata.irPackageName, manifestDigest: metadata.manifestDigest, contentDigest: metadata.contentDigest, bindings });
-const targetPath = "example.com/lib/target";
-const keeperPath = "example.com/lib/keeper";
-const existingPath = "example.com/lib/existing";
-const existing10 = record(existingPath, "1.0.0", "example/existing");
-const existing15 = record(existingPath, "1.5.0", "example/existing");
-const target10 = record(targetPath, "1.0.0", "example/target");
-const target20 = record(targetPath, "2.0.0", "example/target", [requirement("example/existing", existingPath, "1.5.0", "2.0.0")]);
-const keeper = record(keeperPath, "1.0.0", "example/keeper", [requirement("example/existing", existingPath, "1.0.0", "2.0.0")]);
-const root = record("example.com/app/root", "1.0.0", "example/app", [requirement("example/target", targetPath, "1.0.0", "3.0.0"), requirement("example/keeper", keeperPath, "1.0.0", "2.0.0")]);
-const input = JSON.stringify({ formatVersion: "0.1.0-draft.2", capability: "flat-library", root, mode: "update", catalogs: [{ packagePath: targetPath, releases: [target10, target20] }, { packagePath: keeperPath, releases: [keeper] }, { packagePath: existingPath, releases: [existing10, existing15] }], lock: { root: root.release, nodes: [node(root, [binding(target10), binding(keeper)]), node(target10), node(keeper, [binding(existing10)]), node(existing10)] }, targets: [{ kind: "exact", packagePath: targetPath, version: "2.0.0" }] });
-let exitCode;
-const processTestee = processResolutionTestee([process.execPath, "node_modules/@finos/morphir-mck/dist/adapter.js", "--suite", "package", "--contract", "0.1.0-draft.2"], { timeoutMs: 5000, onExit: (code) => { exitCode = code; } });
-for (const testee of [referenceResolutionTestee(), processTestee]) {
-	try {
-		assert.deepEqual((await testee.capabilities()).profiles, ["flat-library"]);
-		const result = await testee.execute({ op: "resolve-library", input });
-		assert.equal(result.ok, false);
-		assert.equal(result.diagnostic.code, "update-scope-conflict");
-		assert.deepEqual(result.diagnostic.changedPins, [{ kind: "changed", previous: existing10.release, selected: existing15.release }]);
-	} finally { await testee.close(); }
-}
-assert.equal(exitCode, 0);
-`;
 
 async function writeResolutionSmokeKit(consumer: string): Promise<string> {
 	const root = path.join(consumer, "resolution-kit");
@@ -334,7 +288,7 @@ async function writeResolutionSmokeKit(consumer: string): Promise<string> {
 	const resultSchema = {
 		$schema: "https://json-schema.org/draft/2020-12/schema",
 		$id: "https://morphir.finos.org/spec/package/0.1.0-draft.2/resolution-result.schema.json",
-		const: expected,
+		type: "object",
 	};
 	const caseSchema = {
 		$schema: "https://json-schema.org/draft/2020-12/schema",
@@ -392,6 +346,16 @@ async function writeResolutionSmokeKit(consumer: string): Promise<string> {
 	return mck;
 }
 
+async function verifyPackageSmokeReport(file: string, contractVersion: string, cases: number): Promise<void> {
+	const report: unknown = JSON.parse(await readFile(file, "utf8"));
+	if (!isRecord(report) || report.contractVersion !== contractVersion || !Array.isArray(report.records) || report.records.length !== cases) {
+		throw new Error(`native package smoke did not produce the expected ${contractVersion} report`);
+	}
+	if (report.records.some((record) => !isRecord(record) || record.result !== "pass")) {
+		throw new Error(`native package smoke reported a non-passing ${contractVersion} case`);
+	}
+}
+
 /** Verifies installed package tooling and the Node 24 adapter with the native CLI. */
 async function smokeTest(mckTarball: string, irTarball: string, compiler: string, root: string): Promise<void> {
 	const consumer = await mkdtemp(path.join(tmpdir(), "morphir-mck-consumer-"));
@@ -424,7 +388,6 @@ async function smokeTest(mckTarball: string, irTarball: string, compiler: string
 			[process.execPath, "add", "--offline", "--no-save", "--ignore-scripts", "--backend=copyfile", ...irDependencyTarballs, irTarball, mckTarball],
 			consumer,
 		);
-		const cli = "node_modules/@finos/morphir-mck/dist/cli.js";
 		const adapter = "node_modules/@finos/morphir-mck/dist/adapter.js";
 
 		// `engines.node` is `>=24`, so the compatibility check has to be Node 24
@@ -439,10 +402,6 @@ async function smokeTest(mckTarball: string, irTarball: string, compiler: string
 			consumer,
 		);
 
-		const version = await runCommand(["node", cli, "--version"], consumer);
-		const manifest = JSON.parse(await readFile(path.join(consumer, "node_modules/@finos/morphir-mck/package.json"), "utf8")) as { version: string };
-		if (version !== manifest.version) throw new Error(`the packed package CLI reported version ${version}, not ${manifest.version}`);
-
 		// Required: validate the installed Node adapter with the released native runner.
 		const native = await nativeContext(root);
 		await runCommand([native.cli, "mck", "kit", "status", "--kit", native.kit, "--json"], consumer);
@@ -451,39 +410,32 @@ async function smokeTest(mckTarball: string, irTarball: string, compiler: string
 			consumer,
 		);
 		await runCommand([native.cli, "mck", "report", "check", "ir.json", path.join(root, ".config/mck-allowed-failing.json"), "--kit", native.kit], consumer);
-		await runCommand(["node", "--input-type=module", "--eval", PACKAGE_SMOKE], consumer);
 		await runCommand(["node", "--input-type=module", "--eval", NOBLE_SMOKE], consumer);
-		await runCommand(["node", "--input-type=module", "--eval", RESOLUTION_SMOKE], consumer);
 
+		const integrityKit = await writeIntegritySmokeKit(consumer);
 		const resolutionKit = await writeResolutionSmokeKit(consumer);
-		await runCommand(["node", cli, "package", "run", "--contract", "0.1.0-draft.2", "--kit", resolutionKit, "--report", "resolution.json"], consumer);
-		await runCommand(
-			[
-				"node",
-				cli,
+		const packageRun = async (contract: "0.1.0-draft.1" | "0.1.0-draft.2", kit: string, report: string, adapterArgs: readonly string[], cases: number) => {
+			const args = [
+				native.cli,
+				"mck",
 				"package",
 				"run",
 				"--contract",
-				"0.1.0-draft.2",
+				contract,
 				"--kit",
-				resolutionKit,
+				kit,
 				"--adapter",
 				"node",
 				"--adapter-arg",
-				adapter,
-				"--adapter-arg",
-				"--suite",
-				"--adapter-arg",
-				"package",
-				"--adapter-arg",
-				"--contract",
-				"--adapter-arg",
-				"0.1.0-draft.2",
-				"--report",
-				"resolution-adapter.json",
-			],
-			consumer,
-		);
+				path.join(consumer, adapter),
+			];
+			for (const argument of adapterArgs) args.push("--adapter-arg", argument);
+			args.push("--report", report);
+			await runCommand(args, consumer);
+			await verifyPackageSmokeReport(path.join(consumer, report), contract, cases);
+		};
+		await packageRun("0.1.0-draft.1", integrityKit, "integrity.json", ["--suite", "package"], 4);
+		await packageRun("0.1.0-draft.2", resolutionKit, "resolution.json", ["--suite", "package", "--contract", "0.1.0-draft.2"], 1);
 
 		await Bun.write(path.join(consumer, "index.ts"), ['import * as mck from "@finos/morphir-mck";', "void mck;", ""].join("\n"));
 		await runCommand([compiler, "--noEmit", "--strict", "--target", "ES2022", "--module", "NodeNext", "--moduleResolution", "NodeNext", "index.ts"], consumer);

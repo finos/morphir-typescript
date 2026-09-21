@@ -3,7 +3,7 @@
 
 # morphir-typescript
 
-`morphir-typescript` is the TypeScript reference binding for the [Morphir Intermediate Representation](https://morphir.finos.org/docs/spec/ir/morphir-ir-specification). It provides a version-agnostic semantic model, the Morphir IR v4 model and JSON codec, and the TypeScript adapter and package tooling for the Morphir Compatibility Kit.
+`morphir-typescript` is the TypeScript reference binding for the [Morphir Intermediate Representation](https://morphir.finos.org/docs/spec/ir/morphir-ir-specification). It provides a version-agnostic semantic model, the Morphir IR v4 model and JSON codec, TypeScript adapters, and package implementation helpers for the Morphir Compatibility Kit.
 
 Morphir captures business logic and domain models as language-independent data so tools can analyze, transform, serialize, and execute the same model across platforms. The authoritative specifications and compatibility corpus live in the [`finos/morphir`](https://github.com/finos/morphir) repository. This project implements those contracts for TypeScript. It is separate from the [Morphir TypeScript code-generation backend](https://morphir.finos.org/docs/reference/backends/other-platforms/typescript-api), which generates TypeScript APIs from Morphir models.
 
@@ -18,7 +18,7 @@ The native Morphir Compatibility Kit is vendored into `vendor/morphir-mck`, so `
 | Package | Publication | Purpose |
 | --- | --- | --- |
 | `@finos/morphir-ir` | Published to public npm at `0.3.0` | Generic Morphir IR semantic types, pinned v4 types, JSON readers and canonical writers, diagnostics, and attribute mapping. |
-| `@finos/morphir-mck` | Published to public npm at `0.3.0` | TypeScript IR adapter, experimental package CLI/library and shared protocol helpers. IR compatibility runs through the native Morphir CLI. |
+| `@finos/morphir-mck` | Published to public npm at `0.3.0` | TypeScript IR and package adapters, implementation libraries and protocol helpers. Compatibility runs through the native Morphir CLI. |
 | `@finos/morphir-sdk` | Not yet published | The Morphir SDK runtime: Elm-named functions over plain immutable data for every module of the `Morphir.SDK` specification, from Basics, List and Dict to LocalDate, UUID, Regex and Aggregate. |
 
 ## Morphir specifications
@@ -100,7 +100,7 @@ morphir mck check ./mck-kit
 morphir mck run --kit ./mck-kit --adapter mck-adapter-typescript --report ir-report.json
 ```
 
-The npm `mck` command now supports `package run` only. Former IR commands exit 2 with migration guidance. See the [consumer migration instructions](packages/mck/README.md#migrating-ir-consumers) for report validation, local Node adapters and removed library APIs.
+The npm package provides the adapter executable but no compatibility runner. Use `morphir mck package run` for package contracts. See the [consumer migration instructions](packages/mck/README.md#migrating-ir-consumers) for report validation, local Node adapters and removed library APIs.
 
 ## Development
 
@@ -131,7 +131,7 @@ Use mise tasks for repository automation:
 
 The adapter-only build keeps both IR and experimental package protocol support.
 Future suite releases produce five adapter executables and both npm packages.
-Historical standalone driver assets remain unchanged; the npm package retains both bins.
+Historical standalone driver assets remain unchanged; the npm package exposes only the adapter bin.
 `@finos/morphir-ir` keeps its Node 20 installed-package gate; the MCK npm package
 keeps its Node 24 requirement. Compiled adapters need neither runtime installed.
 
@@ -150,8 +150,8 @@ It does not disable operating-system network access or certify other platforms.
 ### Native IR conformance
 
 `check:kit` and `check:conformance` use the native CLI. The installed Node 24
-adapter gate also uses that CLI and the managed kit. The legacy IR runner and
-parity gates have been retired; package tooling remains until finos/morphir#852.
+adapter gate also uses that CLI and the managed kit. The legacy TypeScript IR
+and package runners and their parity gates have been retired.
 
 The production pin is `.config/mck-cli.json`, containing an exact `version` and a
 `sha256` object with archive digests for all six native release target triples.

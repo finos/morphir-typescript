@@ -14,8 +14,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
-- IR MCK execution, authoring checks, coverage and reports now use the released native Morphir CLI with an explicit TypeScript adapter. The npm `mck` command is package-only; former IR commands exit 2 with migration instructions. IR runner/parser/kit/report APIs and embedded IR assets are removed. Package contracts and both npm bins remain until the separate package migration.
-- Future release assets contain five standalone adapters and two npm tarballs; standalone TypeScript drivers are no longer built. Historical releases are unchanged. The installed Node 24 adapter gate uses native MCK, while IR retains its independent Node 20 artifact gate.
+- IR and package MCK execution, authoring checks, coverage and reports now use the released native Morphir CLI with an explicit TypeScript adapter. The npm `mck` executable and TypeScript runner, corpus, report-summary and subprocess-client APIs are removed. Direct implementation, resolver and protocol APIs remain.
+- Future release assets contain five standalone adapters and two npm tarballs; standalone TypeScript drivers are no longer built. Historical releases are unchanged. The installed Node 24 adapter gate uses native MCK for IR and bounded draft.1/draft.2 package smoke cases, while IR retains its independent Node 20 artifact gate.
 - Canonical YAML codec regressions now use frozen fixtures with source provenance, preserving 98 JSON/YAML pairs, 121 idempotence fences, the complete document example and nine rejected inputs.
 
 ### Added

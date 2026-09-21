@@ -4,16 +4,11 @@ import { describe, expect, test } from "bun:test";
 import path from "node:path";
 import Ajv2020 from "ajv/dist/2020.js";
 import protocolSchema from "../package-resolution-protocol.schema.json";
-import reportSchema from "../package-resolution-report.schema.json";
 import { referenceResolutionTestee } from "../src/package/reference.ts";
 import type { ResolutionResponse } from "../src/package/resolution/contract.ts";
-import { loadResolutionKitFromFiles } from "../src/package/resolution/corpus.ts";
 import { parseResolutionResponse } from "../src/package/resolution/protocol.ts";
-import { runResolutionKit } from "../src/package/run.ts";
-import { resolutionFiles } from "./package-resolution-fixture.ts";
 
 const adapter = path.resolve(import.meta.dir, "../src/adapter.ts");
-const cli = path.resolve(import.meta.dir, "../src/cli.ts");
 
 async function run(command: readonly string[], stdin = ""): Promise<{ readonly code: number; readonly stdout: string; readonly stderr: string }> {
 	const child = Bun.spawn([...command], { stdin: "pipe", stdout: "pipe", stderr: "pipe" });
@@ -112,17 +107,32 @@ function witnessBinding(node: WitnessNodeFixture, index: number): WitnessBinding
 }
 
 describe("versioned package protocol routing", () => {
-	test("installed schemas accept the same requests, results, capabilities, and report", async () => {
+	test.each([
+		{ args: ["--contract", "future"] },
+		{ args: ["--suite", "ir", "--contract", "future"] },
+		{ args: ["--contract", "future", "--suite", "package"] },
+		{ args: ["--suite", "future"] },
+	])("rejects unsupported or misplaced adapter selectors: $args", async ({ args }) => {
+		const result = await run([process.execPath, adapter, ...args]);
+		expect(result.code).not.toBe(0);
+		expect(result.stdout).toBe("");
+		expect(result.stderr).toContain("usage:");
+	});
+
+	test("explicit IR suite selection preserves protocol v1", async () => {
+		const result = await run([process.execPath, adapter, "--suite", "ir"], '{"id":1,"op":"capabilities"}\n{"id":2,"op":"exit"}\n');
+		expect(result.code).toBe(0);
+		expect(result.stderr).toBe("");
+		expect(JSON.parse(result.stdout.trim())).toMatchObject({ id: 1, contractVersion: 1, binding: "morphir-typescript" });
+	});
+
+	test("installed schema accepts the implementation's requests, results, and capabilities", async () => {
 		const protocol = new Ajv2020().compile(protocolSchema);
-		const report = new Ajv2020().compile(reportSchema);
-		const kit = loadResolutionKitFromFiles(resolutionFiles());
 		const testee = referenceResolutionTestee();
 		expect(protocol({ id: 1, ...(await testee.capabilities()) })).toBe(true);
-		for (const entry of kit.cases) {
-			expect(protocol({ id: 2, ...entry.request })).toBe(true);
-			expect(protocol({ id: 2, ...(await testee.execute(entry.request)) })).toBe(true);
-		}
-		expect(report(await runResolutionKit(kit, referenceResolutionTestee()))).toBe(true);
+		const request = { op: "resolve-library" as const, input: "{" };
+		expect(protocol({ id: 2, ...request })).toBe(true);
+		expect(protocol({ id: 2, ...(await testee.execute(request)) })).toBe(true);
 		expect(protocol({ id: 2, ok: true, graph: {}, ignored: true })).toBe(false);
 	});
 
@@ -249,12 +259,5 @@ describe("versioned package protocol routing", () => {
 		const result = await run([process.execPath, adapter], '{"id":1,"op":"capabilities"}\n{"id":2,"op":"exit"}\n');
 		expect(result.code).toBe(0);
 		expect(lines(result.stdout)[0]).toMatchObject({ id: 1, contractVersion: 1, binding: "morphir-typescript" });
-	});
-
-	test("the driver rejects an unknown contract before reading cases", async () => {
-		const result = await run([process.execPath, cli, "package", "run", "--contract", "future", "--kit", "/definitely/missing/package/mck"]);
-		expect(result.code).toBe(2);
-		expect(`${result.stdout}\n${result.stderr}`).toContain("0.1.0-draft.1");
-		expect(`${result.stdout}\n${result.stderr}`).not.toContain("ENOENT");
 	});
 });

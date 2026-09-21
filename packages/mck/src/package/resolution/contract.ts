@@ -1,6 +1,6 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
-import type { PackageContractDescriptor, PackageContractKit, PackageContractTestee } from "../contract.ts";
+import type { PackageContractTestee } from "../contract.ts";
 import type { ResolutionResult } from "./model.ts";
 
 export const RESOLUTION_CONTRACT = "0.1.0-draft.2" as const;
@@ -23,12 +23,3 @@ export interface ResolutionCapabilities {
 	readonly profiles: readonly ResolutionProfile[];
 }
 export type ResolutionTestee = PackageContractTestee<ResolutionCapabilities, ResolutionRequest, ResolutionResponse>;
-export type ResolutionKit = PackageContractKit<typeof RESOLUTION_CONTRACT, ResolutionRequest, ResolutionResponse>;
-export type ResolutionContractDescriptor = PackageContractDescriptor<
-	typeof RESOLUTION_CONTRACT,
-	ResolutionOperation,
-	ResolutionRequest,
-	ResolutionResponse,
-	ResolutionCapabilities,
-	ResolutionResponse
->;
