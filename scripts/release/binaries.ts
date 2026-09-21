@@ -2,12 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // Compiles the `mck` driver and its reference adapter to single-file
-// executables, one pair per release target. `bun build --compile` bundles
-// `kit/embedded.ts`, `packages/mck/package.json`, and the relative IR sources
-// into the executable, so a released binary carries the vendored kit and needs
-// no checkout, no `node_modules`, and no Node installation. Cross-compilation
-// needs no source rewriting for the same reason: nothing is resolved at run
-// time.
+// executables, one pair per release target, or the adapter alone. The driver
+// embeds its kit; the adapter only bundles binding/protocol code and package
+// metadata. Both include their runtime and IR sources, so neither needs a
+// checkout, node_modules, or a Node installation. Cross-compilation needs no
+// source rewriting: nothing is resolved at run time.
 
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -38,11 +37,9 @@ interface Entrypoint {
 	readonly stem: string;
 }
 
+const ADAPTER: Entrypoint = { source: "packages/mck/src/adapter.ts", stem: "mck-adapter-typescript" };
 /** The two executables the package declares in `bin`, in `bin` order. */
-const ENTRYPOINTS: readonly Entrypoint[] = [
-	{ source: "packages/mck/src/cli.ts", stem: "mck" },
-	{ source: "packages/mck/src/adapter.ts", stem: "mck-adapter-typescript" },
-];
+const ENTRYPOINTS: readonly Entrypoint[] = [{ source: "packages/mck/src/cli.ts", stem: "mck" }, ADAPTER];
 
 /** The environment variable that narrows the matrix: `host`, or a comma-separated list of target names. */
 export const TARGET_SELECTION_VARIABLE = "MCK_BINARY_TARGETS";
@@ -103,12 +100,21 @@ async function mckVersion(root: string): Promise<string> {
  * absolute path of each executable in build order.
  */
 export async function buildBinaries(root: string, outputDirectory: string): Promise<readonly string[]> {
+	return buildEntrypoints(root, outputDirectory, ENTRYPOINTS);
+}
+
+/** Build the binding adapter without compiling the legacy runner or embedding its kit. */
+export async function buildAdapterBinaries(root: string, outputDirectory: string): Promise<readonly string[]> {
+	return buildEntrypoints(root, outputDirectory, [ADAPTER]);
+}
+
+async function buildEntrypoints(root: string, outputDirectory: string, entrypoints: readonly Entrypoint[]): Promise<readonly string[]> {
 	const version = await mckVersion(root);
 	const directory = path.resolve(root, outputDirectory);
 	await mkdir(directory, { recursive: true });
 	const built: string[] = [];
 	for (const [target, os, arch] of selectedTargets(process.env[TARGET_SELECTION_VARIABLE])) {
-		for (const entrypoint of ENTRYPOINTS) {
+		for (const entrypoint of entrypoints) {
 			const output = path.join(directory, binaryName(entrypoint.stem, version, os, arch));
 			await runCommand([process.execPath, "build", "--compile", `--target=${target}`, entrypoint.source, "--outfile", output], root);
 			built.push(output);

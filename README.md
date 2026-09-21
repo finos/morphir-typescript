@@ -127,6 +127,25 @@ Use mise tasks for repository automation:
 | `mise run release:validate -- TAG` | Validate a `vVERSION` tag against the suite manifests and changelog. |
 | `mise run release:artifact -- OUTPUT_DIRECTORY` | Build and verify both publishable tarballs in the requested directory. |
 | `mise run release:binaries -- OUTPUT_DIRECTORY` | Compile `mck` and `mck-adapter-typescript` to single-file binaries for every release target. Set `MCK_BINARY_TARGETS=host` to compile only this machine's target. |
+| `mise run release:adapter-binaries -- OUTPUT_DIRECTORY` | Compile only `mck-adapter-typescript`, with the same target selection and asset names. No driver or embedded kit is needed by the adapter. |
+
+The adapter-only build keeps both IR and experimental package protocol support.
+The existing suite release still produces both executables and both npm packages
+while consumers migrate to the native `morphir mck` runner.
+`@finos/morphir-ir` keeps its Node 20 installed-package gate; the MCK npm package
+keeps its Node 24 requirement. Compiled adapters need neither runtime installed.
+
+To exercise a compiled adapter against a native CLI, supply an absolute path:
+
+```sh
+MORPHIR_MCK_NATIVE_CLI=/absolute/path/to/morphir \
+  mise exec -- bun test ./scripts/release/binaries.test.ts
+```
+
+This runs the CLI and adapter from a fresh directory with an empty `PATH`, vendors
+the CLI's embedded kit, runs it and independently checks the resulting report.
+It complements the always-on adapter build-boundary and IR/package protocol tests.
+It does not disable operating-system network access or certify other platforms.
 
 To apply formatting and safe lint fixes, run:
 

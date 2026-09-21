@@ -4,11 +4,8 @@
 // What a report says ran: the driver's own version and the kit's identity.
 import { execFileSync } from "node:child_process";
 import { EMBEDDED_KIT_COMMIT } from "../../kit/embedded.ts";
-import pkg from "../../package.json" with { type: "json" };
 
-export function driverVersion(): string {
-	return pkg.version;
-}
+export { bindingVersion as driverVersion } from "../binding-version.ts";
 
 export function kitVersion(kitDirectory: string | null): string {
 	if (kitDirectory === null) return EMBEDDED_KIT_COMMIT;
