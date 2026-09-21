@@ -1,20 +1,19 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 //
-// The kit is the authority for the YAML profile's bytes: every YAML fence in
-// the embedded kit is run through the reader and the canonical writer here, so
-// a rule the writer gets wrong shows up as a diff against a fence rather than
-// as an opinion. Three assertions per canonical case: the writer emits the YAML
+// Frozen fixtures retain the YAML regression expectations from the retired kit.
+// Every YAML fence runs through the reader and canonical writer.
+// Three assertions per canonical case: the writer emits the YAML
 // fence from the JSON fence's value, the reader reads the YAML fence to the
 // JSON fence's value, and the writer is idempotent on the YAML fence itself.
 import { describe, expect, test } from "bun:test";
-import { parseJson } from "../../../ir/src/codec/json/value.ts";
-import { parseYaml, writeYaml } from "../../../ir/src/codec/yaml/index.ts";
-import type { KitCase, KitFence } from "../kit/case.ts";
-import { embeddedKitFiles } from "../kit/embedded-source.ts";
-import { loadKitFromFiles } from "../kit/load.ts";
+import { parseJson } from "../src/codec/json/value.ts";
+import { parseYaml, writeYaml } from "../src/codec/yaml/index.ts";
+import fixture from "./fixtures/yaml-regressions.json";
 
-const kit = await loadKitFromFiles(embeddedKitFiles());
+type KitCase = (typeof fixture.cases)[number];
+type KitFence = KitCase["fences"][number];
+const kit = fixture;
 const active = kit.cases.filter((c) => c.status === "active");
 
 const yamlOf = (c: KitCase, role: KitFence["info"]["role"]): KitFence | undefined => c.fences.find((f) => f.info.language === "yaml" && f.info.role === role);
@@ -31,9 +30,9 @@ const yaml = (text: string) => {
 	return r.value;
 };
 
-describe("the canonical YAML writer against every YAML fence of the embedded kit", () => {
-	test("the kit loads without errors and carries YAML fences", () => {
-		expect(kit.errors).toEqual([]);
+describe("the canonical YAML writer against every YAML fence of the frozen codec fixture", () => {
+	test("the fixture records its source and carries YAML fences", () => {
+		expect(kit.source).toMatch(/^https:\/\/github.com\/finos\/morphir\/tree\/[a-f0-9]{40}\/spec\/ir\/mck$/);
 		expect(active.length).toBeGreaterThan(60);
 		expect(active.flatMap((c) => c.fences).filter((f) => f.info.language === "yaml").length).toBeGreaterThan(60);
 	});
@@ -48,7 +47,7 @@ describe("the canonical YAML writer against every YAML fence of the embedded kit
 			compared += 1;
 		}
 		console.log(`yaml canonical fences written from json: ${compared}`);
-		// Pinned, not bounded: the embedded kit is a fixed set of bytes, so this
+		// Pinned, not bounded: the frozen codec fixture is a fixed set of bytes, so this
 		// number moves only when a kit resync deliberately moves it.
 		expect(compared).toBe(98);
 	});
@@ -79,7 +78,7 @@ describe("the canonical YAML writer against every YAML fence of the embedded kit
 			}
 		}
 		console.log(`yaml fences the writer reproduces byte for byte: ${checked}`);
-		// 97 canonical with a JSON twin, plus canonical fences without one and
+		// 98 canonical with a JSON twin, plus canonical fences without one and
 		// `file` fences.
 		expect(checked).toBe(121);
 	});
@@ -88,7 +87,7 @@ describe("the canonical YAML writer against every YAML fence of the embedded kit
 		// distributions-0004 names the document from a `text canonical` fence.
 		const c = active.find((x) => x.id === "distributions-0004");
 		const j = c === undefined ? undefined : jsonOf(c, "canonical");
-		const document = kit.source.read("spec/ir/mck/documents/complete-example.yaml");
+		const document = kit.completeExample;
 		expect(j).toBeDefined();
 		expect(document).not.toBeNull();
 		expect(yaml(document ?? "")).toEqual(json(j?.body ?? ""));

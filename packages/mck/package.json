@@ -2,7 +2,7 @@
 	"name": "@finos/morphir-mck",
 	"version": "0.3.0",
 	"type": "module",
-	"description": "The Morphir Compatibility Kit (MCK) driver: runs the kit against any binding through the adapter protocol and writes conformance reports.",
+	"description": "Morphir package compatibility tooling and the TypeScript IR adapter. IR compatibility runs through the native Morphir CLI.",
 	"license": "Apache-2.0",
 	"repository": {
 		"type": "git",

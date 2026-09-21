@@ -16,7 +16,7 @@ const USAGE = [
 	"  release validate TAG",
 	"  release notes VERSION OUTPUT",
 	"  release artifact OUTPUT_DIRECTORY",
-	"  release binaries OUTPUT_DIRECTORY",
+	"  release binaries OUTPUT_DIRECTORY (TypeScript adapter only)",
 	"  release adapter-binaries OUTPUT_DIRECTORY",
 ].join("\n");
 

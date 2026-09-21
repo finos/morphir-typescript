@@ -148,17 +148,7 @@ describe("release automation contract", () => {
 			expect(byName.get(name)?.depends).toEqual(["setup"]);
 			await access(byName.get(name)?.file as string, constants.X_OK);
 		}
-		for (const dependency of [
-			"check:lint",
-			"check:typecheck",
-			"check:kit",
-			"check:kit-legacy",
-			"test",
-			"check:package",
-			"check:workflows",
-			"check:conformance",
-			"check:conformance-legacy",
-		])
+		for (const dependency of ["check:lint", "check:typecheck", "check:kit", "test", "check:package", "check:workflows", "check:conformance"])
 			expect(byName.get("ci")?.depends).toContain(dependency);
 
 		const sources = new Map<string, string>();
@@ -187,19 +177,8 @@ describe("release automation contract", () => {
 		expect(nativeConformance).toContain("await checkNativeConformance(ROOT_DIR)");
 		const nativeKit = await readFile(byName.get("check:kit")?.file as string, "utf8");
 		expect(nativeKit).toContain("await checkNativeKit(await nativeContext(ROOT_DIR))");
-		const legacyKit = await readFile(byName.get("check:kit-legacy")?.file as string, "utf8");
-		expect(legacyKit).toContain('["bun", "packages/mck/src/cli.ts", "kit", "status"]');
-		const conformanceFile = byName.get("check:conformance-legacy")?.file;
-		expect(conformanceFile).toBeString();
-		await access(conformanceFile as string, constants.X_OK);
-		const conformanceSource = await readFile(conformanceFile as string, "utf8");
-		expect(conformanceSource).toMatch(/^#!\/usr\/bin\/env bun\n\/\/ Copyright 2026 FINOS\n\/\/ SPDX-License-Identifier: Apache-2\.0\n/);
-		const conformanceInvocations = conformanceSource.match(/^await exec\(.+\);$/gm) ?? [];
-		expect(conformanceInvocations).toHaveLength(4);
-		expect(conformanceInvocations[0]).toContain('"run", "--report"');
-		expect(conformanceInvocations[1]).toContain('"--adapter", "bun"');
-		expect(conformanceInvocations[2]).toContain("scripts/conformance/compare-reports.ts");
-		expect(conformanceInvocations[3]).toContain('"coverage"');
+		expect(byName.has("check:kit-legacy")).toBe(false);
+		expect(byName.has("check:conformance-legacy")).toBe(false);
 	});
 
 	// The naming and format-version conformance corpora live only in the parent
@@ -221,10 +200,10 @@ describe("release automation contract", () => {
 		expect(taskInvocation(source)).toBe('await exec(["bun", "run", "test"], { MORPHIR_FIXTURES_OPTIONAL: "1" });');
 		expect(source).toContain("docs/spec/ir/fixtures/{naming,format-version}-conformance.json");
 		expect(source).toContain("format-version.test.ts throw at load when they are absent");
-		expect(source).toContain("MCK kit is vendored under packages/mck/kit and needs no opt-out");
+		expect(source).toContain("native MCK kit is vendored under vendor/morphir-mck and needs no opt-out");
 
 		const status = markdownSection(await readFile(path.join(root, "README.md"), "utf8"), "Project status");
-		expect(status).toContain("vendored into packages/mck/kit");
+		expect(status).toContain("vendored into vendor/morphir-mck");
 		expect(status).toContain("MORPHIR_FIXTURES_OPTIONAL=1");
 		expect(status).not.toContain("Standalone CI temporarily skips");
 	});
@@ -322,15 +301,7 @@ describe("release automation contract", () => {
 		expect(publishing).toContain("0.0.1 published only @finos/morphir-ir");
 		expect(publishing).toContain("0.1.0 was the first release to publish both");
 		expect(publishing).not.toContain("publishes from the next suite release");
-		for (const expected of [
-			"mck-VERSION-OS-ARCH",
-			"mck-adapter-typescript-VERSION-OS-ARCH",
-			"bun build --compile",
-			"chmod +x",
-			"mck kit status",
-			"mck kit sync",
-		])
-			expect(publishing).toContain(expected);
+		for (const expected of ["mck-adapter-typescript-VERSION-OS-ARCH", "bun build --compile", "chmod +x"]) expect(publishing).toContain(expected);
 	});
 
 	test("starts releases for version tags with least-privilege job boundaries", async () => {
@@ -412,7 +383,6 @@ describe("release automation contract", () => {
 		expect(String(upload.with?.path).trim().split("\n")).toEqual([
 			`.dev/out/release/finos-morphir-ir-${releaseVersion}.tgz`,
 			`.dev/out/release/finos-morphir-mck-${releaseVersion}.tgz`,
-			`.dev/out/release/mck-${releaseVersion}-*`,
 			`.dev/out/release/mck-adapter-typescript-${releaseVersion}-*`,
 			".dev/out/release/release-notes.md",
 			".dev/out/release/SHA256SUMS",
@@ -421,8 +391,8 @@ describe("release automation contract", () => {
 
 	test("pins every enumerated release file set to what the artifact commands build", async () => {
 		const { workflow } = await releaseWorkflow();
-		expect(binaryNames("1.2.3")).toHaveLength(10);
-		expect(RELEASE_ARTIFACTS).toHaveLength(12);
+		expect(binaryNames("1.2.3")).toHaveLength(5);
+		expect(RELEASE_ARTIFACTS).toHaveLength(7);
 
 		const enumerating = [
 			stepNamed(workflow.jobs.artifact as WorkflowJob, "Checksum release artifact"),

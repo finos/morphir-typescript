@@ -1,7 +1,7 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 //
-// Tests for the process Testee: every way a foreign process can misbehave
+// Shared transport regressions: every way a foreign process can misbehave
 // (non-JSON output, a mismatched id, a non-zero exit, a hang, dying right
 // after answering) becomes a ProtocolError naming the problem; a dead
 // child's stdin never raises an uncaught error; and the real adapter agrees
@@ -9,8 +9,8 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 import { IN_PROCESS_CAPABILITIES, inProcessTestee } from "./in-process.ts";
-import { processTestee } from "./process.ts";
 import { ProtocolError } from "./protocol.ts";
+import { jsonLineClient } from "./transport.ts";
 
 const fixture = (name: string): string => path.join(import.meta.dir, "..", "..", "test", "fixtures", name);
 const adapter = path.join(import.meta.dir, "..", "adapter.ts");
@@ -39,32 +39,32 @@ async function rejection(p: Promise<unknown>): Promise<string> {
 	throw new Error("expected the promise to reject");
 }
 
-describe("processTestee", () => {
+describe("jsonLineClient process failures", () => {
 	test("non-JSON output rejects with a ProtocolError naming the parse failure", async () => {
-		const t = processTestee(["bun", fixture("adapter-nonjson.ts")], { timeoutMs: 5000 });
-		await t.capabilities();
-		expect(await rejection(t.decode(decodeRequest))).toMatch(/not a JSON line/);
+		const t = jsonLineClient(["bun", fixture("adapter-nonjson.ts")], { timeoutMs: 5000 });
+		await t.exchange({ op: "capabilities" });
+		expect(await rejection(t.exchange(decodeRequest))).toMatch(/not a JSON line/);
 		await t.close();
 	});
 
 	test("a mismatched id rejects with a ProtocolError naming the expected and actual ids", async () => {
-		const t = processTestee(["bun", fixture("adapter-wrong-id.ts")], { timeoutMs: 5000 });
-		await t.capabilities();
-		expect(await rejection(t.decode(decodeRequest))).toMatch(/expected id 2, got 999/);
+		const t = jsonLineClient(["bun", fixture("adapter-wrong-id.ts")], { timeoutMs: 5000 });
+		await t.exchange({ op: "capabilities" });
+		expect(await rejection(t.exchange(decodeRequest))).toMatch(/expected id 2, got 999/);
 		await t.close();
 	});
 
 	test("a non-zero exit rejects with a ProtocolError naming the code and captured stderr", async () => {
-		const t = processTestee(["bun", fixture("adapter-exit.ts")], { timeoutMs: 5000 });
-		await t.capabilities();
-		expect(await rejection(t.decode(decodeRequest))).toMatch(/adapter exited with code 3[\s\S]*boom/);
+		const t = jsonLineClient(["bun", fixture("adapter-exit.ts")], { timeoutMs: 5000 });
+		await t.exchange({ op: "capabilities" });
+		expect(await rejection(t.exchange(decodeRequest))).toMatch(/adapter exited with code 3[\s\S]*boom/);
 		await t.close();
 	});
 
 	test("a hung adapter times out", async () => {
-		const t = processTestee(["bun", fixture("adapter-hang.ts")], { timeoutMs: 200 });
-		await t.capabilities();
-		expect(await rejection(t.decode(decodeRequest))).toMatch(/timed out after 200 ms/);
+		const t = jsonLineClient(["bun", fixture("adapter-hang.ts")], { timeoutMs: 200 });
+		await t.exchange({ op: "capabilities" });
+		expect(await rejection(t.exchange(decodeRequest))).toMatch(/timed out after 200 ms/);
 		await t.close();
 	});
 
@@ -79,9 +79,9 @@ describe("processTestee", () => {
 		};
 		process.on("unhandledRejection", record);
 		try {
-			const t = processTestee(["bun", fixture("adapter-hang.ts")], { timeoutMs: 200 });
-			await t.capabilities();
-			expect(await rejection(t.decode(decodeRequest))).toMatch(/timed out after 200 ms/);
+			const t = jsonLineClient(["bun", fixture("adapter-hang.ts")], { timeoutMs: 200 });
+			await t.exchange({ op: "capabilities" });
+			expect(await rejection(t.exchange(decodeRequest))).toMatch(/timed out after 200 ms/);
 			await t.close();
 			// Unhandled-rejection detection is deferred to a later turn of the
 			// loop, so give the killed child's streams a moment to settle first.
@@ -93,18 +93,18 @@ describe("processTestee", () => {
 	});
 
 	test("an adapter that answers and then exits promptly is not mistaken for one that failed to answer", async () => {
-		const t = processTestee(["bun", fixture("adapter-answer-then-exit.ts")], { timeoutMs: 5000 });
-		await t.capabilities();
-		const response = await t.decode(decodeRequest);
+		const t = jsonLineClient(["bun", fixture("adapter-answer-then-exit.ts")], { timeoutMs: 5000 });
+		await t.exchange({ op: "capabilities" });
+		const response = await t.exchange(decodeRequest);
 		const expected = await inProcessTestee().decode(decodeRequest);
 		expect(response).toEqual(expected);
 		// The adapter has already exited after answering; the next request must
 		// report that exit, not hang or repeat the previous answer.
-		expect(await rejection(t.decode(decodeRequest))).toMatch(/adapter exited with code 0/);
+		expect(await rejection(t.exchange(decodeRequest))).toMatch(/adapter exited with code 0/);
 		await t.close();
 	});
 
-	test("a dead child's stdin does not raise an uncaught error when the Testee is closed", async () => {
+	test("a dead child's stdin does not raise an uncaught error when the client is closed", async () => {
 		let uncaught: unknown;
 		const onUncaught = (err: unknown) => {
 			uncaught = err;
@@ -112,9 +112,9 @@ describe("processTestee", () => {
 		process.once("uncaughtException", onUncaught);
 		process.once("unhandledRejection", onUncaught);
 		try {
-			const t = processTestee(["bun", fixture("adapter-exit.ts")], { timeoutMs: 5000 });
-			await t.capabilities();
-			await rejection(t.decode(decodeRequest));
+			const t = jsonLineClient(["bun", fixture("adapter-exit.ts")], { timeoutMs: 5000 });
+			await t.exchange({ op: "capabilities" });
+			await rejection(t.exchange(decodeRequest));
 			// The child has already exited (code 3) by the time close() runs, so
 			// its stdin pipe is dead; close() must still resolve cleanly.
 			await t.close();
@@ -129,15 +129,15 @@ describe("processTestee", () => {
 
 	test("the real adapter matches the in-process testee's capabilities and decode answer, closes cleanly, and exits 0", async () => {
 		let exitCode: number | null | undefined;
-		const t = processTestee(["bun", adapter], {
+		const t = jsonLineClient(["bun", adapter], {
 			timeoutMs: 5000,
 			onExit: (code) => {
 				exitCode = code;
 			},
 		});
-		const caps = await t.capabilities();
+		const caps = await t.exchange({ op: "capabilities" });
 		expect(caps).toEqual(IN_PROCESS_CAPABILITIES);
-		const viaAdapter = await t.decode(decodeRequest);
+		const viaAdapter = await t.exchange(decodeRequest);
 		const inProcess = await inProcessTestee().decode(decodeRequest);
 		expect(viaAdapter).toEqual(inProcess);
 		await t.close();

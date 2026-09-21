@@ -5,7 +5,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { buildMckArtifact, canonicalSourceMap, checkKitRunReport, publishMckManifest, TYPESCRIPT_SPECIFIER, validatePackageFiles } from "./package-mck.ts";
+import { buildMckArtifact, canonicalSourceMap, publishMckManifest, TYPESCRIPT_SPECIFIER, validatePackageFiles } from "./package-mck.ts";
 import { parseStableVersion } from "./version.ts";
 
 const root = path.resolve(import.meta.dir, "../..");
@@ -21,7 +21,7 @@ function sourceManifest(): Record<string, unknown> {
 		version: "0.0.0",
 		private: false,
 		type: "module",
-		description: "The Morphir Compatibility Kit (MCK) driver: runs the kit against any binding through the adapter protocol and writes conformance reports.",
+		description: "Morphir package compatibility tooling and the TypeScript IR adapter. IR compatibility runs through the native Morphir CLI.",
 		license: "Apache-2.0",
 		repository: {
 			type: "git",
@@ -87,8 +87,6 @@ describe("publishMckManifest", () => {
 			sideEffects: false,
 			files: [
 				"dist",
-				"kit",
-				"kit.lock.json",
 				"protocol.schema.json",
 				"protocol.example.json",
 				"package-protocol.schema.json",
@@ -146,10 +144,10 @@ describe("publishMckManifest", () => {
 });
 
 describe("validatePackageFiles", () => {
-	test("publishes the vendored kit verbatim but never the package sources", () => {
+	test("rejects retired kit files but ships adapter contracts", () => {
 		const kitFile = "package/kit/spec/ir/mck/types.md";
-		expect(() => validatePackageFiles([kitFile], new Set(), new Set([kitFile]))).not.toThrow();
-		expect(() => validatePackageFiles(["package/kit.lock.json"], new Set(), new Set(["package/kit.lock.json"]))).not.toThrow();
+		expect(() => validatePackageFiles([kitFile], new Set(), new Set([kitFile]))).toThrow();
+		expect(() => validatePackageFiles(["package/kit.lock.json"], new Set(), new Set(["package/kit.lock.json"]))).toThrow();
 		// The adapter protocol contract ships so an installed consumer can read it.
 		for (const contract of [
 			"package/protocol.schema.json",
@@ -188,50 +186,6 @@ describe("TYPESCRIPT_SPECIFIER", () => {
 	});
 });
 
-describe("checkKitRunReport", () => {
-	function record(caseId: string, result: string): Record<string, unknown> {
-		return { caseId, fenceIndex: 0, profile: "json", role: "canonical", result };
-	}
-	function report(records: readonly Record<string, unknown>[]): Record<string, unknown> {
-		return { contractVersion: 1, binding: "morphir-typescript", language: "typescript", driverVersion: "0.0.1", kitVersion: "abc", records };
-	}
-
-	test("accepts a clean run with no failing records", () => {
-		expect(() => checkKitRunReport(report([record("types-0001", "pass")]), "r.json")).not.toThrow();
-		expect(() => checkKitRunReport(report([record("types-0001", "pass"), record("names-0001", "skipped")]), "r.json")).not.toThrow();
-	});
-
-	test("rejects a failing case the allowance does not name", () => {
-		const extra = report([record("distributions-0004", "fail"), record("values-0007", "fail")]);
-
-		expect(() => checkKitRunReport(extra, "r.json")).toThrow(/values-0007/);
-		expect(() => checkKitRunReport(extra, "r.json")).toThrow("does not allow");
-	});
-
-	// The allowance is empty now that the vendored kit runs clean, so it holds
-	// no case's failures back; repeated non-failing records for the same case
-	// still don't count against it.
-	test("repeated non-failing records for the same case never trip the allowance", () => {
-		expect(() => checkKitRunReport(report([record("distributions-0004", "pass"), record("distributions-0004", "pass")]), "r.json")).not.toThrow();
-		expect(() =>
-			checkKitRunReport(
-				report([record("document-tree-0005", "skipped"), record("document-tree-0005", "skipped"), record("document-tree-0005", "pass")]),
-				"r.json",
-			),
-		).not.toThrow();
-	});
-
-	test("rejects repeated failures of the same case, kit errors, another binding, and an empty run", () => {
-		const tooMany = report([record("values-0007", "fail"), record("values-0007", "fail"), record("values-0007", "fail")]);
-		expect(() => checkKitRunReport(tooMany, "r.json")).toThrow(/values-0007 \(3 failing record\(s\), at most 0 allowed\)/);
-
-		expect(() => checkKitRunReport(report([record("types-0001", "kit-error")]), "r.json")).toThrow("kit-error");
-		expect(() => checkKitRunReport({ ...report([record("types-0001", "pass")]), binding: "morphir-rust" }, "r.json")).toThrow("morphir-rust");
-		expect(() => checkKitRunReport(report([]), "r.json")).toThrow("no records");
-		expect(() => checkKitRunReport("not a report", "r.json")).toThrow("report object");
-	});
-});
-
 // The artifact build shells out to `bun pm pack`, `tar`, `tsc`, and `node`, and
 // installs the two tarballs into a temporary consumer. It is skipped where Bun
 // cannot spawn itself, never in CI.
@@ -240,7 +194,7 @@ const canBuild = Bun.spawnSync([process.execPath, "--version"]).exitCode === 0;
 describe.if(canBuild)("@finos/morphir-mck artifact", () => {
 	let output: string;
 
-	test("builds one clean tarball with Node shebangs, the vendored kit, and no sources", async () => {
+	test("builds one clean tarball with Node shebangs, package tooling, and no IR kit or sources", async () => {
 		output = await mkdtemp(path.join(tmpdir(), "morphir-mck-artifact-test-"));
 		const ir = await (await import("./package-ir.ts")).buildIrArtifact(root, output);
 		const artifact = await buildMckArtifact(root, output, ir.tarball);
@@ -253,14 +207,12 @@ describe.if(canBuild)("@finos/morphir-mck artifact", () => {
 			"package/README.md",
 			"package/LICENSE",
 			"package/NOTICE",
-			"package/kit.lock.json",
 			"package/protocol.schema.json",
 			"package/protocol.example.json",
 			"package/package-protocol.schema.json",
 			"package/package-report.schema.json",
 			"package/package-resolution-protocol.schema.json",
 			"package/package-resolution-report.schema.json",
-			"package/kit/spec/ir/mck/types.md",
 			"package/dist/index.js",
 			"package/dist/cli.js",
 			"package/dist/adapter.js",
@@ -271,7 +223,7 @@ describe.if(canBuild)("@finos/morphir-mck artifact", () => {
 			expect(artifact.files).toContain(required);
 		}
 		expect(artifact.files.some((file) => file.includes("/src/") && !file.startsWith("package/kit/"))).toBe(false);
-		expect(artifact.files).not.toContain("package/kit/embedded.ts");
+		expect(artifact.files.some((file) => file.startsWith("package/kit/") || file === "package/kit.lock.json")).toBe(false);
 		expect(artifact.files.some((file) => file.includes(".test.") || file.includes("tsconfig") || file.includes("bun.lock"))).toBe(false);
 
 		const cli = await Bun.$`tar -xOf ${artifact.tarball} package/dist/cli.js`.text();

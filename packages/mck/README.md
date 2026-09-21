@@ -1,58 +1,39 @@
 # @finos/morphir-mck
 
-The Morphir Compatibility Kit driver. The IR kit is a set of Markdown case files whose fenced blocks state what every Morphir binding must decode, reject, and write back; this package runs those cases against a binding and writes a conformance report. A copy of the IR kit ships inside the package, so an IR run needs no checkout. The experimental package suite uses a separately supplied corpus. The package is ESM-only and runs on Node 24 or later.
+Package compatibility tooling and the TypeScript IR adapter. The package is ESM-only and requires Node 24 or later.
 
 ```sh
 npm install -g @finos/morphir-mck
 ```
 
-The install provides two binaries: `mck`, the driver, and `mck-adapter-typescript`, the reference adapter that puts the TypeScript binding behind the adapter protocol.
+The install retains two commands: `mck package run` for experimental package contracts, and `mck-adapter-typescript` for the TypeScript implementation's JSON-lines adapter.
 
-Run the embedded kit against the built-in TypeScript binding:
+## Migrating IR consumers
 
-```sh
-mck run --report report.json
-```
-
-Run it against any other binding by naming an executable that speaks the adapter protocol on stdin and stdout:
+IR compatibility now runs through the released native [Morphir CLI](https://github.com/finos/morphir/releases). Install that CLI separately; the npm command does not download it or forward commands. Use an explicit adapter:
 
 ```sh
-mck run --adapter my-binding-adapter --adapter-arg --profile=json --report report.json
+morphir mck kit vendor --source embedded --dest ./mck-kit
+morphir mck check ./mck-kit
+morphir mck coverage --kit ./mck-kit
+morphir mck schema check --kit ./mck-kit
+morphir mck run --kit ./mck-kit --adapter mck-adapter-typescript --report ir-report.json
+printf '{"cases":[]}\n' > allowed-failing.json
+morphir mck report check ir-report.json allowed-failing.json --kit ./mck-kit
 ```
 
-`mck run` exits 0 when every record passes, 1 when a record fails or the kit itself does not parse, and 2 on a usage error. `--strict` also fails the run on skipped records. `--kit <dir>` runs a checkout's `spec/ir/mck` instead of the embedded copy, and `--only <regex>` narrows the run to matching case ids.
+For a local npm install, pass `--adapter node --adapter-arg /absolute/path/to/node_modules/@finos/morphir-mck/dist/adapter.js`. The adapter protocol remains version 1, with `protocol.schema.json` and `protocol.example.json` shipped in the package. Native reports use the consolidated `2.0.0-draft.1` contract, not the retired TypeScript IR report format.
 
-The driver checks JSON, YAML, and document-tree fences alike: a YAML fence round-trips through the binding's YAML codec the same way a JSON fence does, and a `file` set of fences checks the binding's document-tree reader and writer against a whole directory of files. A set marked `mode=read` only exercises the read half: for input a canonical writer never reproduces itself, such as a `$meta` member the kit carries for a read-only case. Run against the embedded kit, `mck run` currently reports:
+The npm commands `mck check`, `mck run`, `mck coverage` and `mck kit` now exit 2 with migration guidance. The library no longer exports IR runner, comparison, coverage, Markdown parser, kit loader, embedded-kit, kit-version or IR report APIs, or the unused `processTestee` IR subprocess client. Use native CLI commands for those operations. Package APIs, adapter/protocol helpers and shared report summaries remain available. `bindingVersion()` replaces `driverVersion()` as the package-version helper; package report wire fields remain unchanged.
 
-```text
-722 pass, 0 fail, 0 kit-error, 8 skipped
-skipped versions-0001 fence 0 [current]: version 3 not in capabilities
-skipped versions-0001 fence 0 [pinned]: version 3 not in capabilities
-skipped versions-0006 fence 0 [current]: version 3 not in capabilities
-skipped versions-0006 fence 0 [pinned]: version 3 not in capabilities
-skipped versions-0007 fence 0 [current]: version 3 not in capabilities
-skipped versions-0007 fence 0 [pinned]: version 3 not in capabilities
-skipped versions-0008 fence 0 [current]: version 3 not in capabilities
-skipped versions-0008 fence 0 [pinned]: version 3 not in capabilities
-```
+Future GitHub releases contain five `mck-adapter-typescript-VERSION-OS-ARCH` executables and the two npm tarballs. They no longer build standalone `mck-VERSION-OS-ARCH` drivers. Historical release assets remain unchanged. Both npm bins remain available.
 
-The eight skips are the kit's version-3 fences, which the TypeScript binding's capabilities do not name; a binding that declares version 3 answers them.
+The package no longer ships an IR kit or `kit.lock.json`. Source CI uses the native managed snapshot at `vendor/morphir-mck` and the checksum-pinned CLI in `.config/mck-cli.json`. The installed Node 24 adapter is tested by that CLI before its npm artifact is promoted. IR codec regression fixtures retain the old canonical YAML cases independently of the runner.
 
-Report which vocabulary entries — variants and member spellings — no case exercises:
-
-```sh
-mck coverage
-```
-
-Show which kit the embedded copy is pinned to, and whether it still matches its lock file:
-
-```sh
-mck kit status --remote
-```
-
-A report validates against [`spec/ir/mck/report.schema.json`](https://github.com/finos/morphir/blob/main/spec/ir/mck/report.schema.json) in finos/morphir, which also ships as `kit/spec/ir/mck/report.schema.json` inside this package. An adapter validates against [`packages/mck/protocol.schema.json`](https://github.com/finos/morphir-typescript/blob/main/packages/mck/protocol.schema.json) in finos/morphir-typescript, which ships as `protocol.schema.json` beside this file along with a worked exchange in `protocol.example.json`. The embedded kit's provenance — the commit it was vendored from and its content hash — is `kit.lock.json` beside this file.
+Package runner and package contract migration remains tracked separately in [finos/morphir#852](https://github.com/finos/morphir/issues/852).
 
 Copyright 2026 FINOS. Licensed under Apache-2.0.
+
 ## Experimental package suite
 
 Draft.3 local Library definitions can be inspected through the library API:
@@ -122,8 +103,7 @@ bun packages/mck/test/support/local-registry-assurance-parent-integration.ts --s
 ```
 
 `mck package run --contract 0.1.0-draft.1 --kit /path/to/finos/morphir/spec/package/mck --report package.json`
-runs the draft package corpus owned by finos/morphir. The package corpus is not embedded;
-the existing embedded kit and `kit.lock.json` still identify only the IR suite.
+runs the draft package corpus owned by finos/morphir. Supply the package corpus explicitly.
 
 Use an executable implementation with:
 

@@ -1,0 +1,98 @@
+{
+	"source": "https://github.com/finos/morphir/tree/2bab57ea23fe85c6f9cc434b32e61f29ca14190c/spec/ir/mck",
+	"files": {
+		"escape": {
+			"manifest": "formatVersion: 4\ndistribution: Library\npackage: my-org/my-project\npathBudget: 4000\n",
+			"pkg/my-org/my-project/domain/module": "formatVersion: 4\npath: domain\ntypes: [user-ID]\nvalues: []\n",
+			"pkg/my-org/my-project/domain/user-_id.type": "formatVersion: 4\nname: user-ID\ndef:\n  Public:\n    doc: The user's identifier\n    TypeAliasDefinition:\n      typeParams: []\n      typeExp: morphir/SDK:string#string\n"
+		},
+		"truncate": {
+			"manifest": "formatVersion: 4\ndistribution: Library\npackage: my-org/my-project\npathBudget: 64\n",
+			"pkg/my-org/my-project/domain/module": "formatVersion: 4\npath: domain\ntypes: [customer-relationship-management-record]\nvalues: []\nfileNames:\n  customer-relationship-management-record: customer-relati__44a101f8\n",
+			"pkg/my-org/my-project/domain/customer-relati__44a101f8.type": "formatVersion: 4\nname: customer-relationship-management-record\ndef:\n  Public:\n    TypeAliasDefinition:\n      typeParams: []\n      typeExp: morphir/SDK:string#string\n"
+		},
+		"meta": {
+			"manifest": "formatVersion: 4\ndistribution: Library\npackage: my-org/my-project\npathBudget: 4000\n$meta:\n  generator: example\n",
+			"pkg/my-org/my-project/domain/module": "formatVersion: 4\npath: domain\ntypes: []\nvalues: []\n$meta:\n  generator: example\n"
+		},
+		"private": {
+			"manifest": "formatVersion: 4\ndistribution: Library\npackage: my-org/my-project\npathBudget: 4000\n",
+			"pkg/my-org/my-project/domain/module": "formatVersion: 4\npath: domain\naccess: Private\ntypes: []\nvalues: []\n"
+		},
+		"deps": {
+			"manifest": "formatVersion: 4\ndistribution: Library\npackage: my-org/my-project\npathBudget: 4000\ndependencies: [morphir/SDK]\n",
+			"pkg/my-org/my-project/domain/module": "formatVersion: 4\npath: domain\ntypes: []\nvalues: []\n",
+			"deps/morphir/_sdk/@/basics/module": "formatVersion: 4\npath: basics\ntypes: [int]\nvalues: []\n",
+			"deps/morphir/_sdk/@/basics/int.type": "formatVersion: 4\nname: int\nspec:\n  OpaqueTypeSpecification: {}\n"
+		},
+		"app-deps": {
+			"manifest": "formatVersion: 4\ndistribution: Application\npackage: example\npathBudget: 4000\ndependencies: [my-org/shared]\nentryPoints:\n  start:\n    target: example:main#run\n    kind: main\n",
+			"pkg/example/main/module": "formatVersion: 4\npath: main\ntypes: []\nvalues: [run]\n",
+			"pkg/example/main/run.value": "formatVersion: 4\nname: run\ndef:\n  Public:\n    ExpressionBody:\n      inputTypes: {}\n      outputType: morphir/SDK:basics#unit\n      body:\n        Unit: {}\n",
+			"deps/my-org/shared/@/util/module": "formatVersion: 4\npath: util\ntypes: []\nvalues: [identity]\n",
+			"deps/my-org/shared/@/util/identity.value": "formatVersion: 4\nname: identity\ndef:\n  Public:\n    ExpressionBody:\n      inputTypes:\n        x: morphir/SDK:basics#int\n      outputType: morphir/SDK:basics#int\n      body:\n        Variable: x\n"
+		}
+	},
+	"canonical": {
+		"document-tree-0001": "formatVersion: 4\ndistribution: Library\npackage: my-org/my-project\npathBudget: 4000\n",
+		"document-tree-0002": "formatVersion: 4\npath: my-org/domain\ntypes: [user, user-ID]\nvalues: [get-user]\n",
+		"document-tree-0003": "formatVersion: 4\ndistribution:\n  Library:\n    packageName: my-org/my-project\n    dependencies: {}\n    def:\n      modules:\n        domain:\n          Public:\n            types:\n              user-ID:\n                Public:\n                  doc: The user's identifier\n                  TypeAliasDefinition:\n                    typeParams: []\n                    typeExp: morphir/SDK:string#string\n            values: {}\n",
+		"document-tree-0004": "formatVersion: 4\ndistribution:\n  Library:\n    packageName: my-org/my-project\n    dependencies: {}\n    def:\n      modules:\n        domain:\n          Public:\n            types:\n              customer-relationship-management-record:\n                Public:\n                  TypeAliasDefinition:\n                    typeParams: []\n                    typeExp: morphir/SDK:string#string\n            values: {}\n",
+		"document-tree-0005": "formatVersion: 4\ndistribution:\n  Library:\n    packageName: my-org/my-project\n    dependencies: {}\n    def:\n      modules:\n        domain:\n          Public:\n            types: {}\n            values: {}\n",
+		"document-tree-0006": "formatVersion: 4\ndistribution:\n  Library:\n    packageName: my-org/my-project\n    dependencies: {}\n    def:\n      modules:\n        domain:\n          Public:\n            types:\n              user-ID:\n                Public:\n                  doc: The user's identifier\n                  TypeAliasDefinition:\n                    typeParams: []\n                    typeExp: morphir/SDK:string#string\n            values: {}\n",
+		"document-tree-0007": "formatVersion: 4\ndistribution:\n  Library:\n    packageName: my-org/my-project\n    dependencies: {}\n    def:\n      modules:\n        domain:\n          Private:\n            types: {}\n            values: {}\n",
+		"document-tree-0008": "formatVersion: 4\ndistribution:\n  Library:\n    packageName: my-org/my-project\n    dependencies:\n      morphir/SDK:\n        modules:\n          basics:\n            types:\n              int:\n                OpaqueTypeSpecification: {}\n            values: {}\n    def:\n      modules:\n        domain:\n          Public:\n            types: {}\n            values: {}\n",
+		"document-tree-0009": "formatVersion: 4\ndistribution:\n  Application:\n    packageName: example\n    dependencies:\n      my-org/shared:\n        modules:\n          util:\n            Public:\n              types: {}\n              values:\n                identity:\n                  Public:\n                    ExpressionBody:\n                      inputTypes:\n                        x: morphir/SDK:basics#int\n                      outputType: morphir/SDK:basics#int\n                      body:\n                        Variable: x\n    def:\n      modules:\n        main:\n          Public:\n            types: {}\n            values:\n              run:\n                Public:\n                  ExpressionBody:\n                    inputTypes: {}\n                    outputType: morphir/SDK:basics#unit\n                    body:\n                      Unit: {}\n    entryPoints:\n      start:\n        target: example:main#run\n        kind: main\n"
+	},
+	"distributions": [
+		[
+			"distributions-0002",
+			"{ \"formatVersion\": 4, \"distribution\": { \"Library\": { \"packageName\": \"example\", \"dependencies\": {}, \"def\": { \"modules\": {} } } } }\n"
+		],
+		[
+			"distributions-0004",
+			"{ \"formatVersion\": 4, \"distribution\": { \"Library\": { \"packageName\": \"regulation\", \"dependencies\": { \"morphir/SDK\": { \"modules\": { \"basics\": { \"types\": { \"int\": { \"OpaqueTypeSpecification\": {} }, \"float\": { \"OpaqueTypeSpecification\": {} }, \"bool\": { \"OpaqueTypeSpecification\": {} } }, \"values\": { \"add\": { \"inputs\": { \"a\": \"morphir/SDK:basics#int\", \"b\": \"morphir/SDK:basics#int\" }, \"output\": \"morphir/SDK:basics#int\" } } }, \"list\": { \"types\": { \"list\": { \"TypeAliasSpecification\": { \"typeParams\": [\"a\"], \"typeExp\": { \"Reference\": [\"morphir/SDK:list#list\", \"a\"] } } } }, \"values\": { \"map\": { \"inputs\": { \"f\": { \"Function\": { \"parameterType\": \"a\", \"returnType\": \"b\" } }, \"list\": { \"Reference\": [\"morphir/SDK:list#list\", \"a\"] } }, \"output\": { \"Reference\": [\"morphir/SDK:list#list\", \"b\"] } } } } } } }, \"def\": { \"modules\": { \"u-s/f-r-2052-a/data-tables\": { \"Public\": { \"types\": { \"data-tables\": { \"Public\": { \"TypeAliasDefinition\": { \"typeParams\": [], \"typeExp\": { \"Record\": { \"fields\": { \"inflows\": \"regulation:u-s/f-r-2052-a/data-tables#inflows\", \"outflows\": \"regulation:u-s/f-r-2052-a/data-tables#outflows\", \"supplemental\": \"regulation:u-s/f-r-2052-a/data-tables#supplemental\" } } } } } }, \"inflows\": { \"Public\": { \"TypeAliasDefinition\": { \"typeParams\": [], \"typeExp\": { \"Record\": { \"fields\": { \"assets\": { \"Reference\": [\"morphir/SDK:list#list\", \"regulation:u-s/f-r-2052-a/data-tables/inflows#assets\"] } } } } } } } }, \"values\": { \"calculate-total\": { \"Public\": { \"ExpressionBody\": { \"inputTypes\": { \"tables\": \"regulation:u-s/f-r-2052-a/data-tables#data-tables\" }, \"outputType\": \"morphir/SDK:basics#float\", \"body\": { \"Literal\": { \"FloatLiteral\": 0.0 } } } } } }, \"doc\": \"Data tables module for regulatory reporting\" } } } } } } }\n"
+		],
+		[
+			"distributions-0005",
+			"{ \"formatVersion\": 4, \"distribution\": { \"Library\": { \"packageName\": \"example\", \"dependencies\": { \"morphir/SDK\": { \"modules\": {} } }, \"def\": { \"modules\": {} } } } }\n"
+		],
+		[
+			"distributions-0006",
+			"{ \"formatVersion\": 4, \"distribution\": { \"Specs\": { \"packageName\": \"example\", \"dependencies\": { \"morphir/SDK\": { \"modules\": {} } }, \"spec\": { \"modules\": { \"main\": { \"types\": {}, \"values\": { \"greet\": { \"inputs\": { \"name\": \"morphir/SDK:string#string\" }, \"output\": \"morphir/SDK:string#string\" } } } } } } } }\n"
+		],
+		[
+			"distributions-0007",
+			"{ \"formatVersion\": 4, \"distribution\": { \"Application\": { \"packageName\": \"example\", \"dependencies\": {}, \"def\": { \"modules\": { \"main\": { \"Public\": { \"types\": {}, \"values\": { \"run\": { \"Public\": { \"ExpressionBody\": { \"inputTypes\": {}, \"outputType\": \"morphir/SDK:basics#unit\", \"body\": { \"Unit\": {} } } } } } } } } }, \"entryPoints\": { \"start\": { \"target\": \"example:main#run\", \"kind\": \"main\", \"doc\": \"The application entry point\" }, \"build\": { \"target\": \"example:main#run\", \"kind\": \"command\" } } } } }\n"
+		],
+		[
+			"distributions-0010",
+			"{ \"formatVersion\": 4, \"distribution\": { \"Application\": { \"packageName\": \"example\", \"dependencies\": { \"my-org/shared\": { \"modules\": { \"util\": { \"Public\": { \"types\": {}, \"values\": { \"identity\": { \"Public\": { \"ExpressionBody\": { \"inputTypes\": { \"x\": \"morphir/SDK:basics#int\" }, \"outputType\": \"morphir/SDK:basics#int\", \"body\": { \"Variable\": \"x\" } } } } } } } } } }, \"def\": { \"modules\": { \"main\": { \"Public\": { \"types\": {}, \"values\": { \"run\": { \"Public\": { \"ExpressionBody\": { \"inputTypes\": {}, \"outputType\": \"morphir/SDK:basics#unit\", \"body\": { \"Unit\": {} } } } } } } } } }, \"entryPoints\": { \"start\": { \"target\": \"example:main#run\", \"kind\": \"main\" } } } } }\n"
+		],
+		[
+			"document-tree-0006",
+			"{ \"formatVersion\": 4, \"distribution\": { \"Library\": { \"packageName\": \"my-org/my-project\", \"dependencies\": {}, \"def\": { \"modules\": { \"domain\": { \"Public\": { \"types\": { \"user-ID\": { \"Public\": { \"doc\": \"The user's identifier\", \"TypeAliasDefinition\": { \"typeParams\": [], \"typeExp\": \"morphir/SDK:string#string\" } } } }, \"values\": {} } } } } } } }\n"
+		],
+		[
+			"document-tree-0007",
+			"{ \"formatVersion\": 4, \"distribution\": { \"Library\": { \"packageName\": \"my-org/my-project\", \"dependencies\": {}, \"def\": { \"modules\": { \"domain\": { \"Private\": { \"types\": {}, \"values\": {} } } } } } } }\n"
+		],
+		[
+			"document-tree-0008",
+			"{ \"formatVersion\": 4, \"distribution\": { \"Library\": { \"packageName\": \"my-org/my-project\", \"dependencies\": { \"morphir/SDK\": { \"modules\": { \"basics\": { \"types\": { \"int\": { \"OpaqueTypeSpecification\": {} } }, \"values\": {} } } } }, \"def\": { \"modules\": { \"domain\": { \"Public\": { \"types\": {}, \"values\": {} } } } } } } }\n"
+		],
+		[
+			"document-tree-0009",
+			"{ \"formatVersion\": 4, \"distribution\": { \"Application\": { \"packageName\": \"example\", \"dependencies\": { \"my-org/shared\": { \"modules\": { \"util\": { \"Public\": { \"types\": {}, \"values\": { \"identity\": { \"Public\": { \"ExpressionBody\": { \"inputTypes\": { \"x\": \"morphir/SDK:basics#int\" }, \"outputType\": \"morphir/SDK:basics#int\", \"body\": { \"Variable\": \"x\" } } } } } } } } } }, \"def\": { \"modules\": { \"main\": { \"Public\": { \"types\": {}, \"values\": { \"run\": { \"Public\": { \"ExpressionBody\": { \"inputTypes\": {}, \"outputType\": \"morphir/SDK:basics#unit\", \"body\": { \"Unit\": {} } } } } } } } } }, \"entryPoints\": { \"start\": { \"target\": \"example:main#run\", \"kind\": \"main\" } } } } }\n"
+		],
+		[
+			"versions-0004",
+			"{ \"formatVersion\": 4, \"distribution\": { \"Library\": { \"packageName\": \"example\", \"dependencies\": {}, \"def\": { \"modules\": {} } } } }\n"
+		],
+		[
+			"versions-0005",
+			"{ \"formatVersion\": 4, \"distribution\": { \"Library\": { \"packageName\": \"example\", \"dependencies\": {}, \"def\": { \"modules\": {} } } } }\n"
+		]
+	],
+	"completeExample": "{\n  \"formatVersion\": \"4.0.0\",\n  \"distribution\": {\n    \"Library\": {\n      \"packageName\": \"regulation\",\n      \"dependencies\": {\n        \"morphir/SDK\": {\n          \"modules\": {\n            \"basics\": {\n              \"types\": {\n                \"int\": {\n                  \"OpaqueTypeSpecification\": {}\n                },\n                \"float\": {\n                  \"OpaqueTypeSpecification\": {}\n                },\n                \"bool\": {\n                  \"OpaqueTypeSpecification\": {}\n                }\n              },\n              \"values\": {\n                \"add\": {\n                  \"inputs\": {\n                    \"a\": \"morphir/SDK:basics#int\",\n                    \"b\": \"morphir/SDK:basics#int\"\n                  },\n                  \"output\": \"morphir/SDK:basics#int\"\n                }\n              }\n            },\n            \"list\": {\n              \"types\": {\n                \"list\": {\n                  \"TypeAliasSpecification\": {\n                    \"typeParams\": [\n                      \"a\"\n                    ],\n                    \"typeExp\": {\n                      \"Reference\": [\n                        \"morphir/SDK:list#list\",\n                        \"a\"\n                      ]\n                    }\n                  }\n                }\n              },\n              \"values\": {\n                \"map\": {\n                  \"inputs\": {\n                    \"f\": {\n                      \"Function\": {\n                        \"parameterType\": \"a\",\n                        \"returnType\": \"b\"\n                      }\n                    },\n                    \"list\": {\n                      \"Reference\": [\n                        \"morphir/SDK:list#list\",\n                        \"a\"\n                      ]\n                    }\n                  },\n                  \"output\": {\n                    \"Reference\": [\n                      \"morphir/SDK:list#list\",\n                      \"b\"\n                    ]\n                  }\n                }\n              }\n            }\n          }\n        }\n      },\n      \"def\": {\n        \"modules\": {\n          \"u-s/f-r-2052-a/data-tables\": {\n            \"access\": \"Public\",\n            \"value\": {\n              \"types\": {\n                \"data-tables\": {\n                  \"access\": \"Public\",\n                  \"TypeAliasDefinition\": {\n                    \"typeParams\": [],\n                    \"typeExp\": {\n                      \"Record\": {\n                        \"fields\": {\n                          \"inflows\": \"regulation:u-s/f-r-2052-a/data-tables#inflows\",\n                          \"outflows\": \"regulation:u-s/f-r-2052-a/data-tables#outflows\",\n                          \"supplemental\": \"regulation:u-s/f-r-2052-a/data-tables#supplemental\"\n                        }\n                      }\n                    }\n                  }\n                },\n                \"inflows\": {\n                  \"access\": \"Public\",\n                  \"TypeAliasDefinition\": {\n                    \"typeParams\": [],\n                    \"typeExp\": {\n                      \"Record\": {\n                        \"fields\": {\n                          \"assets\": {\n                            \"Reference\": [\n                              \"morphir/SDK:list#list\",\n                              \"regulation:u-s/f-r-2052-a/data-tables/inflows#assets\"\n                            ]\n                          }\n                        }\n                      }\n                    }\n                  }\n                }\n              },\n              \"values\": {\n                \"calculate-total\": {\n                  \"access\": \"Public\",\n                  \"ExpressionBody\": {\n                    \"inputTypes\": {\n                      \"tables\": \"regulation:u-s/f-r-2052-a/data-tables#data-tables\"\n                    },\n                    \"outputType\": \"morphir/SDK:basics#float\",\n                    \"body\": {\n                      \"Literal\": {\n                        \"FloatLiteral\": 0.0\n                      }\n                    }\n                  }\n                }\n              },\n              \"doc\": \"Data tables module for regulatory reporting\"\n            }\n          }\n        }\n      }\n    }\n  }\n}\n"
+}

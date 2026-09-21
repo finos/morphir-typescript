@@ -42,8 +42,8 @@ jobs:
       # check:package verifies installed IR on pinned Node 20 and MCK on Node 24.
       # Both runtimes are installed from mise.toml by the setup action above.
       # Native IR gates use .config/mck-cli.json and vendor/morphir-mck.
-      # Frozen TypeScript parity remains required until the parent cutover review.
-      - name: Run local CI mirror with native IR and frozen parity
+      # Package compatibility retains its separate TypeScript gates.
+      - name: Run local CI mirror with native IR and package checks
         run: mise run ci
 
       - name: Retain native conformance reports

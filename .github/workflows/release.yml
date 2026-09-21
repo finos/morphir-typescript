@@ -80,15 +80,10 @@ jobs:
           artifacts=(
             "finos-morphir-ir-${version}.tgz"
             "finos-morphir-mck-${version}.tgz"
-            "mck-${version}-linux-x64"
             "mck-adapter-typescript-${version}-linux-x64"
-            "mck-${version}-linux-arm64"
             "mck-adapter-typescript-${version}-linux-arm64"
-            "mck-${version}-darwin-x64"
             "mck-adapter-typescript-${version}-darwin-x64"
-            "mck-${version}-darwin-arm64"
             "mck-adapter-typescript-${version}-darwin-arm64"
-            "mck-${version}-windows-x64.exe"
             "mck-adapter-typescript-${version}-windows-x64.exe"
           )
           mapfile -t checksummed < <(printf '%s\n' "${artifacts[@]}" | LC_ALL=C sort)
@@ -111,7 +106,6 @@ jobs:
           path: |
             .dev/out/release/finos-morphir-ir-${{ env.RELEASE_VERSION }}.tgz
             .dev/out/release/finos-morphir-mck-${{ env.RELEASE_VERSION }}.tgz
-            .dev/out/release/mck-${{ env.RELEASE_VERSION }}-*
             .dev/out/release/mck-adapter-typescript-${{ env.RELEASE_VERSION }}-*
             .dev/out/release/release-notes.md
             .dev/out/release/SHA256SUMS
@@ -157,15 +151,10 @@ jobs:
           artifacts=(
             "finos-morphir-ir-${version}.tgz"
             "finos-morphir-mck-${version}.tgz"
-            "mck-${version}-linux-x64"
             "mck-adapter-typescript-${version}-linux-x64"
-            "mck-${version}-linux-arm64"
             "mck-adapter-typescript-${version}-linux-arm64"
-            "mck-${version}-darwin-x64"
             "mck-adapter-typescript-${version}-darwin-x64"
-            "mck-${version}-darwin-arm64"
             "mck-adapter-typescript-${version}-darwin-arm64"
-            "mck-${version}-windows-x64.exe"
             "mck-adapter-typescript-${version}-windows-x64.exe"
           )
           mapfile -t checksummed < <(printf '%s\n' "${artifacts[@]}" | LC_ALL=C sort)
@@ -376,15 +365,10 @@ jobs:
           artifacts=(
             "finos-morphir-ir-${version}.tgz"
             "finos-morphir-mck-${version}.tgz"
-            "mck-${version}-linux-x64"
             "mck-adapter-typescript-${version}-linux-x64"
-            "mck-${version}-linux-arm64"
             "mck-adapter-typescript-${version}-linux-arm64"
-            "mck-${version}-darwin-x64"
             "mck-adapter-typescript-${version}-darwin-x64"
-            "mck-${version}-darwin-arm64"
             "mck-adapter-typescript-${version}-darwin-arm64"
-            "mck-${version}-windows-x64.exe"
             "mck-adapter-typescript-${version}-windows-x64.exe"
           )
           mapfile -t checksummed < <(printf '%s\n' "${artifacts[@]}" | LC_ALL=C sort)
@@ -424,7 +408,7 @@ jobs:
           # Everything the artifact carries except the release notes, which are
           # the release body rather than an asset.
           mapfile -t uploads < <(find .dev/out/release -maxdepth 1 -type f ! -name release-notes.md -printf '%p\n' | LC_ALL=C sort)
-          test "${#uploads[@]}" -eq 13
+          test "${#uploads[@]}" -eq 8
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release edit "$tag" \
               --repo "$GITHUB_REPOSITORY" \

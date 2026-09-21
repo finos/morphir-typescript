@@ -12,6 +12,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- IR MCK execution, authoring checks, coverage and reports now use the released native Morphir CLI with an explicit TypeScript adapter. The npm `mck` command is package-only; former IR commands exit 2 with migration instructions. IR runner/parser/kit/report APIs and embedded IR assets are removed. Package contracts and both npm bins remain until the separate package migration.
+- Future release assets contain five standalone adapters and two npm tarballs; standalone TypeScript drivers are no longer built. Historical releases are unchanged. The installed Node 24 adapter gate uses native MCK, while IR retains its independent Node 20 artifact gate.
+- Canonical YAML codec regressions now use frozen fixtures with source provenance, preserving 98 JSON/YAML pairs, 121 idempotence fences, the complete document example and nine rejected inputs.
+
 ### Added
 
 - `@finos/morphir-sdk`, a new workspace package holding the TypeScript Morphir SDK runtime: the `Basics`, `Char`, `String`, `List`, `Dict`, `Set`, `Maybe`, `Result`, `Tuple`, `Decimal`, `Int` and `Number` modules of the `Morphir.SDK` specification as Elm-named functions in Elm argument order over plain immutable data. `Dict` and `Set` order keys with the SDK's structural `compare`, `Decimal` is a `decimal.js` value and `Number` is a rational over `bigint`. The package is registered with the suite version but is not published yet.

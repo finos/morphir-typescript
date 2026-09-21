@@ -1,26 +1,5 @@
-// Public surface of @finos/morphir-mck. finos/morphir-typescript#1 exposes
-// the case-file parser and report types; the driver and coverage script
-// arrive in #6.
-
-export { type CoverageGap, coverageGaps, formatGap } from "./coverage/coverage.ts";
-export { checkCanonical, checkRejected, checkWarnings, normalizeCanonical, type RejectedCheck } from "./driver/compare.ts";
-export { exitCodeFor, type RunOptions, runKit } from "./driver/run.ts";
-export { driverVersion, kitVersion } from "./driver/version.ts";
-export { type KitCase, type KitError, type KitFence, type ParsedFile, parseKitFile, topicOf } from "./kit/case.ts";
-export { embeddedKitCommit, embeddedKitFiles } from "./kit/embedded-source.ts";
-export { type FenceInfo, isInfoError, type Language, parseInfoString, type Role } from "./kit/info-string.ts";
-export { type Kit, loadKit, loadKitFromFiles } from "./kit/load.ts";
-export { type Block, tokenize } from "./kit/markdown.ts";
-export {
-	KIT_PATH,
-	type KitFiles,
-	kitFilesFromDirectory,
-	kitFilesFromMap,
-	profileOfPath,
-	type ResolvedText,
-	resolveTextFence,
-	textFenceTarget,
-} from "./kit/source.ts";
+// Package tooling and TypeScript adapter helpers. IR runner APIs moved to morphir mck.
+export { bindingVersion } from "./binding-version.ts";
 export {
 	PACKAGE_CONTRACT,
 	PACKAGE_OPERATIONS,
@@ -72,21 +51,8 @@ export {
 	runPackageKit,
 	runResolutionKit,
 } from "./package/run.ts";
-export {
-	emptyReport,
-	formatSummary,
-	type Report,
-	type ReportDiagnostic,
-	type ReportProfile,
-	type ReportRecord,
-	type ReportResult,
-	type ReportRole,
-	type Summary,
-	summarize,
-	writeReport,
-} from "./report.ts";
+export { formatSummary, type ReportResult, type Summary, summarize } from "./report.ts";
 export { IN_PROCESS_CAPABILITIES, inProcessTestee, NODE_KINDS, resolveNode } from "./testee/in-process.ts";
-export { type ProcessOptions, processTestee } from "./testee/process.ts";
 export {
 	ProtocolError,
 	parseCapabilities,
@@ -113,3 +79,4 @@ export type {
 	WriteTreeRequest,
 	WriteTreeResponse,
 } from "./testee/testee.ts";
+export type { ProcessOptions } from "./testee/transport.ts";
