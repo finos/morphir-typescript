@@ -13,7 +13,7 @@ const repositoryVersion = parseStableVersion(JSON.parse(await readFile(path.join
 const repositoryArtifactFilename = `finos-morphir-mck-${repositoryVersion}.tgz`;
 
 const exportsMap = { ".": { types: "./dist/index.d.ts", import: "./dist/index.js" } } as const;
-const binMap = { mck: "./dist/cli.js", "mck-adapter-typescript": "./dist/adapter.js" } as const;
+const binMap = { "mck-adapter-typescript": "./dist/adapter.js" } as const;
 
 function sourceManifest(): Record<string, unknown> {
 	return {
@@ -21,7 +21,7 @@ function sourceManifest(): Record<string, unknown> {
 		version: "0.0.0",
 		private: false,
 		type: "module",
-		description: "Morphir package compatibility tooling and the TypeScript IR adapter. IR compatibility runs through the native Morphir CLI.",
+		description: "Morphir package implementation helpers and TypeScript adapters. Compatibility runs through the native Morphir CLI.",
 		license: "Apache-2.0",
 		repository: {
 			type: "git",
@@ -41,26 +41,26 @@ function sourceManifest(): Record<string, unknown> {
 }
 
 describe("canonicalSourceMap", () => {
-	// The driver bundles its command-line dependencies (@effect/cli and the
-	// Node platform) into dist/cli.js, so the bundle's map names sources under
-	// the workspace's node_modules. Those map to a virtual node_modules path
-	// keyed by package name, never to the checkout's store layout.
-	test("maps a bundled dependency source to a virtual node_modules path", async () => {
+	test("maps a package source to its stable virtual package path", () => {
 		const packageRoot = path.join(root, "packages/mck");
-		const mapFile = path.join(root, "stage/dist/cli.js.map");
-		const effectSource = path.join(path.dirname(await Bun.resolve("effect", packageRoot)), "Function.js");
-		const input = JSON.stringify({ version: 3, file: "cli.js", sources: [path.relative(path.dirname(mapFile), effectSource)], mappings: "AAAA" });
+		const mapFile = path.join(root, "stage/dist/index.js.map");
+		const input = JSON.stringify({
+			version: 3,
+			file: "index.js",
+			sources: [path.relative(path.dirname(mapFile), path.join(packageRoot, "src/index.ts"))],
+			mappings: "AAAA",
+		});
 		expect(JSON.parse(canonicalSourceMap(input, mapFile, packageRoot))).toEqual({
 			version: 3,
-			file: "cli.js",
-			sources: ["morphir-mck:///node_modules/effect/dist/esm/Function.js"],
+			file: "index.js",
+			sources: ["morphir-mck:///src/index.ts"],
 			mappings: "AAAA",
 		});
 	});
 
 	test("still rejects a source outside both the package and node_modules", () => {
 		const packageRoot = path.join(root, "packages/mck");
-		const mapFile = path.join(root, "stage/dist/cli.js.map");
+		const mapFile = path.join(root, "stage/dist/index.js.map");
 		expect(() => canonicalSourceMap('{"version":3,"sources":["../../scripts/release/cli.ts"],"mappings":""}', mapFile, packageRoot)).toThrow(
 			"outside packages/mck",
 		);
@@ -160,7 +160,14 @@ describe("validatePackageFiles", () => {
 			expect(() => validatePackageFiles([contract], new Set(), new Set([contract]))).not.toThrow();
 		}
 
-		for (const file of ["package/src/cli.ts", "package/kit/embedded.ts", "package/dist/cli.test.js", "package/tsconfig.json", "../outside"]) {
+		for (const file of [
+			"package/src/cli.ts",
+			"package/kit/embedded.ts",
+			"package/dist/cli.js",
+			"package/dist/cli.test.js",
+			"package/tsconfig.json",
+			"../outside",
+		]) {
 			expect(() => validatePackageFiles([file], new Set(), new Set([file]))).toThrow();
 		}
 		expect(() => validatePackageFiles(["package/dist/cli.js"], new Set(["package/dist/cli.js"]), new Set(["package/dist/cli.js"]))).toThrow("link");
@@ -194,7 +201,7 @@ const canBuild = Bun.spawnSync([process.execPath, "--version"]).exitCode === 0;
 describe.if(canBuild)("@finos/morphir-mck artifact", () => {
 	let output: string;
 
-	test("builds one clean tarball with Node shebangs, package tooling, and no IR kit or sources", async () => {
+	test("builds one clean library and adapter tarball with no compatibility runner", async () => {
 		output = await mkdtemp(path.join(tmpdir(), "morphir-mck-artifact-test-"));
 		const ir = await (await import("./package-ir.ts")).buildIrArtifact(root, output);
 		const artifact = await buildMckArtifact(root, output, ir.tarball);
@@ -214,10 +221,8 @@ describe.if(canBuild)("@finos/morphir-mck artifact", () => {
 			"package/package-resolution-protocol.schema.json",
 			"package/package-resolution-report.schema.json",
 			"package/dist/index.js",
-			"package/dist/cli.js",
 			"package/dist/adapter.js",
 			"package/dist/index.d.ts",
-			"package/dist/cli.d.ts",
 			"package/dist/adapter.d.ts",
 		]) {
 			expect(artifact.files).toContain(required);
@@ -226,8 +231,7 @@ describe.if(canBuild)("@finos/morphir-mck artifact", () => {
 		expect(artifact.files.some((file) => file.startsWith("package/kit/") || file === "package/kit.lock.json")).toBe(false);
 		expect(artifact.files.some((file) => file.includes(".test.") || file.includes("tsconfig") || file.includes("bun.lock"))).toBe(false);
 
-		const cli = await Bun.$`tar -xOf ${artifact.tarball} package/dist/cli.js`.text();
-		expect(cli.startsWith("#!/usr/bin/env node")).toBe(true);
+		expect(artifact.files.some((file) => file.includes("/cli."))).toBe(false);
 		const adapter = await Bun.$`tar -xOf ${artifact.tarball} package/dist/adapter.js`.text();
 		expect(adapter.startsWith("#!/usr/bin/env node")).toBe(true);
 

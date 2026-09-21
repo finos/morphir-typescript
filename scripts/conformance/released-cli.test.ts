@@ -19,7 +19,22 @@ const root = () => {
 	mkdirSync(path.join(value, ".dev/bin"), { recursive: true });
 	return value;
 };
-const version = "0.4.0-beta.2";
+const version = "0.4.0-beta.3";
+
+test("the production pin names the qualified beta.3 archives for all six targets", () => {
+	const pin = parseReleasePin(JSON.parse(readFileSync(path.resolve(import.meta.dir, "../../.config/mck-cli.json"), "utf8")));
+	expect(pin).toEqual({
+		version,
+		sha256: {
+			"aarch64-apple-darwin": "af1206f8eaadd17b32b8c417f5e52ae53edce844bd10815371ce62fb92e7113c",
+			"aarch64-pc-windows-msvc": "d920a63e5433511b9f88e6efb31126f1c91552332d54b2418ba44a7a3aa47c59",
+			"aarch64-unknown-linux-gnu": "6f37afcc14a65438dc874626622f93c222afdd4b976b5cc9d5d7c7aebb87cae4",
+			"x86_64-apple-darwin": "889a0b9b8bd96409481c95e5521d3d0a17277beac57e129697b5442f559f7ef0",
+			"x86_64-pc-windows-msvc": "939d7ad0272dbbadc4d7594a3865816e419f38ef061399b3d4235c236b8cca23",
+			"x86_64-unknown-linux-gnu": "f7e2dd500e6a9e812b4df1cc19e4d5fc3c577928b28aff90e6330971f15d0a55",
+		},
+	});
+});
 
 test("maps all six native release targets, including Windows ARM64", () => {
 	for (const [os, triple] of [

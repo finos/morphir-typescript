@@ -6,7 +6,6 @@ import {
 	RESOLUTION_OPERATIONS,
 	RESOLUTION_PROFILES,
 	type ResolutionCapabilities,
-	type ResolutionContractDescriptor,
 	type ResolutionOperation,
 	type ResolutionProfile,
 	type ResolutionRequest,
@@ -373,13 +372,3 @@ function projectWitness(value: ResolutionWitnessWire) {
 function projectReleaseRecord(value: ReleaseRecordWire) {
 	return { ...value, dependencies: [...value.dependencies].sort((left, right) => compareText(left.irPackageName, right.irPackageName)) };
 }
-
-export const resolutionContract: ResolutionContractDescriptor = {
-	contractVersion: RESOLUTION_CONTRACT,
-	operation: (request) => request.op,
-	supports: (capabilities, operation) => capabilities.operations.includes(operation) && capabilities.profiles.includes("flat-library"),
-	parseCapabilities: parseResolutionCapabilities,
-	parseRequest: parseResolutionRequest,
-	parseResponse: parseResolutionResponse,
-	projectResult: projectResolutionResult,
-};

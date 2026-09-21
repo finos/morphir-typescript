@@ -2,7 +2,7 @@
 	"name": "@finos/morphir-mck",
 	"version": "0.3.0",
 	"type": "module",
-	"description": "Morphir package compatibility tooling and the TypeScript IR adapter. IR compatibility runs through the native Morphir CLI.",
+	"description": "Morphir package implementation helpers and TypeScript adapters. Compatibility runs through the native Morphir CLI.",
 	"license": "Apache-2.0",
 	"repository": {
 		"type": "git",
@@ -22,7 +22,6 @@
 		}
 	},
 	"bin": {
-		"mck": "./dist/cli.js",
 		"mck-adapter-typescript": "./dist/adapter.js"
 	},
 	"sideEffects": false,
@@ -39,12 +38,6 @@
 	},
 	"devDependencies": {
 		"@tufjs/canonical-json": "2.0.0",
-		"@effect/cli": "0.77.2",
-		"@effect/platform": "0.97.2",
-		"@effect/platform-node": "0.108.2",
-		"@effect/printer": "0.51.0",
-		"@effect/printer-ansi": "0.51.0",
-		"effect": "3.22.2",
 		"tuf-js": "5.0.1"
 	}
 }

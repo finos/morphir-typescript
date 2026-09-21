@@ -1,12 +1,12 @@
 # @finos/morphir-mck
 
-Package compatibility tooling and the TypeScript IR adapter. The package is ESM-only and requires Node 24 or later.
+Package implementation helpers and the TypeScript IR and package adapters. The package is ESM-only and requires Node 24 or later.
 
 ```sh
 npm install -g @finos/morphir-mck
 ```
 
-The install retains two commands: `mck package run` for experimental package contracts, and `mck-adapter-typescript` for the TypeScript implementation's JSON-lines adapter.
+The install provides `mck-adapter-typescript`, the TypeScript implementation's JSON-lines adapter. Install the native Morphir CLI separately to run compatibility suites.
 
 ## Migrating IR consumers
 
@@ -24,13 +24,11 @@ morphir mck report check ir-report.json allowed-failing.json --kit ./mck-kit
 
 For a local npm install, pass `--adapter node --adapter-arg /absolute/path/to/node_modules/@finos/morphir-mck/dist/adapter.js`. The adapter protocol remains version 1, with `protocol.schema.json` and `protocol.example.json` shipped in the package. Native reports use the consolidated `2.0.0-draft.1` contract, not the retired TypeScript IR report format.
 
-The npm commands `mck check`, `mck run`, `mck coverage` and `mck kit` now exit 2 with migration guidance. The library no longer exports IR runner, comparison, coverage, Markdown parser, kit loader, embedded-kit, kit-version or IR report APIs, or the unused `processTestee` IR subprocess client. Use native CLI commands for those operations. Package APIs, adapter/protocol helpers and shared report summaries remain available. `bindingVersion()` replaces `driverVersion()` as the package-version helper; package report wire fields remain unchanged.
+The npm `mck` executable has been removed. The library no longer exports IR or package runner, comparison, coverage, corpus loader, embedded-kit, kit-version, report-summary, or subprocess-client APIs. Use `morphir mck` for IR operations and `morphir mck package run` for draft package compatibility. The implementation APIs, resolver, adapter/protocol codecs and draft.3 local-registry helpers remain available. `bindingVersion()` is the package-version helper.
 
-Future GitHub releases contain five `mck-adapter-typescript-VERSION-OS-ARCH` executables and the two npm tarballs. They no longer build standalone `mck-VERSION-OS-ARCH` drivers. Historical release assets remain unchanged. Both npm bins remain available.
+Future GitHub releases contain five `mck-adapter-typescript-VERSION-OS-ARCH` executables and the two npm tarballs. They no longer build standalone `mck-VERSION-OS-ARCH` drivers. Historical release assets remain unchanged.
 
 The package no longer ships an IR kit or `kit.lock.json`. Source CI uses the native managed snapshot at `vendor/morphir-mck` and the checksum-pinned CLI in `.config/mck-cli.json`. The installed Node 24 adapter is tested by that CLI before its npm artifact is promoted. IR codec regression fixtures retain the old canonical YAML cases independently of the runner.
-
-Package runner and package contract migration remains tracked separately in [finos/morphir#852](https://github.com/finos/morphir/issues/852).
 
 Copyright 2026 FINOS. Licensed under Apache-2.0.
 
@@ -102,13 +100,13 @@ without executing or relabeling any draft.3 case:
 bun packages/mck/test/support/local-registry-assurance-parent-integration.ts --source /path/to/finos/morphir
 ```
 
-`mck package run --contract 0.1.0-draft.1 --kit /path/to/finos/morphir/spec/package/mck --report package.json`
-runs the draft package corpus owned by finos/morphir. Supply the package corpus explicitly.
+`morphir mck package run --contract 0.1.0-draft.1 --kit /path/to/finos/morphir/spec/package/mck --adapter mck-adapter-typescript --adapter-arg --suite --adapter-arg package --report package.json`
+runs the draft package corpus owned by finos/morphir. Supply the package corpus and adapter explicitly.
 
 Use an executable implementation with:
 
 ```shell
-mck package run --contract 0.1.0-draft.1 --kit /path/to/spec/package/mck \
+morphir mck package run --contract 0.1.0-draft.1 --kit /path/to/spec/package/mck \
   --adapter mck-adapter-typescript --adapter-arg --suite --adapter-arg package \
   --report package-adapter.json
 ```
@@ -124,7 +122,7 @@ Only a valid operation result can satisfy an expected rejection.
 Omitting `--contract` preserves `0.1.0-draft.1`. Select Library resolution explicitly:
 
 ```shell
-mck package run --contract 0.1.0-draft.2 --kit /path/to/spec/package/mck \
+morphir mck package run --contract 0.1.0-draft.2 --kit /path/to/spec/package/mck \
   --adapter mck-adapter-typescript --adapter-arg --suite --adapter-arg package \
   --adapter-arg --contract --adapter-arg 0.1.0-draft.2 \
   --report package-resolution.json
@@ -157,14 +155,13 @@ trust, archive extraction, or installation. A successful run is evidence for thi
 functions require a value already returned by `parseResolutionInput`; raw or otherwise
 unvalidated JSON-shaped values are outside their contract.
 
-All loaded cases are required. A missing capability, failed comparison, kit/adapter error, or empty corpus
-causes a nonzero exit. Reports include testee capabilities and a hash of every consumed schema, case and fixture.
-Record checkout commits separately when comparing development runs. In-process and process runs of the
-TypeScript reference are one implementation, not two independent implementations.
+All loaded cases are required by the native runner. A missing capability, failed comparison, kit/adapter error,
+or empty corpus causes a nonzero exit. Reports include testee capabilities and a hash of every consumed schema,
+case and fixture. Record checkout commits separately when comparing development runs.
 
-For library consumers, import `loadPackageKit`, `runPackageKit`, `packageExitCode`, and either
-`referencePackageTestee` or `processPackageTestee`. Other implementations implement `PackageTestee`.
-`runPackageKit` consumes and closes the testee session before returning its report. Abnormal adapter
-shutdown adds a kit-error record and prevents a successful exit.
-The loader and driver do not derive expectations from reference operations. They share transport lifecycle,
-summary formatting and corpus hashing with IR support, without introducing synthetic IR nodes or fields.
+Library consumers can call `referencePackageTestee()` and `referenceResolutionTestee()` as direct TypeScript
+implementations, or use the lower-level metadata, library, resolver and protocol helpers exported from the root.
+`PackageTestee` and `ResolutionTestee` describe those implementation boundaries. The former `loadPackageKit`,
+`loadResolutionKit`, `runPackageKit`, `runResolutionKit`, `packageExitCode`, `processPackageTestee`,
+`processResolutionTestee`, `formatSummary` and `summarize` APIs have no TypeScript replacement: use the native
+CLI to load corpora, manage adapter processes, compare expectations and write reports.

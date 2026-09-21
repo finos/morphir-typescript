@@ -11,7 +11,6 @@ export {
 	type PackageSchemas,
 	type PackageTestee,
 } from "./package/contract.ts";
-export { loadPackageKit, loadPackageKitFromFiles, type PackageCase, type PackageKit } from "./package/corpus.ts";
 export {
 	type Admission,
 	admitLocalRegistryFromFiles,
@@ -20,7 +19,6 @@ export {
 	type LocalRegistryKit,
 } from "./package/local-registry/admission.ts";
 export { type DefinitionSummary, inspectLocalRegistryFromFiles, inspectLocalRegistryRepository } from "./package/local-registry/definition.ts";
-export { processPackageTestee, processResolutionTestee } from "./package/process.ts";
 export { parsePackageCapabilities, parsePackageRequest, parsePackageResponse } from "./package/protocol.ts";
 export { canonicalizePackageDocument, packageFileDigest, referencePackageTestee, referenceResolutionTestee } from "./package/reference.ts";
 export {
@@ -28,30 +26,18 @@ export {
 	RESOLUTION_OPERATIONS,
 	RESOLUTION_PROFILES,
 	type ResolutionCapabilities,
-	type ResolutionKit,
 	type ResolutionOperation,
 	type ResolutionProfile,
 	type ResolutionRequest,
 	type ResolutionResponse,
 	type ResolutionTestee,
 } from "./package/resolution/contract.ts";
-export { loadResolutionKit, loadResolutionKitFromFiles } from "./package/resolution/corpus.ts";
 export { ResolutionExecutionError, resolveLibrary } from "./package/resolution/index.ts";
 export * from "./package/resolution/model.ts";
 export * from "./package/resolution/order.ts";
 export { parseResolutionInput, resolutionInputToWire } from "./package/resolution/parse.ts";
 export { parseResolutionCapabilities, parseResolutionRequest, parseResolutionResponse, projectResolutionResult } from "./package/resolution/protocol.ts";
 export { type InitialSearchResult, searchInitialLibrary } from "./package/resolution/search.ts";
-export {
-	type PackageContractRecord,
-	type PackageContractReport,
-	type PackageRecord,
-	type PackageReport,
-	packageExitCode,
-	runPackageKit,
-	runResolutionKit,
-} from "./package/run.ts";
-export { formatSummary, type ReportResult, type Summary, summarize } from "./report.ts";
 export { IN_PROCESS_CAPABILITIES, inProcessTestee, NODE_KINDS, resolveNode } from "./testee/in-process.ts";
 export {
 	ProtocolError,
@@ -79,4 +65,3 @@ export type {
 	WriteTreeRequest,
 	WriteTreeResponse,
 } from "./testee/testee.ts";
-export type { ProcessOptions } from "./testee/transport.ts";
