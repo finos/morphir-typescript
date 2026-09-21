@@ -18,6 +18,8 @@ interface MiseTask {
 
 interface WorkflowStep {
 	readonly name?: string;
+	readonly if?: string;
+	readonly "continue-on-error"?: boolean;
 	readonly uses?: string;
 	readonly run?: string;
 	readonly with?: Record<string, unknown>;
@@ -146,7 +148,17 @@ describe("release automation contract", () => {
 			expect(byName.get(name)?.depends).toEqual(["setup"]);
 			await access(byName.get(name)?.file as string, constants.X_OK);
 		}
-		for (const dependency of ["check:lint", "check:typecheck", "check:kit", "test", "check:package", "check:workflows", "check:conformance"])
+		for (const dependency of [
+			"check:lint",
+			"check:typecheck",
+			"check:kit",
+			"check:kit-legacy",
+			"test",
+			"check:package",
+			"check:workflows",
+			"check:conformance",
+			"check:conformance-legacy",
+		])
 			expect(byName.get("ci")?.depends).toContain(dependency);
 
 		const sources = new Map<string, string>();
@@ -171,7 +183,13 @@ describe("release automation contract", () => {
 			'await exec(["bun", "scripts/release/cli.ts", "adapter-binaries", ...process.argv.slice(2)]);',
 		);
 
-		const conformanceFile = byName.get("check:conformance")?.file;
+		const nativeConformance = await readFile(byName.get("check:conformance")?.file as string, "utf8");
+		expect(nativeConformance).toContain("await checkNativeConformance(ROOT_DIR)");
+		const nativeKit = await readFile(byName.get("check:kit")?.file as string, "utf8");
+		expect(nativeKit).toContain("await checkNativeKit(await nativeContext(ROOT_DIR))");
+		const legacyKit = await readFile(byName.get("check:kit-legacy")?.file as string, "utf8");
+		expect(legacyKit).toContain('["bun", "packages/mck/src/cli.ts", "kit", "status"]');
+		const conformanceFile = byName.get("check:conformance-legacy")?.file;
 		expect(conformanceFile).toBeString();
 		await access(conformanceFile as string, constants.X_OK);
 		const conformanceSource = await readFile(conformanceFile as string, "utf8");
@@ -235,6 +253,20 @@ describe("release automation contract", () => {
 		expect(jobName?.toLowerCase()).toContain("package");
 		expect(jobName?.toLowerCase()).toContain("workflow");
 		expect(workflow).not.toMatch(/^\s+run:\s*(?:bun|actionlint|npm)\b/m);
+	});
+
+	test("retains fresh native JSON and HTML after failed CI without masking failure", async () => {
+		const workflow = Bun.YAML.parse(await readFile(path.join(root, ".github/workflows/ci.yml"), "utf8")) as { jobs: Record<string, WorkflowJob> };
+		const steps = workflow.jobs.ci?.steps ?? [];
+		const gate = steps.findIndex((step) => step.run === "mise run ci");
+		const upload = steps.findIndex((step) => step.uses?.startsWith("actions/upload-artifact@"));
+		expect(gate).toBeGreaterThanOrEqual(0);
+		expect(upload).toBeGreaterThan(gate);
+		expect(steps[gate]?.["continue-on-error"]).not.toBe(true);
+		expect(steps[upload]?.if).toBe("always()");
+		expect(steps[upload]?.uses).toBe("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
+		expect(steps[upload]?.with?.["include-hidden-files"]).toBe(true);
+		expect(String(steps[upload]?.with?.path).trim().split(/\r?\n/)).toEqual([".dev/out/conformance/native.json", ".dev/out/conformance/native.html"]);
 	});
 
 	test("documents package status, suite releases, and local release commands", async () => {
