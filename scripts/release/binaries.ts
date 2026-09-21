@@ -1,12 +1,8 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 //
-// Compiles the `mck` driver and its reference adapter to single-file
-// executables, one pair per release target, or the adapter alone. The driver
-// embeds its kit; the adapter only bundles binding/protocol code and package
-// metadata. Both include their runtime and IR sources, so neither needs a
-// checkout, node_modules, or a Node installation. Cross-compilation needs no
-// source rewriting: nothing is resolved at run time.
+// Compiles the TypeScript adapter to one self-contained executable per target.
+// IR compatibility runs through the native Morphir CLI.
 
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -38,8 +34,8 @@ interface Entrypoint {
 }
 
 const ADAPTER: Entrypoint = { source: "packages/mck/src/adapter.ts", stem: "mck-adapter-typescript" };
-/** The two executables the package declares in `bin`, in `bin` order. */
-const ENTRYPOINTS: readonly Entrypoint[] = [{ source: "packages/mck/src/cli.ts", stem: "mck" }, ADAPTER];
+/** Standalone releases contain adapters only; npm retains the package CLI. */
+const ENTRYPOINTS: readonly Entrypoint[] = [ADAPTER];
 
 /** The environment variable that narrows the matrix: `host`, or a comma-separated list of target names. */
 export const TARGET_SELECTION_VARIABLE = "MCK_BINARY_TARGETS";

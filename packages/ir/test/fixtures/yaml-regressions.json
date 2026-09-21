@@ -1,0 +1,2456 @@
+{
+	"source": "https://github.com/finos/morphir/tree/2bab57ea23fe85c6f9cc434b32e61f29ca14190c/spec/ir/mck",
+	"cases": [
+		{
+			"id": "definitions-0001",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Public:\n  TypeAliasDefinition:\n    typeParams: []\n    typeExp: morphir/SDK:string#string\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Public\": { \"TypeAliasDefinition\": { \"typeParams\": [], \"typeExp\": \"morphir/SDK:string#string\" } } }\n"
+				}
+			]
+		},
+		{
+			"id": "definitions-0002",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "OpaqueTypeSpecification: {}\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"OpaqueTypeSpecification\": {} }\n"
+				}
+			]
+		},
+		{
+			"id": "definitions-0003",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "CustomTypeDefinition:\n  typeParams: [a]\n  access: Public\n  constructors:\n    just: [[value, a]]\n    nothing: []\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"CustomTypeDefinition\": { \"typeParams\": [\"a\"], \"access\": \"Public\", \"constructors\": { \"just\": [[\"value\", \"a\"]], \"nothing\": [] } } }\n"
+				}
+			]
+		},
+		{
+			"id": "definitions-0004",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "inputs:\n  a: morphir/SDK:basics#int\n  b: morphir/SDK:basics#int\noutput: morphir/SDK:basics#int\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"inputs\": { \"a\": \"morphir/SDK:basics#int\", \"b\": \"morphir/SDK:basics#int\" }, \"output\": \"morphir/SDK:basics#int\" }\n"
+				}
+			]
+		},
+		{
+			"id": "definitions-0005",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "ExpressionBody:\n  inputTypes:\n    x: morphir/SDK:basics#int\n  outputType: morphir/SDK:basics#int\n  body:\n    Variable: x\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"ExpressionBody\": { \"inputTypes\": { \"x\": \"morphir/SDK:basics#int\" }, \"outputType\": \"morphir/SDK:basics#int\", \"body\": { \"Variable\": \"x\" } } }\n"
+				}
+			]
+		},
+		{
+			"id": "definitions-0006",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Public:\n  doc: The user's display name\n  TypeAliasDefinition:\n    typeParams: []\n    typeExp: morphir/SDK:string#string\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Public\": { \"doc\": \"The user's display name\", \"TypeAliasDefinition\": { \"typeParams\": [], \"typeExp\": \"morphir/SDK:string#string\" } } }\n"
+				}
+			]
+		},
+		{
+			"id": "definitions-0007",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "ExternalBody:\n  inputTypes:\n    msg: morphir/SDK:string#string\n  outputType: morphir/SDK:basics#unit\n  externals:\n    - targetPlatform: javascript\n      externalName: console.log\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"ExternalBody\": { \"inputTypes\": { \"msg\": \"morphir/SDK:string#string\" }, \"outputType\": \"morphir/SDK:basics#unit\", \"externals\": [{ \"targetPlatform\": \"javascript\", \"externalName\": \"console.log\" }] } }\n"
+				}
+			]
+		},
+		{
+			"id": "definitions-0008",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "ExternalBody:\n  inputTypes:\n    x: morphir/SDK:basics#int\n  outputType: morphir/SDK:basics#int\n  externals:\n    - targetPlatform: erlang\n      externalName: math:abs\n    - targetPlatform: javascript\n      externalName: Math.abs\n  body:\n    Variable: x\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"ExternalBody\": { \"inputTypes\": { \"x\": \"morphir/SDK:basics#int\" }, \"outputType\": \"morphir/SDK:basics#int\", \"externals\": [{ \"targetPlatform\": \"erlang\", \"externalName\": \"math:abs\" }, { \"targetPlatform\": \"javascript\", \"externalName\": \"Math.abs\" }], \"body\": { \"Variable\": \"x\" } } }\n"
+				}
+			]
+		},
+		{
+			"id": "definitions-0009",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "NativeBody:\n  inputTypes:\n    a: morphir/SDK:basics#int\n    b: morphir/SDK:basics#int\n  outputType: morphir/SDK:basics#int\n  nativeInfo:\n    hint:\n      Arithmetic: {}\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"NativeBody\": { \"inputTypes\": { \"a\": \"morphir/SDK:basics#int\", \"b\": \"morphir/SDK:basics#int\" }, \"outputType\": \"morphir/SDK:basics#int\", \"nativeInfo\": { \"hint\": { \"Arithmetic\": {} } } } }\n"
+				}
+			]
+		},
+		{
+			"id": "definitions-0010",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "types: {}\nvalues:\n  add:\n    doc: Adds two integers\n    inputs:\n      a: morphir/SDK:basics#int\n      b: morphir/SDK:basics#int\n    output: morphir/SDK:basics#int\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"types\": {}, \"values\": { \"add\": { \"doc\": \"Adds two integers\", \"inputs\": { \"a\": \"morphir/SDK:basics#int\", \"b\": \"morphir/SDK:basics#int\" }, \"output\": \"morphir/SDK:basics#int\" } } }\n"
+				}
+			]
+		},
+		{
+			"id": "definitions-0011",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "TypeAliasSpecification:\n  typeParams: [a]\n  typeExp:\n    Reference: [\"morphir/SDK:list#list\", a]\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"TypeAliasSpecification\": { \"typeParams\": [\"a\"], \"typeExp\": { \"Reference\": [\"morphir/SDK:list#list\", \"a\"] } } }\n"
+				}
+			]
+		},
+		{
+			"id": "definitions-0012",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "CustomTypeSpecification:\n  typeParams: [a]\n  constructors:\n    just: [[value, a]]\n    nothing: []\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"CustomTypeSpecification\": { \"typeParams\": [\"a\"], \"constructors\": { \"just\": [[\"value\", \"a\"]], \"nothing\": [] } } }\n"
+				}
+			]
+		},
+		{
+			"id": "definitions-0013",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "DerivedTypeSpecification:\n  typeParams: []\n  baseType: morphir/SDK:string#string\n  fromBaseType: my-org/project:module#from-string\n  toBaseType: my-org/project:module#to-string\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"DerivedTypeSpecification\": { \"typeParams\": [], \"baseType\": \"morphir/SDK:string#string\", \"fromBaseType\": \"my-org/project:module#from-string\", \"toBaseType\": \"my-org/project:module#to-string\" } }\n"
+				}
+			]
+		},
+		{
+			"id": "definitions-0014",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "IncompleteTypeDefinition:\n  typeParams: [a]\n  incompleteness:\n    Hole:\n      reason:\n        TypeMismatch:\n          expected: morphir/SDK:basics#int\n          found: morphir/SDK:string#string\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"IncompleteTypeDefinition\": { \"typeParams\": [\"a\"], \"incompleteness\": { \"Hole\": { \"reason\": { \"TypeMismatch\": { \"expected\": \"morphir/SDK:basics#int\", \"found\": \"morphir/SDK:string#string\" } } } } } }\n"
+				}
+			]
+		},
+		{
+			"id": "definitions-0015",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "IncompleteTypeDefinition:\n  typeParams: []\n  incompleteness:\n    Draft: {}\n  partialTypeExp: morphir/SDK:basics#int\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"IncompleteTypeDefinition\": { \"typeParams\": [], \"incompleteness\": { \"Draft\": {} }, \"partialTypeExp\": \"morphir/SDK:basics#int\" } }\n"
+				}
+			]
+		},
+		{
+			"id": "definitions-0016",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "IncompleteBody:\n  inputTypes:\n    x: morphir/SDK:basics#int\n  outputType: morphir/SDK:basics#int\n  incompleteness:\n    Hole:\n      reason:\n        DeletedDuringRefactor:\n          tx-id: tx-42\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"IncompleteBody\": { \"inputTypes\": { \"x\": \"morphir/SDK:basics#int\" }, \"outputType\": \"morphir/SDK:basics#int\", \"incompleteness\": { \"Hole\": { \"reason\": { \"DeletedDuringRefactor\": { \"tx-id\": \"tx-42\" } } } } } }\n"
+				}
+			]
+		},
+		{
+			"id": "definitions-0017",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Private:\n  TypeAliasDefinition:\n    typeParams: []\n    typeExp: morphir/SDK:basics#int\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Private\": { \"TypeAliasDefinition\": { \"typeParams\": [], \"typeExp\": \"morphir/SDK:basics#int\" } } }\n"
+				}
+			]
+		},
+		{
+			"id": "definitions-0018",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Public:\n  doc: Adds two integers\n  ExpressionBody:\n    inputTypes:\n      a: morphir/SDK:basics#int\n      b: morphir/SDK:basics#int\n    outputType: morphir/SDK:basics#int\n    body:\n      Variable: a\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Public\": { \"doc\": \"Adds two integers\", \"ExpressionBody\": { \"inputTypes\": { \"a\": \"morphir/SDK:basics#int\", \"b\": \"morphir/SDK:basics#int\" }, \"outputType\": \"morphir/SDK:basics#int\", \"body\": { \"Variable\": \"a\" } } } }\n"
+				}
+			]
+		},
+		{
+			"id": "definitions-0019",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Private:\n  ExpressionBody:\n    inputTypes: {}\n    outputType: morphir/SDK:basics#int\n    body:\n      Variable: x\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Private\": { \"ExpressionBody\": { \"inputTypes\": {}, \"outputType\": \"morphir/SDK:basics#int\", \"body\": { \"Variable\": \"x\" } } } }\n"
+				}
+			]
+		},
+		{
+			"id": "definitions-0020",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "TypeAliasSpecification:\n  annotations:\n    - my-org/project:annotations#deprecated:Use user-v2 instead\n    - name: my-org/project:annotations#since\n      arguments:\n        - Literal:\n            StringLiteral: 1.2.0\n        - name: reason\n          value:\n            Literal:\n              StringLiteral: renamed\n    - name: my-org/project:annotations#internal\n  typeParams: []\n  typeExp: morphir/SDK:string#string\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"TypeAliasSpecification\": { \"annotations\": [\"my-org/project:annotations#deprecated:Use user-v2 instead\", { \"name\": \"my-org/project:annotations#since\", \"arguments\": [{ \"Literal\": { \"StringLiteral\": \"1.2.0\" } }, { \"name\": \"reason\", \"value\": { \"Literal\": { \"StringLiteral\": \"renamed\" } } }] }, { \"name\": \"my-org/project:annotations#internal\" }], \"typeParams\": [], \"typeExp\": \"morphir/SDK:string#string\" } }\n"
+				}
+			]
+		},
+		{
+			"id": "definitions-0021",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "annotations: [\"my-org/project:annotations#pure\"]\ninputs:\n  x: morphir/SDK:basics#int\noutput: morphir/SDK:basics#int\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"annotations\": [\"my-org/project:annotations#pure\"], \"inputs\": { \"x\": \"morphir/SDK:basics#int\" }, \"output\": \"morphir/SDK:basics#int\" }\n"
+				}
+			]
+		},
+		{
+			"id": "definitions-0022",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "annotations: [\"my-org/project:annotations#stable\"]\ntypes: {}\nvalues: {}\ndoc: The domain module\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"annotations\": [\"my-org/project:annotations#stable\"], \"types\": {}, \"values\": {}, \"doc\": \"The domain module\" }\n"
+				}
+			]
+		},
+		{
+			"id": "definitions-0024",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "IncompleteTypeDefinition:\n  typeParams: []\n  incompleteness:\n    Hole:\n      reason:\n        UnresolvedReference:\n          target: my-org/project:module#missing\n      partialBody: morphir/SDK:basics#int\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"IncompleteTypeDefinition\": { \"typeParams\": [], \"incompleteness\": { \"Hole\": { \"reason\": { \"UnresolvedReference\": { \"target\": \"my-org/project:module#missing\" } }, \"partialBody\": \"morphir/SDK:basics#int\" } } } }\n"
+				}
+			]
+		},
+		{
+			"id": "definitions-0025",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "IncompleteBody:\n  inputTypes: {}\n  outputType: morphir/SDK:basics#int\n  incompleteness:\n    Draft: {}\n  partialBody:\n    Literal:\n      IntegerLiteral: 1\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"IncompleteBody\": { \"inputTypes\": {}, \"outputType\": \"morphir/SDK:basics#int\", \"incompleteness\": { \"Draft\": {} }, \"partialBody\": { \"Literal\": { \"IntegerLiteral\": 1 } } } }\n"
+				}
+			]
+		},
+		{
+			"id": "definitions-0029",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "output: morphir/SDK:basics#int\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"output\": \"morphir/SDK:basics#int\" }\n"
+				}
+			]
+		},
+		{
+			"id": "distributions-0001",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "4\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "4\n"
+				}
+			]
+		},
+		{
+			"id": "distributions-0002",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "formatVersion: 4\ndistribution:\n  Library:\n    packageName: example\n    dependencies: {}\n    def:\n      modules: {}\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"formatVersion\": 4, \"distribution\": { \"Library\": { \"packageName\": \"example\", \"dependencies\": {}, \"def\": { \"modules\": {} } } } }\n"
+				}
+			]
+		},
+		{
+			"id": "distributions-0004",
+			"status": "active",
+			"fences": [
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"formatVersion\": 4, \"distribution\": { \"Library\": { \"packageName\": \"regulation\", \"dependencies\": { \"morphir/SDK\": { \"modules\": { \"basics\": { \"types\": { \"int\": { \"OpaqueTypeSpecification\": {} }, \"float\": { \"OpaqueTypeSpecification\": {} }, \"bool\": { \"OpaqueTypeSpecification\": {} } }, \"values\": { \"add\": { \"inputs\": { \"a\": \"morphir/SDK:basics#int\", \"b\": \"morphir/SDK:basics#int\" }, \"output\": \"morphir/SDK:basics#int\" } } }, \"list\": { \"types\": { \"list\": { \"TypeAliasSpecification\": { \"typeParams\": [\"a\"], \"typeExp\": { \"Reference\": [\"morphir/SDK:list#list\", \"a\"] } } } }, \"values\": { \"map\": { \"inputs\": { \"f\": { \"Function\": { \"parameterType\": \"a\", \"returnType\": \"b\" } }, \"list\": { \"Reference\": [\"morphir/SDK:list#list\", \"a\"] } }, \"output\": { \"Reference\": [\"morphir/SDK:list#list\", \"b\"] } } } } } } }, \"def\": { \"modules\": { \"u-s/f-r-2052-a/data-tables\": { \"Public\": { \"types\": { \"data-tables\": { \"Public\": { \"TypeAliasDefinition\": { \"typeParams\": [], \"typeExp\": { \"Record\": { \"fields\": { \"inflows\": \"regulation:u-s/f-r-2052-a/data-tables#inflows\", \"outflows\": \"regulation:u-s/f-r-2052-a/data-tables#outflows\", \"supplemental\": \"regulation:u-s/f-r-2052-a/data-tables#supplemental\" } } } } } }, \"inflows\": { \"Public\": { \"TypeAliasDefinition\": { \"typeParams\": [], \"typeExp\": { \"Record\": { \"fields\": { \"assets\": { \"Reference\": [\"morphir/SDK:list#list\", \"regulation:u-s/f-r-2052-a/data-tables/inflows#assets\"] } } } } } } } }, \"values\": { \"calculate-total\": { \"Public\": { \"ExpressionBody\": { \"inputTypes\": { \"tables\": \"regulation:u-s/f-r-2052-a/data-tables#data-tables\" }, \"outputType\": \"morphir/SDK:basics#float\", \"body\": { \"Literal\": { \"FloatLiteral\": 0.0 } } } } } }, \"doc\": \"Data tables module for regulatory reporting\" } } } } } } }\n"
+				}
+			]
+		},
+		{
+			"id": "distributions-0005",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "formatVersion: 4\ndistribution:\n  Library:\n    packageName: example\n    dependencies:\n      morphir/SDK:\n        modules: {}\n    def:\n      modules: {}\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"formatVersion\": 4, \"distribution\": { \"Library\": { \"packageName\": \"example\", \"dependencies\": { \"morphir/SDK\": { \"modules\": {} } }, \"def\": { \"modules\": {} } } } }\n"
+				}
+			]
+		},
+		{
+			"id": "distributions-0006",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "formatVersion: 4\ndistribution:\n  Specs:\n    packageName: example\n    dependencies:\n      morphir/SDK:\n        modules: {}\n    spec:\n      modules:\n        main:\n          types: {}\n          values:\n            greet:\n              inputs:\n                name: morphir/SDK:string#string\n              output: morphir/SDK:string#string\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"formatVersion\": 4, \"distribution\": { \"Specs\": { \"packageName\": \"example\", \"dependencies\": { \"morphir/SDK\": { \"modules\": {} } }, \"spec\": { \"modules\": { \"main\": { \"types\": {}, \"values\": { \"greet\": { \"inputs\": { \"name\": \"morphir/SDK:string#string\" }, \"output\": \"morphir/SDK:string#string\" } } } } } } } }\n"
+				}
+			]
+		},
+		{
+			"id": "distributions-0007",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "formatVersion: 4\ndistribution:\n  Application:\n    packageName: example\n    dependencies: {}\n    def:\n      modules:\n        main:\n          Public:\n            types: {}\n            values:\n              run:\n                Public:\n                  ExpressionBody:\n                    inputTypes: {}\n                    outputType: morphir/SDK:basics#unit\n                    body:\n                      Unit: {}\n    entryPoints:\n      start:\n        target: example:main#run\n        kind: main\n        doc: The application entry point\n      build:\n        target: example:main#run\n        kind: command\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"formatVersion\": 4, \"distribution\": { \"Application\": { \"packageName\": \"example\", \"dependencies\": {}, \"def\": { \"modules\": { \"main\": { \"Public\": { \"types\": {}, \"values\": { \"run\": { \"Public\": { \"ExpressionBody\": { \"inputTypes\": {}, \"outputType\": \"morphir/SDK:basics#unit\", \"body\": { \"Unit\": {} } } } } } } } } }, \"entryPoints\": { \"start\": { \"target\": \"example:main#run\", \"kind\": \"main\", \"doc\": \"The application entry point\" }, \"build\": { \"target\": \"example:main#run\", \"kind\": \"command\" } } } } }\n"
+				}
+			]
+		},
+		{
+			"id": "distributions-0008",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "4.0.1\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "\"4.0.1\"\n"
+				}
+			]
+		},
+		{
+			"id": "distributions-0010",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "formatVersion: 4\ndistribution:\n  Application:\n    packageName: example\n    dependencies:\n      my-org/shared:\n        modules:\n          util:\n            Public:\n              types: {}\n              values:\n                identity:\n                  Public:\n                    ExpressionBody:\n                      inputTypes:\n                        x: morphir/SDK:basics#int\n                      outputType: morphir/SDK:basics#int\n                      body:\n                        Variable: x\n    def:\n      modules:\n        main:\n          Public:\n            types: {}\n            values:\n              run:\n                Public:\n                  ExpressionBody:\n                    inputTypes: {}\n                    outputType: morphir/SDK:basics#unit\n                    body:\n                      Unit: {}\n    entryPoints:\n      start:\n        target: example:main#run\n        kind: main\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"formatVersion\": 4, \"distribution\": { \"Application\": { \"packageName\": \"example\", \"dependencies\": { \"my-org/shared\": { \"modules\": { \"util\": { \"Public\": { \"types\": {}, \"values\": { \"identity\": { \"Public\": { \"ExpressionBody\": { \"inputTypes\": { \"x\": \"morphir/SDK:basics#int\" }, \"outputType\": \"morphir/SDK:basics#int\", \"body\": { \"Variable\": \"x\" } } } } } } } } } }, \"def\": { \"modules\": { \"main\": { \"Public\": { \"types\": {}, \"values\": { \"run\": { \"Public\": { \"ExpressionBody\": { \"inputTypes\": {}, \"outputType\": \"morphir/SDK:basics#unit\", \"body\": { \"Unit\": {} } } } } } } } } }, \"entryPoints\": { \"start\": { \"target\": \"example:main#run\", \"kind\": \"main\" } } } } }\n"
+				}
+			]
+		},
+		{
+			"id": "document-tree-0001",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "formatVersion: 4\ndistribution: Library\npackage: my-org/my-project\npathBudget: 4000\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"formatVersion\": 4, \"distribution\": \"Library\", \"package\": \"my-org/my-project\", \"pathBudget\": 4000 }\n"
+				}
+			]
+		},
+		{
+			"id": "document-tree-0002",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "formatVersion: 4\npath: my-org/domain\ntypes: [user, user-ID]\nvalues: [get-user]\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"formatVersion\": 4, \"path\": \"my-org/domain\", \"types\": [\"user\", \"user-ID\"], \"values\": [\"get-user\"] }\n"
+				}
+			]
+		},
+		{
+			"id": "document-tree-0003",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "file"
+					},
+					"body": "formatVersion: 4\ndistribution: Library\npackage: my-org/my-project\npathBudget: 4000\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "yaml",
+						"role": "file"
+					},
+					"body": "formatVersion: 4\npath: domain\ntypes: [user-ID]\nvalues: []\n"
+				},
+				{
+					"index": 2,
+					"info": {
+						"language": "yaml",
+						"role": "file"
+					},
+					"body": "formatVersion: 4\nname: user-ID\ndef:\n  Public:\n    doc: The user's identifier\n    TypeAliasDefinition:\n      typeParams: []\n      typeExp: morphir/SDK:string#string\n"
+				},
+				{
+					"index": 3,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "formatVersion: 4\ndistribution:\n  Library:\n    packageName: my-org/my-project\n    dependencies: {}\n    def:\n      modules:\n        domain:\n          Public:\n            types:\n              user-ID:\n                Public:\n                  doc: The user's identifier\n                  TypeAliasDefinition:\n                    typeParams: []\n                    typeExp: morphir/SDK:string#string\n            values: {}\n"
+				}
+			]
+		},
+		{
+			"id": "document-tree-0004",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "file"
+					},
+					"body": "formatVersion: 4\ndistribution: Library\npackage: my-org/my-project\npathBudget: 64\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "yaml",
+						"role": "file"
+					},
+					"body": "formatVersion: 4\npath: domain\ntypes: [customer-relationship-management-record]\nvalues: []\nfileNames:\n  customer-relationship-management-record: customer-relati__44a101f8\n"
+				},
+				{
+					"index": 2,
+					"info": {
+						"language": "yaml",
+						"role": "file"
+					},
+					"body": "formatVersion: 4\nname: customer-relationship-management-record\ndef:\n  Public:\n    TypeAliasDefinition:\n      typeParams: []\n      typeExp: morphir/SDK:string#string\n"
+				},
+				{
+					"index": 3,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "formatVersion: 4\ndistribution:\n  Library:\n    packageName: my-org/my-project\n    dependencies: {}\n    def:\n      modules:\n        domain:\n          Public:\n            types:\n              customer-relationship-management-record:\n                Public:\n                  TypeAliasDefinition:\n                    typeParams: []\n                    typeExp: morphir/SDK:string#string\n            values: {}\n"
+				}
+			]
+		},
+		{
+			"id": "document-tree-0005",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "file"
+					},
+					"body": "formatVersion: 4\ndistribution: Library\npackage: my-org/my-project\npathBudget: 4000\n$meta:\n  generator: example\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "yaml",
+						"role": "file"
+					},
+					"body": "formatVersion: 4\npath: domain\ntypes: []\nvalues: []\n$meta:\n  generator: example\n"
+				},
+				{
+					"index": 2,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "formatVersion: 4\ndistribution:\n  Library:\n    packageName: my-org/my-project\n    dependencies: {}\n    def:\n      modules:\n        domain:\n          Public:\n            types: {}\n            values: {}\n"
+				}
+			]
+		},
+		{
+			"id": "document-tree-0006",
+			"status": "active",
+			"fences": [
+				{
+					"index": 3,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "formatVersion: 4\ndistribution:\n  Library:\n    packageName: my-org/my-project\n    dependencies: {}\n    def:\n      modules:\n        domain:\n          Public:\n            types:\n              user-ID:\n                Public:\n                  doc: The user's identifier\n                  TypeAliasDefinition:\n                    typeParams: []\n                    typeExp: morphir/SDK:string#string\n            values: {}\n"
+				},
+				{
+					"index": 4,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"formatVersion\": 4, \"distribution\": { \"Library\": { \"packageName\": \"my-org/my-project\", \"dependencies\": {}, \"def\": { \"modules\": { \"domain\": { \"Public\": { \"types\": { \"user-ID\": { \"Public\": { \"doc\": \"The user's identifier\", \"TypeAliasDefinition\": { \"typeParams\": [], \"typeExp\": \"morphir/SDK:string#string\" } } } }, \"values\": {} } } } } } } }\n"
+				}
+			]
+		},
+		{
+			"id": "document-tree-0007",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "file"
+					},
+					"body": "formatVersion: 4\ndistribution: Library\npackage: my-org/my-project\npathBudget: 4000\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "yaml",
+						"role": "file"
+					},
+					"body": "formatVersion: 4\npath: domain\naccess: Private\ntypes: []\nvalues: []\n"
+				},
+				{
+					"index": 2,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "formatVersion: 4\ndistribution:\n  Library:\n    packageName: my-org/my-project\n    dependencies: {}\n    def:\n      modules:\n        domain:\n          Private:\n            types: {}\n            values: {}\n"
+				},
+				{
+					"index": 3,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"formatVersion\": 4, \"distribution\": { \"Library\": { \"packageName\": \"my-org/my-project\", \"dependencies\": {}, \"def\": { \"modules\": { \"domain\": { \"Private\": { \"types\": {}, \"values\": {} } } } } } } }\n"
+				}
+			]
+		},
+		{
+			"id": "document-tree-0008",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "file"
+					},
+					"body": "formatVersion: 4\ndistribution: Library\npackage: my-org/my-project\npathBudget: 4000\ndependencies: [morphir/SDK]\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "yaml",
+						"role": "file"
+					},
+					"body": "formatVersion: 4\npath: domain\ntypes: []\nvalues: []\n"
+				},
+				{
+					"index": 2,
+					"info": {
+						"language": "yaml",
+						"role": "file"
+					},
+					"body": "formatVersion: 4\npath: basics\ntypes: [int]\nvalues: []\n"
+				},
+				{
+					"index": 3,
+					"info": {
+						"language": "yaml",
+						"role": "file"
+					},
+					"body": "formatVersion: 4\nname: int\nspec:\n  OpaqueTypeSpecification: {}\n"
+				},
+				{
+					"index": 4,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "formatVersion: 4\ndistribution:\n  Library:\n    packageName: my-org/my-project\n    dependencies:\n      morphir/SDK:\n        modules:\n          basics:\n            types:\n              int:\n                OpaqueTypeSpecification: {}\n            values: {}\n    def:\n      modules:\n        domain:\n          Public:\n            types: {}\n            values: {}\n"
+				},
+				{
+					"index": 5,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"formatVersion\": 4, \"distribution\": { \"Library\": { \"packageName\": \"my-org/my-project\", \"dependencies\": { \"morphir/SDK\": { \"modules\": { \"basics\": { \"types\": { \"int\": { \"OpaqueTypeSpecification\": {} } }, \"values\": {} } } } }, \"def\": { \"modules\": { \"domain\": { \"Public\": { \"types\": {}, \"values\": {} } } } } } } }\n"
+				}
+			]
+		},
+		{
+			"id": "document-tree-0009",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "file"
+					},
+					"body": "formatVersion: 4\ndistribution: Application\npackage: example\npathBudget: 4000\ndependencies: [my-org/shared]\nentryPoints:\n  start:\n    target: example:main#run\n    kind: main\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "yaml",
+						"role": "file"
+					},
+					"body": "formatVersion: 4\npath: main\ntypes: []\nvalues: [run]\n"
+				},
+				{
+					"index": 2,
+					"info": {
+						"language": "yaml",
+						"role": "file"
+					},
+					"body": "formatVersion: 4\nname: run\ndef:\n  Public:\n    ExpressionBody:\n      inputTypes: {}\n      outputType: morphir/SDK:basics#unit\n      body:\n        Unit: {}\n"
+				},
+				{
+					"index": 3,
+					"info": {
+						"language": "yaml",
+						"role": "file"
+					},
+					"body": "formatVersion: 4\npath: util\ntypes: []\nvalues: [identity]\n"
+				},
+				{
+					"index": 4,
+					"info": {
+						"language": "yaml",
+						"role": "file"
+					},
+					"body": "formatVersion: 4\nname: identity\ndef:\n  Public:\n    ExpressionBody:\n      inputTypes:\n        x: morphir/SDK:basics#int\n      outputType: morphir/SDK:basics#int\n      body:\n        Variable: x\n"
+				},
+				{
+					"index": 5,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "formatVersion: 4\ndistribution:\n  Application:\n    packageName: example\n    dependencies:\n      my-org/shared:\n        modules:\n          util:\n            Public:\n              types: {}\n              values:\n                identity:\n                  Public:\n                    ExpressionBody:\n                      inputTypes:\n                        x: morphir/SDK:basics#int\n                      outputType: morphir/SDK:basics#int\n                      body:\n                        Variable: x\n    def:\n      modules:\n        main:\n          Public:\n            types: {}\n            values:\n              run:\n                Public:\n                  ExpressionBody:\n                    inputTypes: {}\n                    outputType: morphir/SDK:basics#unit\n                    body:\n                      Unit: {}\n    entryPoints:\n      start:\n        target: example:main#run\n        kind: main\n"
+				},
+				{
+					"index": 6,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"formatVersion\": 4, \"distribution\": { \"Application\": { \"packageName\": \"example\", \"dependencies\": { \"my-org/shared\": { \"modules\": { \"util\": { \"Public\": { \"types\": {}, \"values\": { \"identity\": { \"Public\": { \"ExpressionBody\": { \"inputTypes\": { \"x\": \"morphir/SDK:basics#int\" }, \"outputType\": \"morphir/SDK:basics#int\", \"body\": { \"Variable\": \"x\" } } } } } } } } } }, \"def\": { \"modules\": { \"main\": { \"Public\": { \"types\": {}, \"values\": { \"run\": { \"Public\": { \"ExpressionBody\": { \"inputTypes\": {}, \"outputType\": \"morphir/SDK:basics#unit\", \"body\": { \"Unit\": {} } } } } } } } } }, \"entryPoints\": { \"start\": { \"target\": \"example:main#run\", \"kind\": \"main\" } } } } }\n"
+				}
+			]
+		},
+		{
+			"id": "names-0001",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "value-in-USD\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "\"value-in-USD\"\n"
+				}
+			]
+		},
+		{
+			"id": "names-0002",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "a\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "\"a\"\n"
+				}
+			]
+		},
+		{
+			"id": "names-0004",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "morphir/SDK\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "\"morphir/SDK\"\n"
+				}
+			]
+		},
+		{
+			"id": "names-0005",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "morphir/SDK:list#map\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "\"morphir/SDK:list#map\"\n"
+				}
+			]
+		},
+		{
+			"id": "names-0006",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "morphir/SDK\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "\"morphir/SDK\"\n"
+				}
+			]
+		},
+		{
+			"id": "names-0007",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "item-2\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "\"item-2\"\n"
+				}
+			]
+		},
+		{
+			"id": "names-0008",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "FR-2052-a\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "\"FR-2052-a\"\n"
+				}
+			]
+		},
+		{
+			"id": "patterns-and-literals-0001",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "IntegerLiteral: 42\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"IntegerLiteral\": 42 }\n"
+				}
+			]
+		},
+		{
+			"id": "patterns-and-literals-0002",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "DecimalLiteral: \"10.50\"\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"DecimalLiteral\": \"10.50\" }\n"
+				}
+			]
+		},
+		{
+			"id": "patterns-and-literals-0003",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "TuplePattern:\n  - WildcardPattern: {}\n  - AsPattern:\n      pattern:\n        WildcardPattern: {}\n      name: x\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"TuplePattern\": [{ \"WildcardPattern\": {} }, { \"AsPattern\": { \"pattern\": { \"WildcardPattern\": {} }, \"name\": \"x\" } }] }\n"
+				}
+			]
+		},
+		{
+			"id": "patterns-and-literals-0004",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "LiteralPattern:\n  IntegerLiteral: 42\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"LiteralPattern\": { \"IntegerLiteral\": 42 } }\n"
+				}
+			]
+		},
+		{
+			"id": "patterns-and-literals-0005",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "DocumentLiteral:\n  name: Alice\n  age: 30\n  tags: [admin, user]\n  metadata: null\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"DocumentLiteral\": { \"name\": \"Alice\", \"age\": 30, \"tags\": [\"admin\", \"user\"], \"metadata\": null } }\n"
+				}
+			]
+		},
+		{
+			"id": "patterns-and-literals-0006",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "DocumentLiteral:\n  id: 9007199254740993\n  ratio: 0.10\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"DocumentLiteral\": { \"id\": 9007199254740993, \"ratio\": 0.10 } }\n"
+				}
+			]
+		},
+		{
+			"id": "patterns-and-literals-0008",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "WildcardPattern: {}\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"WildcardPattern\": {} }\n"
+				}
+			]
+		},
+		{
+			"id": "patterns-and-literals-0009",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "EmptyListPattern: {}\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"EmptyListPattern\": {} }\n"
+				}
+			]
+		},
+		{
+			"id": "patterns-and-literals-0010",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "ConstructorPattern:\n  fqname: morphir/SDK:maybe#just\n  patterns:\n    - AsPattern:\n        pattern:\n          WildcardPattern: {}\n        name: x\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"ConstructorPattern\": { \"fqname\": \"morphir/SDK:maybe#just\", \"patterns\": [{ \"AsPattern\": { \"pattern\": { \"WildcardPattern\": {} }, \"name\": \"x\" } }] } }\n"
+				}
+			]
+		},
+		{
+			"id": "patterns-and-literals-0011",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "HeadTailPattern:\n  head:\n    AsPattern:\n      pattern:\n        WildcardPattern: {}\n      name: x\n  tail:\n    UnitPattern: {}\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"HeadTailPattern\": { \"head\": { \"AsPattern\": { \"pattern\": { \"WildcardPattern\": {} }, \"name\": \"x\" } }, \"tail\": { \"UnitPattern\": {} } } }\n"
+				}
+			]
+		},
+		{
+			"id": "patterns-and-literals-0012",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "AsPattern:\n  attributes:\n    source:\n      startLine: 2\n      startColumn: 1\n      endLine: 2\n      endColumn: 2\n  pattern:\n    WildcardPattern: {}\n  name: x\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"AsPattern\": { \"attributes\": { \"source\": { \"startLine\": 2, \"startColumn\": 1, \"endLine\": 2, \"endColumn\": 2 } }, \"pattern\": { \"WildcardPattern\": {} }, \"name\": \"x\" } }\n"
+				}
+			]
+		},
+		{
+			"id": "patterns-and-literals-0013",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "CharLiteral: a\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"CharLiteral\": \"a\" }\n"
+				}
+			]
+		},
+		{
+			"id": "patterns-and-literals-0014",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "StringLiteral: 2026-01-15\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"StringLiteral\": \"2026-01-15\" }\n"
+				}
+			]
+		},
+		{
+			"id": "patterns-and-literals-0015",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "IntegerLiteral: 15\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"IntegerLiteral\": 15 }\n"
+				},
+				{
+					"index": 2,
+					"info": {
+						"language": "yaml",
+						"role": "rejected"
+					},
+					"body": "IntegerLiteral: 0o17\n"
+				},
+				{
+					"index": 3,
+					"info": {
+						"language": "yaml",
+						"role": "rejected"
+					},
+					"body": "IntegerLiteral: 0xF\n"
+				}
+			]
+		},
+		{
+			"id": "patterns-and-literals-0016",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "DecimalLiteral: \"-0.00\"\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"DecimalLiteral\": \"-0.00\" }\n"
+				}
+			]
+		},
+		{
+			"id": "patterns-and-literals-0017",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "DecimalLiteral: \"1e-7\"\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"DecimalLiteral\": \"1e-7\" }\n"
+				}
+			]
+		},
+		{
+			"id": "patterns-and-literals-0018",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "DecimalLiteral: \".5\"\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"DecimalLiteral\": \".5\" }\n"
+				}
+			]
+		},
+		{
+			"id": "patterns-and-literals-0019",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "IntegerLiteral: 18446744073709551616\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"IntegerLiteral\": 18446744073709551616 }\n"
+				}
+			]
+		},
+		{
+			"id": "patterns-and-literals-0020",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "IntegerLiteral: -9223372036854775809\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"IntegerLiteral\": -9223372036854775809 }\n"
+				}
+			]
+		},
+		{
+			"id": "types-0001",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "a\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "\"a\"\n"
+				}
+			]
+		},
+		{
+			"id": "types-0002",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "morphir/SDK:basics#int\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "\"morphir/SDK:basics#int\"\n"
+				}
+			]
+		},
+		{
+			"id": "types-0003",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Reference: [\"morphir/SDK:list#list\", a]\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Reference\": [\"morphir/SDK:list#list\", \"a\"] }\n"
+				},
+				{
+					"index": 4,
+					"info": {
+						"language": "yaml",
+						"role": "rejected"
+					},
+					"body": "[\"morphir/SDK:list#list\", a]\n"
+				}
+			]
+		},
+		{
+			"id": "types-0004",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Tuple: [\"morphir/SDK:basics#int\", \"morphir/SDK:string#string\"]\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Tuple\": [\"morphir/SDK:basics#int\", \"morphir/SDK:string#string\"] }\n"
+				}
+			]
+		},
+		{
+			"id": "types-0005",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Record:\n  fields:\n    name: morphir/SDK:string#string\n    age: morphir/SDK:basics#int\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Record\": { \"fields\": { \"name\": \"morphir/SDK:string#string\", \"age\": \"morphir/SDK:basics#int\" } } }\n"
+				}
+			]
+		},
+		{
+			"id": "types-0006",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "ExtensibleRecord:\n  variable: r\n  fields:\n    email: morphir/SDK:string#string\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"ExtensibleRecord\": { \"variable\": \"r\", \"fields\": { \"email\": \"morphir/SDK:string#string\" } } }\n"
+				}
+			]
+		},
+		{
+			"id": "types-0007",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Function:\n  parameterType: morphir/SDK:basics#int\n  returnType: morphir/SDK:string#string\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Function\": { \"parameterType\": \"morphir/SDK:basics#int\", \"returnType\": \"morphir/SDK:string#string\" } }\n"
+				}
+			]
+		},
+		{
+			"id": "types-0008",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Unit: {}\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Unit\": {} }\n"
+				}
+			]
+		},
+		{
+			"id": "types-0009",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "a\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "\"a\"\n"
+				}
+			]
+		},
+		{
+			"id": "types-0010",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Variable:\n  attributes:\n    source:\n      startLine: 1\n      startColumn: 1\n      endLine: 1\n      endColumn: 2\n  name: a\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Variable\": { \"attributes\": { \"source\": { \"startLine\": 1, \"startColumn\": 1, \"endLine\": 1, \"endColumn\": 2 } }, \"name\": \"a\" } }\n"
+				}
+			]
+		},
+		{
+			"id": "values-0001",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Literal:\n  IntegerLiteral: 42\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Literal\": { \"IntegerLiteral\": 42 } }\n"
+				}
+			]
+		},
+		{
+			"id": "values-0002",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Variable: x\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Variable\": \"x\" }\n"
+				}
+			]
+		},
+		{
+			"id": "values-0003",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Reference: morphir/SDK:basics#add\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Reference\": \"morphir/SDK:basics#add\" }\n"
+				}
+			]
+		},
+		{
+			"id": "values-0004",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Apply:\n  function:\n    Reference: morphir/SDK:basics#negate\n  argument:\n    Literal:\n      IntegerLiteral: 1\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Apply\": { \"function\": { \"Reference\": \"morphir/SDK:basics#negate\" }, \"argument\": { \"Literal\": { \"IntegerLiteral\": 1 } } } }\n"
+				}
+			]
+		},
+		{
+			"id": "values-0005",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "IfThenElse:\n  condition:\n    Literal:\n      BoolLiteral: true\n  then:\n    Literal:\n      IntegerLiteral: 1\n  else:\n    Literal:\n      IntegerLiteral: 2\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"IfThenElse\": { \"condition\": { \"Literal\": { \"BoolLiteral\": true } }, \"then\": { \"Literal\": { \"IntegerLiteral\": 1 } }, \"else\": { \"Literal\": { \"IntegerLiteral\": 2 } } } }\n"
+				}
+			]
+		},
+		{
+			"id": "values-0006",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Field:\n  target:\n    Variable: record\n  name: field-name\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Field\": { \"target\": { \"Variable\": \"record\" }, \"name\": \"field-name\" } }\n"
+				}
+			]
+		},
+		{
+			"id": "values-0007",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Tuple:\n  - Variable: x\n  - Literal:\n      IntegerLiteral: 1\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Tuple\": [{ \"Variable\": \"x\" }, { \"Literal\": { \"IntegerLiteral\": 1 } }] }\n"
+				}
+			]
+		},
+		{
+			"id": "values-0008",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "List:\n  - Literal:\n      IntegerLiteral: 1\n  - Literal:\n      IntegerLiteral: 2\n  - Literal:\n      IntegerLiteral: 3\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"List\": [{ \"Literal\": { \"IntegerLiteral\": 1 } }, { \"Literal\": { \"IntegerLiteral\": 2 } }, { \"Literal\": { \"IntegerLiteral\": 3 } }] }\n"
+				}
+			]
+		},
+		{
+			"id": "values-0009",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Hole:\n  reason:\n    UnresolvedReference:\n      target: my-org/project:module#deleted\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Hole\": { \"reason\": { \"UnresolvedReference\": { \"target\": \"my-org/project:module#deleted\" } } } }\n"
+				}
+			]
+		},
+		{
+			"id": "values-0010",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Unit: {}\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Unit\": {} }\n"
+				}
+			]
+		},
+		{
+			"id": "values-0011",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Literal:\n  BoolLiteral: true\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Literal\": { \"BoolLiteral\": true } }\n"
+				}
+			]
+		},
+		{
+			"id": "values-0012",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Literal:\n  FloatLiteral: 4.0\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Literal\": { \"FloatLiteral\": 4.0 } }\n"
+				}
+			]
+		},
+		{
+			"id": "values-0013",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Record:\n  fields:\n    name:\n      Variable: x\n    age:\n      Literal:\n        IntegerLiteral: 25\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Record\": { \"fields\": { \"name\": { \"Variable\": \"x\" }, \"age\": { \"Literal\": { \"IntegerLiteral\": 25 } } } } }\n"
+				}
+			]
+		},
+		{
+			"id": "values-0014",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Constructor: morphir/SDK:maybe#just\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Constructor\": \"morphir/SDK:maybe#just\" }\n"
+				}
+			]
+		},
+		{
+			"id": "values-0015",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "FieldFunction: name\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"FieldFunction\": \"name\" }\n"
+				}
+			]
+		},
+		{
+			"id": "values-0016",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Lambda:\n  pattern:\n    AsPattern:\n      pattern:\n        WildcardPattern: {}\n      name: x\n  body:\n    Variable: x\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Lambda\": { \"pattern\": { \"AsPattern\": { \"pattern\": { \"WildcardPattern\": {} }, \"name\": \"x\" } }, \"body\": { \"Variable\": \"x\" } } }\n"
+				}
+			]
+		},
+		{
+			"id": "values-0017",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "LetDefinition:\n  name: x\n  definition:\n    ExpressionBody:\n      inputTypes: {}\n      outputType: morphir/SDK:basics#int\n      body:\n        Literal:\n          IntegerLiteral: 1\n  in:\n    Variable: x\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"LetDefinition\": { \"name\": \"x\", \"definition\": { \"ExpressionBody\": { \"inputTypes\": {}, \"outputType\": \"morphir/SDK:basics#int\", \"body\": { \"Literal\": { \"IntegerLiteral\": 1 } } } }, \"in\": { \"Variable\": \"x\" } } }\n"
+				}
+			]
+		},
+		{
+			"id": "values-0018",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "LetRecursion:\n  definitions:\n    f:\n      ExpressionBody:\n        inputTypes: {}\n        outputType: morphir/SDK:basics#int\n        body:\n          Variable: f\n  in:\n    Variable: f\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"LetRecursion\": { \"definitions\": { \"f\": { \"ExpressionBody\": { \"inputTypes\": {}, \"outputType\": \"morphir/SDK:basics#int\", \"body\": { \"Variable\": \"f\" } } } }, \"in\": { \"Variable\": \"f\" } } }\n"
+				}
+			]
+		},
+		{
+			"id": "values-0019",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Destructure:\n  pattern:\n    TuplePattern:\n      - AsPattern:\n          pattern:\n            WildcardPattern: {}\n          name: a\n      - WildcardPattern: {}\n  value:\n    Variable: pair\n  in:\n    Variable: a\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Destructure\": { \"pattern\": { \"TuplePattern\": [{ \"AsPattern\": { \"pattern\": { \"WildcardPattern\": {} }, \"name\": \"a\" } }, { \"WildcardPattern\": {} }] }, \"value\": { \"Variable\": \"pair\" }, \"in\": { \"Variable\": \"a\" } } }\n"
+				}
+			]
+		},
+		{
+			"id": "values-0020",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "PatternMatch:\n  value:\n    Variable: x\n  cases:\n    - pattern:\n        LiteralPattern:\n          IntegerLiteral: 0\n      body:\n        Literal:\n          BoolLiteral: true\n    - pattern:\n        WildcardPattern: {}\n      body:\n        Literal:\n          BoolLiteral: false\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"PatternMatch\": { \"value\": { \"Variable\": \"x\" }, \"cases\": [{ \"pattern\": { \"LiteralPattern\": { \"IntegerLiteral\": 0 } }, \"body\": { \"Literal\": { \"BoolLiteral\": true } } }, { \"pattern\": { \"WildcardPattern\": {} }, \"body\": { \"Literal\": { \"BoolLiteral\": false } } }] } }\n"
+				}
+			]
+		},
+		{
+			"id": "values-0021",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "UpdateRecord:\n  target:\n    Variable: record\n  fields:\n    name:\n      Literal:\n        StringLiteral: new\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"UpdateRecord\": { \"target\": { \"Variable\": \"record\" }, \"fields\": { \"name\": { \"Literal\": { \"StringLiteral\": \"new\" } } } } }\n"
+				}
+			]
+		},
+		{
+			"id": "values-0022",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "Variable:\n  attributes:\n    source:\n      startLine: 3\n      startColumn: 5\n      endLine: 3\n      endColumn: 6\n  name: x\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"Variable\": { \"attributes\": { \"source\": { \"startLine\": 3, \"startColumn\": 5, \"endLine\": 3, \"endColumn\": 6 } }, \"name\": \"x\" } }\n"
+				}
+			]
+		},
+		{
+			"id": "versions-0003",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "4\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "yaml",
+						"role": "rejected"
+					},
+					"body": "4\n---\n4\n"
+				}
+			]
+		},
+		{
+			"id": "versions-0004",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "formatVersion: 4\ndistribution:\n  Library:\n    packageName: example\n    dependencies: {}\n    def:\n      modules: {}\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"formatVersion\": 4, \"distribution\": { \"Library\": { \"packageName\": \"example\", \"dependencies\": {}, \"def\": { \"modules\": {} } } } }\n"
+				},
+				{
+					"index": 2,
+					"info": {
+						"language": "yaml",
+						"role": "rejected"
+					},
+					"body": "formatVersion: 4\ndistribution:\n  Library:\n    packageName: example\n    dependencies: &empty {}\n    def:\n      modules: *empty\n"
+				},
+				{
+					"index": 3,
+					"info": {
+						"language": "yaml",
+						"role": "rejected"
+					},
+					"body": "formatVersion: 4\ndistribution:\n  Library:\n    packageName: example\n    dependencies: !!map {}\n    def:\n      modules: {}\n"
+				},
+				{
+					"index": 4,
+					"info": {
+						"language": "yaml",
+						"role": "rejected"
+					},
+					"body": "formatVersion: 4\ndistribution:\n  Library:\n    packageName: example\n    dependencies: {}\n    def:\n      <<: {}\n      modules: {}\n"
+				},
+				{
+					"index": 5,
+					"info": {
+						"language": "yaml",
+						"role": "rejected"
+					},
+					"body": "%YAML 1.2\n---\nformatVersion: 4\ndistribution:\n  Library:\n    packageName: example\n    dependencies: {}\n    def:\n      modules: {}\n"
+				}
+			]
+		},
+		{
+			"id": "versions-0005",
+			"status": "active",
+			"fences": [
+				{
+					"index": 0,
+					"info": {
+						"language": "yaml",
+						"role": "canonical"
+					},
+					"body": "formatVersion: 4\ndistribution:\n  Library:\n    packageName: example\n    dependencies: {}\n    def:\n      modules: {}\n"
+				},
+				{
+					"index": 1,
+					"info": {
+						"language": "json",
+						"role": "canonical"
+					},
+					"body": "{ \"formatVersion\": 4, \"distribution\": { \"Library\": { \"packageName\": \"example\", \"dependencies\": {}, \"def\": { \"modules\": {} } } } }\n"
+				},
+				{
+					"index": 2,
+					"info": {
+						"language": "yaml",
+						"role": "rejected"
+					},
+					"body": "formatVersion: 4\nformatVersion: 4\ndistribution:\n  Library:\n    packageName: example\n    dependencies: {}\n    def:\n      modules: {}\n"
+				}
+			]
+		}
+	],
+	"completeExample": "formatVersion: 4\ndistribution:\n  Library:\n    packageName: regulation\n    dependencies:\n      morphir/SDK:\n        modules:\n          basics:\n            types:\n              int:\n                OpaqueTypeSpecification: {}\n              float:\n                OpaqueTypeSpecification: {}\n              bool:\n                OpaqueTypeSpecification: {}\n            values:\n              add:\n                inputs:\n                  a: morphir/SDK:basics#int\n                  b: morphir/SDK:basics#int\n                output: morphir/SDK:basics#int\n          list:\n            types:\n              list:\n                TypeAliasSpecification:\n                  typeParams: [a]\n                  typeExp:\n                    Reference: [\"morphir/SDK:list#list\", a]\n            values:\n              map:\n                inputs:\n                  f:\n                    Function:\n                      parameterType: a\n                      returnType: b\n                  list:\n                    Reference: [\"morphir/SDK:list#list\", a]\n                output:\n                  Reference: [\"morphir/SDK:list#list\", b]\n    def:\n      modules:\n        u-s/f-r-2052-a/data-tables:\n          Public:\n            types:\n              data-tables:\n                Public:\n                  TypeAliasDefinition:\n                    typeParams: []\n                    typeExp:\n                      Record:\n                        fields:\n                          inflows: regulation:u-s/f-r-2052-a/data-tables#inflows\n                          outflows: regulation:u-s/f-r-2052-a/data-tables#outflows\n                          supplemental: regulation:u-s/f-r-2052-a/data-tables#supplemental\n              inflows:\n                Public:\n                  TypeAliasDefinition:\n                    typeParams: []\n                    typeExp:\n                      Record:\n                        fields:\n                          assets:\n                            Reference: [\"morphir/SDK:list#list\", \"regulation:u-s/f-r-2052-a/data-tables/inflows#assets\"]\n            values:\n              calculate-total:\n                Public:\n                  ExpressionBody:\n                    inputTypes:\n                      tables: regulation:u-s/f-r-2052-a/data-tables#data-tables\n                    outputType: morphir/SDK:basics#float\n                    body:\n                      Literal:\n                        FloatLiteral: 0.0\n            doc: Data tables module for regulatory reporting\n"
+}

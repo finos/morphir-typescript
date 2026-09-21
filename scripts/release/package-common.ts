@@ -29,7 +29,7 @@ export interface PackageIdentity {
 	/**
 	 * The directory a canonical source URL is rooted at, such as `src` for
 	 * `morphir-ir:///src/index.ts`. Empty when the package's source root is the
-	 * package itself, so `packages/mck/kit/embedded.ts` can be a bundled source.
+	 * package itself, including the package version metadata.
 	 */
 	readonly virtualDirectory: string;
 }

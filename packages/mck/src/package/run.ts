@@ -1,7 +1,7 @@
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
 import { isDeepStrictEqual } from "node:util";
-import { driverVersion } from "../driver/version.ts";
+import { bindingVersion } from "../binding-version.ts";
 import type { ReportResult } from "../report.ts";
 import type {
 	PACKAGE_CONTRACT,
@@ -64,7 +64,7 @@ async function executeContractKit<
 	const header = {
 		suite: "package" as const,
 		contractVersion: descriptor.contractVersion,
-		driverVersion: driverVersion(),
+		driverVersion: bindingVersion(),
 		kit: { formatVersion: kit.formatVersion, contentHash: kit.contentHash },
 		startedAt: new Date().toISOString(),
 	};

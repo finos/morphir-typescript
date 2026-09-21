@@ -3,7 +3,7 @@
 
 # morphir-typescript
 
-`morphir-typescript` is the TypeScript reference binding for the [Morphir Intermediate Representation](https://morphir.finos.org/docs/spec/ir/morphir-ir-specification). It provides a version-agnostic semantic model, the Morphir IR v4 model and JSON codec, and the parser, structural checker, and binding-side conformance runner for the Morphir Compatibility Kit.
+`morphir-typescript` is the TypeScript reference binding for the [Morphir Intermediate Representation](https://morphir.finos.org/docs/spec/ir/morphir-ir-specification). It provides a version-agnostic semantic model, the Morphir IR v4 model and JSON codec, and the TypeScript adapter and package tooling for the Morphir Compatibility Kit.
 
 Morphir captures business logic and domain models as language-independent data so tools can analyze, transform, serialize, and execute the same model across platforms. The authoritative specifications and compatibility corpus live in the [`finos/morphir`](https://github.com/finos/morphir) repository. This project implements those contracts for TypeScript. It is separate from the [Morphir TypeScript code-generation backend](https://morphir.finos.org/docs/reference/backends/other-platforms/typescript-api), which generates TypeScript APIs from Morphir models.
 
@@ -11,14 +11,14 @@ Morphir captures business logic and domain models as language-independent data s
 
 `@finos/morphir-ir` and `@finos/morphir-mck` are published to public npm at suite version `0.3.0`. The root workspace stays private and is never published. Every workspace uses the same repository-wide suite version, including packages that are not part of a given release, and the manifests read the last released version until release preparation bumps them.
 
-The native Morphir Compatibility Kit is vendored into `vendor/morphir-mck`, so `mise run check:conformance` runs the full kit with the pinned native CLI and explicit TypeScript adapter in a standalone clone. The frozen kit remains vendored into `packages/mck/kit` for package gates and migration parity. Two corpora are still not vendored: the naming and format-version conformance fixtures, which live only in `finos/morphir` at `docs/spec/ir/fixtures/`. `mise run test` therefore sets `MORPHIR_FIXTURES_OPTIONAL=1`, which makes those two corpora — and nothing else — optional when they are absent. That opt-out goes away once they are vendored too.
+The native Morphir Compatibility Kit is vendored into `vendor/morphir-mck`, so `mise run check:conformance` runs the full kit with the pinned native CLI and explicit TypeScript adapter in a standalone clone. Two corpora are still not vendored: the naming and format-version conformance fixtures, which live only in `finos/morphir` at `docs/spec/ir/fixtures/`. `mise run test` therefore sets `MORPHIR_FIXTURES_OPTIONAL=1`, which makes those two corpora — and nothing else — optional when they are absent. That opt-out goes away once they are vendored too.
 
 ## Packages
 
 | Package | Publication | Purpose |
 | --- | --- | --- |
 | `@finos/morphir-ir` | Published to public npm at `0.3.0` | Generic Morphir IR semantic types, pinned v4 types, JSON readers and canonical writers, diagnostics, and attribute mapping. |
-| `@finos/morphir-mck` | Published to public npm at `0.3.0` | MCK Markdown case parser, kit loader, structural checker, the `mck` driver and its reference adapter, and the report model. Ships the vendored kit. |
+| `@finos/morphir-mck` | Published to public npm at `0.3.0` | TypeScript IR adapter, experimental package CLI/library and shared protocol helpers. IR compatibility runs through the native Morphir CLI. |
 | `@finos/morphir-sdk` | Not yet published | The Morphir SDK runtime: Elm-named functions over plain immutable data for every module of the `Morphir.SDK` specification, from Basics, List and Dict to LocalDate, UUID, Regex and Aggregate. |
 
 ## Morphir specifications
@@ -90,19 +90,17 @@ import { readTreeFromDirectory, writeTreeToDirectory } from "./packages/ir/src/l
 
 `./layout` works against an in-memory `DocumentTree`; `./layout/node` is the one entry point in the package that touches the filesystem, reading and writing that tree at a real directory. A stem too long for the filesystem is truncated and replaced with the first eight hex digits of the SHA-256 hash of its untruncated, escaped form, after `__`.
 
-### Check an MCK directory
+### Check IR conformance
 
-The current MCK CLI validates the structure of a kit directory:
+Install the [native Morphir CLI](https://github.com/finos/morphir/releases) and `@finos/morphir-mck` separately, then run:
 
 ```sh
-mise exec -- bun run packages/mck/src/cli.ts check /path/to/morphir/spec/ir/mck
+morphir mck kit vendor --source embedded --dest ./mck-kit
+morphir mck check ./mck-kit
+morphir mck run --kit ./mck-kit --adapter mck-adapter-typescript --report ir-report.json
 ```
 
-Add `--json` for machine-readable output.
-
-### Check a binding's conformance with `mck`
-
-`mck` is the driver for the Morphir Compatibility Kit: it runs a binding's decoder and structural checker against every kit case and reports pass, fail, or skip per fence, including JSON, YAML, and document-tree fences. Install it as the `mck` binary from `@finos/morphir-mck` (`npm install -g @finos/morphir-mck`, or `npx -p @finos/morphir-mck mck` since the package ships two binaries), or download the standalone `mck` binary from a [release](https://github.com/finos/morphir-typescript/releases). `mck run` checks the in-process TypeScript binding against the kit vendored in the package; `mck run --adapter <exe> [--adapter-arg <arg>]...` runs the same kit against any binding that speaks the adapter's JSON-lines protocol (see `mck-adapter-typescript` for the reference implementation) as a child process; `mck coverage` reports every IR v4 vocabulary entry the kit does not yet exercise. Over the embedded kit, `mck run` reports `722 pass, 0 fail, 0 kit-error, 8 skipped` — the eight skips are the kit's version-3 fences, which this binding's capabilities do not name. A run opens by announcing the `formatVersions` support table the binding declares in its capabilities reply, and carries that table into the report.
+The npm `mck` command now supports `package run` only. Former IR commands exit 2 with migration guidance. See the [consumer migration instructions](packages/mck/README.md#migrating-ir-consumers) for report validation, local Node adapters and removed library APIs.
 
 ## Development
 
@@ -121,8 +119,6 @@ Use mise tasks for repository automation:
 | `mise run check:workflows` | Validate GitHub Actions workflows with the pinned actionlint version. |
 | `mise run check:kit` | Verify the native managed kit and run native authoring gates with the pinned CLI. |
 | `mise run check:conformance` | Run the native kit against the explicit TypeScript adapter, check the native report and render HTML. |
-| `mise run check:kit-legacy` | Retain frozen TypeScript kit verification during adoption. |
-| `mise run check:conformance-legacy` | Retain frozen in-process/adapter report parity and coverage during adoption. |
 | `mise run check:native-kit` | Alias entry point for the same native kit gates. |
 | `mise run check:native-conformance` | Alias entry point for the same native conformance gates. |
 | `mise run test` | Run the available Bun test suite. |
@@ -130,12 +126,12 @@ Use mise tasks for repository automation:
 | `mise run release:prepare -- VERSION` | Update the suite version and finalize the Keep a Changelog release entry. |
 | `mise run release:validate -- TAG` | Validate a `vVERSION` tag against the suite manifests and changelog. |
 | `mise run release:artifact -- OUTPUT_DIRECTORY` | Build and verify both publishable tarballs in the requested directory. |
-| `mise run release:binaries -- OUTPUT_DIRECTORY` | Compile `mck` and `mck-adapter-typescript` to single-file binaries for every release target. Set `MCK_BINARY_TARGETS=host` to compile only this machine's target. |
+| `mise run release:binaries -- OUTPUT_DIRECTORY` | Compile `mck-adapter-typescript` to single-file binaries for every release target. Set `MCK_BINARY_TARGETS=host` to compile only this machine's target. |
 | `mise run release:adapter-binaries -- OUTPUT_DIRECTORY` | Compile only `mck-adapter-typescript`, with the same target selection and asset names. No driver or embedded kit is needed by the adapter. |
 
 The adapter-only build keeps both IR and experimental package protocol support.
-The existing suite release still produces both executables and both npm packages
-while consumers migrate to the native `morphir mck` runner.
+Future suite releases produce five adapter executables and both npm packages.
+Historical standalone driver assets remain unchanged; the npm package retains both bins.
 `@finos/morphir-ir` keeps its Node 20 installed-package gate; the MCK npm package
 keeps its Node 24 requirement. Compiled adapters need neither runtime installed.
 
@@ -153,10 +149,9 @@ It does not disable operating-system network access or certify other platforms.
 
 ### Native IR conformance
 
-`check:kit` and `check:conformance` use the native CLI. CI also requires the frozen
-`check:kit-legacy` and `check:conformance-legacy` gates until the parent cutover
-review is complete. Package gates and the existing driver distribution remain
-unchanged during adoption.
+`check:kit` and `check:conformance` use the native CLI. The installed Node 24
+adapter gate also uses that CLI and the managed kit. The legacy IR runner and
+parity gates have been retired; package tooling remains until finos/morphir#852.
 
 The production pin is `.config/mck-cli.json`, containing an exact `version` and a
 `sha256` object with archive digests for all six native release target triples.
@@ -165,7 +160,7 @@ cached receipt and executable digest on reuse. The managed kit lives at
 `vendor/morphir-mck`, acquired from `finos/morphir` commit
 `48977b55ec1c1ccf834837fe1912e01615071d46` with a CLI-generated `mck-kit.lock.json`.
 Its exact bytes are preserved by `.gitattributes` and excluded from formatting.
-The older `packages/mck/kit.lock.json` is not that manifest.
+Codec regressions retain frozen YAML fixtures separately from the managed kit.
 
 To override the pinned CLI and kit for local development:
 

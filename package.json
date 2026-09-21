@@ -4,7 +4,7 @@
 	"private": true,
 	"type": "module",
 	"packageManager": "bun@1.4.2",
-	"description": "TypeScript binding for the Morphir IR: reference model, codecs, and the Morphir Compatibility Kit (MCK) driver.",
+	"description": "TypeScript binding for the Morphir IR: reference model, codecs, and the TypeScript MCK adapter, and package compatibility tooling.",
 	"workspaces": [
 		"packages/*"
 	],

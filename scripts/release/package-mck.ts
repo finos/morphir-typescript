@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 // Builds the publishable `@finos/morphir-mck` tarball: three Node bundles
-// (the library, the `mck` driver, the reference adapter), their declarations,
-// and the vendored kit the driver runs when no checkout is named. The mck
+// (the package library, package CLI, TypeScript adapter) and declarations. The mck
 // sources reach the IR by relative path inside this repository; both the
 // bundle and the declarations rewrite those paths to the `@finos/morphir-ir`
 // package specifiers the published package depends on.
@@ -20,13 +19,12 @@ import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
+import { nativeContext } from "../conformance/native.ts";
 import {
 	archiveFiles,
 	canonicalizeSourceMaps,
 	canonicalSourceMapper,
-	commandFailure,
 	type DeclarationRewrite,
-	executeCommand,
 	isRecord,
 	type JsonRecord,
 	type PackageIdentity,
@@ -42,13 +40,12 @@ import { parseStableVersion } from "./version.ts";
 
 const ENTRYPOINTS = ["index.ts", "cli.ts", "adapter.ts"] as const;
 
-// The kit files are the package's own sources for source-map purposes, so the
-// canonical root is the package, not `src`: `kit/embedded.ts` is bundled too.
+// Package metadata and sources share the package root in source maps.
 const IDENTITY: PackageIdentity = { scheme: "morphir-mck", sourceLabel: "packages/mck", virtualDirectory: "" };
 
 export const canonicalSourceMap = canonicalSourceMapper(IDENTITY);
 
-const DESCRIPTION = "The Morphir Compatibility Kit (MCK) driver: runs the kit against any binding through the adapter protocol and writes conformance reports.";
+const DESCRIPTION = "Morphir package compatibility tooling and the TypeScript IR adapter. IR compatibility runs through the native Morphir CLI.";
 const REPOSITORY = {
 	type: "git",
 	url: "git+https://github.com/finos/morphir-typescript.git",
@@ -59,7 +56,7 @@ const BIN = { mck: "./dist/cli.js", "mck-adapter-typescript": "./dist/adapter.js
 const RUNTIME_DEPENDENCIES = { "@noble/curves": "2.4.0", ajv: "8.20.0" } as const;
 const WORKSPACE_DEPENDENCIES = { "@finos/morphir-ir": "workspace:*", ...RUNTIME_DEPENDENCIES } as const;
 
-// The adapter protocol's schema and worked example ship beside the kit: an
+// The adapter protocol's schema and worked example ship with the package: an
 // installed consumer writing an adapter needs the contract it is held to, and
 // the README points at both by name.
 const CONTRACT_FILES = [
@@ -76,7 +73,6 @@ const ROOT_FILES = [
 	"package/README.md",
 	"package/LICENSE",
 	"package/NOTICE",
-	"package/kit.lock.json",
 	...CONTRACT_FILES.map((file) => `package/${file}` as const),
 ] as const;
 const REQUIRED_FILES = [
@@ -91,9 +87,6 @@ const REQUIRED_FILES = [
 	"package/dist/cli.d.ts",
 	"package/dist/adapter.d.ts",
 ] as const;
-
-/** The generated module that carries the vendored kit; it is bundled, never shipped as a source. */
-const EMBEDDED_KIT_MODULE = "embedded.ts";
 
 /**
  * The IR is imported by relative source path inside the repository. Both the
@@ -154,7 +147,7 @@ export function publishMckManifest(source: JsonRecord): JsonRecord & { readonly 
 		exports: structuredClone(EXPORTS),
 		bin: structuredClone(BIN),
 		sideEffects: false,
-		files: ["dist", "kit", "kit.lock.json", ...CONTRACT_FILES, "README.md", "LICENSE", "NOTICE"],
+		files: ["dist", ...CONTRACT_FILES, "README.md", "LICENSE", "NOTICE"],
 		dependencies: { "@finos/morphir-ir": source.version, ...RUNTIME_DEPENDENCIES },
 		publishConfig: { access: "public" },
 	};
@@ -162,8 +155,6 @@ export function publishMckManifest(source: JsonRecord): JsonRecord & { readonly 
 
 export const validatePackageFiles = packageFileValidator({
 	rootFiles: [...ROOT_FILES],
-	verbatimPrefixes: ["package/kit/"],
-	denied: [`package/kit/${EMBEDDED_KIT_MODULE}`],
 	defaultExpected: new Set(REQUIRED_FILES),
 });
 
@@ -181,17 +172,6 @@ async function walkFiles(directory: string, visit: (absolute: string) => Promise
 	}
 }
 
-/** The kit as it publishes: every vendored file except the generated module the bundle inlines. */
-async function kitFiles(packageRoot: string): Promise<readonly string[]> {
-	const kitRoot = path.join(packageRoot, "kit");
-	const files: string[] = [];
-	await walkFiles(kitRoot, (absolute) => {
-		const relative = path.relative(kitRoot, absolute).split(path.sep).join("/");
-		if (relative !== EMBEDDED_KIT_MODULE) files.push(relative);
-	});
-	return files.sort();
-}
-
 async function expectedArchiveFiles(packageRoot: string): Promise<ReadonlySet<string>> {
 	const expected = new Set<string>(REQUIRED_FILES);
 	const sourceRoot = path.join(packageRoot, "src");
@@ -201,7 +181,6 @@ async function expectedArchiveFiles(packageRoot: string): Promise<ReadonlySet<st
 		expected.add(`package/dist/${relative}`);
 		expected.add(`package/dist/${relative}.map`);
 	});
-	for (const relative of await kitFiles(packageRoot)) expected.add(`package/kit/${relative}`);
 	return expected;
 }
 
@@ -413,14 +392,7 @@ async function writeResolutionSmokeKit(consumer: string): Promise<string> {
 	return mck;
 }
 
-/**
- * Runs the packed driver the way a user does: `--version`, an embedded-kit run,
- * and the same run over the packed adapter as a child process.
- *
- * The vendored kit runs clean, so `mck run` exits 0. `checkKitRunReport`
- * still adjudicates the report against ALLOWED_FAILING_CASES, and
- * `expectKitRun` still requires that exit code from the driver.
- */
+/** Verifies installed package tooling and the Node 24 adapter with the native CLI. */
 async function smokeTest(mckTarball: string, irTarball: string, compiler: string, root: string): Promise<void> {
 	const consumer = await mkdtemp(path.join(tmpdir(), "morphir-mck-consumer-"));
 	const irDependenciesWork = await mkdtemp(path.join(tmpdir(), "morphir-mck-ir-dependency-pack-"));
@@ -469,10 +441,16 @@ async function smokeTest(mckTarball: string, irTarball: string, compiler: string
 
 		const version = await runCommand(["node", cli, "--version"], consumer);
 		const manifest = JSON.parse(await readFile(path.join(consumer, "node_modules/@finos/morphir-mck/package.json"), "utf8")) as { version: string };
-		if (version !== manifest.version) throw new Error(`the packed driver reported version ${version}, not ${manifest.version}`);
+		if (version !== manifest.version) throw new Error(`the packed package CLI reported version ${version}, not ${manifest.version}`);
 
-		await expectKitRun(["node", cli, "run", "--report", "r.json"], consumer, "r.json");
-		await expectKitRun(["node", cli, "run", "--adapter", "node", "--adapter-arg", adapter, "--report", "a.json"], consumer, "a.json");
+		// Required: validate the installed Node adapter with the released native runner.
+		const native = await nativeContext(root);
+		await runCommand([native.cli, "mck", "kit", "status", "--kit", native.kit, "--json"], consumer);
+		await runCommand(
+			[native.cli, "mck", "run", "--adapter", "node", "--adapter-arg", path.join(consumer, adapter), "--kit", native.kit, "--report", "ir.json"],
+			consumer,
+		);
+		await runCommand([native.cli, "mck", "report", "check", "ir.json", path.join(root, ".config/mck-allowed-failing.json"), "--kit", native.kit], consumer);
 		await runCommand(["node", "--input-type=module", "--eval", PACKAGE_SMOKE], consumer);
 		await runCommand(["node", "--input-type=module", "--eval", NOBLE_SMOKE], consumer);
 		await runCommand(["node", "--input-type=module", "--eval", RESOLUTION_SMOKE], consumer);
@@ -539,42 +517,6 @@ async function verifyDeclarations(tarball: string, files: readonly string[], cwd
 	}
 }
 
-/**
- * The case ids the packed driver is allowed to fail on, and how many records
- * each may contribute. Empty: the vendored kit runs clean. The mechanism
- * stays so a future kit resync can carry a known-bad fence again without a
- * code change.
- */
-const ALLOWED_FAILING_CASES: ReadonlyMap<string, number> = new Map();
-
-/** Holds the packed driver to its report: this binding, no kit errors, and only the known failures. */
-export function checkKitRunReport(report: unknown, label: string): void {
-	if (!isRecord(report)) throw new Error(`${label} must contain a report object`);
-	if (report.binding !== "morphir-typescript") throw new Error(`${label} reports binding ${String(report.binding)}`);
-	if (!Array.isArray(report.records) || report.records.length === 0) throw new Error(`${label} contains no records`);
-
-	const kitErrors = report.records.filter((record) => isRecord(record) && record.result === "kit-error").length;
-	if (kitErrors > 0) throw new Error(`${label} reports ${kitErrors} kit-error record(s); the vendored kit must parse cleanly`);
-
-	const failuresByCase = new Map<string, number>();
-	for (const record of report.records) {
-		if (!isRecord(record) || record.result !== "fail") continue;
-		const caseId = String(record.caseId);
-		failuresByCase.set(caseId, (failuresByCase.get(caseId) ?? 0) + 1);
-	}
-	const unexpected = [...failuresByCase]
-		.filter(([caseId, count]) => count > (ALLOWED_FAILING_CASES.get(caseId) ?? 0))
-		.map(([caseId, count]) => `${caseId} (${count} failing record(s), at most ${ALLOWED_FAILING_CASES.get(caseId) ?? 0} allowed)`)
-		.sort();
-	if (unexpected.length > 0) throw new Error(`${label} reports failures the packaging check does not allow: ${unexpected.join(", ")}`);
-}
-
-async function expectKitRun(command: readonly string[], consumer: string, reportFile: string): Promise<void> {
-	const result = await executeCommand(command, consumer);
-	if (result.exitCode !== 0) throw commandFailure(command, result);
-	checkKitRunReport(JSON.parse(await readFile(path.join(consumer, reportFile), "utf8")), reportFile);
-}
-
 export async function buildMckArtifact(
 	root: string,
 	outputDirectory: string,
@@ -613,9 +555,8 @@ export async function buildMckArtifact(
 		if (!build.success) throw new AggregateError(build.logs, "Bun failed to build @finos/morphir-mck");
 		await canonicalizeSourceMaps(canonicalSourceMap, dist, packageRoot);
 
-		// `tsc` roots the emit at `packages/` so `kit/embedded.ts` and the IR
-		// sources the program pulls in stay under `rootDir`; only the package's
-		// own declarations are kept.
+		// `tsc` roots the emit at `packages/` so the IR sources stay under
+		// `rootDir`; only the package's own declarations are kept.
 		const declarations = path.join(work, "declarations");
 		await runCommand(
 			[
@@ -636,16 +577,10 @@ export async function buildMckArtifact(
 		await Promise.all([
 			Bun.write(path.join(stage, "package.json"), `${JSON.stringify(manifest, null, "\t")}\n`),
 			copyFile(path.join(packageRoot, "README.md"), path.join(stage, "README.md")),
-			copyFile(path.join(packageRoot, "kit.lock.json"), path.join(stage, "kit.lock.json")),
 			...CONTRACT_FILES.map((file) => copyFile(path.join(packageRoot, file), path.join(stage, file))),
 			copyFile(path.join(absoluteRoot, "LICENSE"), path.join(stage, "LICENSE")),
 			copyFile(path.join(absoluteRoot, "NOTICE"), path.join(stage, "NOTICE")),
 		]);
-		for (const relative of await kitFiles(packageRoot)) {
-			const destination = path.join(stage, "kit", relative);
-			await mkdir(path.dirname(destination), { recursive: true });
-			await copyFile(path.join(packageRoot, "kit", relative), destination);
-		}
 
 		const expectedFilename = `finos-morphir-mck-${version}.tgz`;
 		const stagedTarball = await packStagedPackage(stage, path.join(work, "packed"), expectedFilename);
