@@ -11,7 +11,7 @@ Morphir captures business logic and domain models as language-independent data s
 
 `@finos/morphir-ir` and `@finos/morphir-mck` are published to public npm at suite version `0.3.0`. The root workspace stays private and is never published. Every workspace uses the same repository-wide suite version, including packages that are not part of a given release, and the manifests read the last released version until release preparation bumps them.
 
-The Morphir Compatibility Kit is vendored into `packages/mck/kit`, so `mise run check:conformance` runs the full kit in a standalone clone with no upstream checkout. Two corpora are still not vendored: the naming and format-version conformance fixtures, which live only in `finos/morphir` at `docs/spec/ir/fixtures/`. `mise run test` therefore sets `MORPHIR_FIXTURES_OPTIONAL=1`, which makes those two corpora — and nothing else — optional when they are absent. That opt-out goes away once they are vendored too.
+The native Morphir Compatibility Kit is vendored into `vendor/morphir-mck`, so `mise run check:conformance` runs the full kit with the pinned native CLI and explicit TypeScript adapter in a standalone clone. The frozen kit remains vendored into `packages/mck/kit` for package gates and migration parity. Two corpora are still not vendored: the naming and format-version conformance fixtures, which live only in `finos/morphir` at `docs/spec/ir/fixtures/`. `mise run test` therefore sets `MORPHIR_FIXTURES_OPTIONAL=1`, which makes those two corpora — and nothing else — optional when they are absent. That opt-out goes away once they are vendored too.
 
 ## Packages
 
@@ -119,8 +119,12 @@ Use mise tasks for repository automation:
 | `mise run check:typecheck` | Typecheck every workspace package. |
 | `mise run check:package` | Build and verify the `@finos/morphir-ir` and `@finos/morphir-mck` tarballs in `.dev/out/package-check`. |
 | `mise run check:workflows` | Validate GitHub Actions workflows with the pinned actionlint version. |
-| `mise run check:kit` | Verify the vendored kit matches `kit.lock.json`. |
-| `mise run check:conformance` | Run the vendored kit in-process and through the adapter, compare the two reports, and check coverage. |
+| `mise run check:kit` | Verify the native managed kit and run native authoring gates with the pinned CLI. |
+| `mise run check:conformance` | Run the native kit against the explicit TypeScript adapter, check the native report and render HTML. |
+| `mise run check:kit-legacy` | Retain frozen TypeScript kit verification during adoption. |
+| `mise run check:conformance-legacy` | Retain frozen in-process/adapter report parity and coverage during adoption. |
+| `mise run check:native-kit` | Alias entry point for the same native kit gates. |
+| `mise run check:native-conformance` | Alias entry point for the same native conformance gates. |
 | `mise run test` | Run the available Bun test suite. |
 | `mise run ci` | Run the same checks as GitHub Actions. |
 | `mise run release:prepare -- VERSION` | Update the suite version and finalize the Keep a Changelog release entry. |
@@ -146,6 +150,37 @@ This runs the CLI and adapter from a fresh directory with an empty `PATH`, vendo
 the CLI's embedded kit, runs it and independently checks the resulting report.
 It complements the always-on adapter build-boundary and IR/package protocol tests.
 It does not disable operating-system network access or certify other platforms.
+
+### Native IR conformance
+
+`check:kit` and `check:conformance` use the native CLI. CI also requires the frozen
+`check:kit-legacy` and `check:conformance-legacy` gates until the parent cutover
+review is complete. Package gates and the existing driver distribution remain
+unchanged during adoption.
+
+The production pin is `.config/mck-cli.json`, containing an exact `version` and a
+`sha256` object with archive digests for all six native release target triples.
+The installer verifies the selected archive before extraction and checks its
+cached receipt and executable digest on reuse. The managed kit lives at
+`vendor/morphir-mck`, acquired from `finos/morphir` commit
+`48977b55ec1c1ccf834837fe1912e01615071d46` with a CLI-generated `mck-kit.lock.json`.
+Its exact bytes are preserved by `.gitattributes` and excluded from formatting.
+The older `packages/mck/kit.lock.json` is not that manifest.
+
+To override the pinned CLI and kit for local development:
+
+```sh
+export MORPHIR_MCK_NATIVE_CLI=/absolute/path/to/morphir
+"$MORPHIR_MCK_NATIVE_CLI" mck kit vendor --source embedded --dest .dev/native-kit
+MORPHIR_MCK_KIT=.dev/native-kit mise run check:conformance
+```
+
+The run writes `.dev/out/conformance/native.json` and `native.html`. It removes
+old evidence before starting. Native `report check` owns schema, inventory,
+session and allowed-failure adjudication against `.config/mck-allowed-failing.json`.
+HTML rendering does not turn a failed gate into a pass. The acquisition helper
+contains no compatibility checker. CI uploads the fresh JSON and HTML together
+as the `native-conformance` artifact, including after a failed gate.
 
 To apply formatting and safe lint fixes, run:
 

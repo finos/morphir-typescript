@@ -1,1 +1,4 @@
 * text=auto eol=lf
+
+# Native managed snapshots are verified against the acquired bytes.
+vendor/morphir-mck/** -text
