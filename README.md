@@ -159,8 +159,10 @@ invented or inferred from a local executable.
 The production pin is `.config/mck-cli.json`, containing an exact `version` and a
 `sha256` object with archive digests for all six native release target triples.
 The installer verifies the selected archive before extraction and checks its
-cached receipt and executable digest on reuse. The managed kit will live at
-`vendor/morphir-mck`; it must contain a CLI-generated `mck-kit.lock.json`.
+cached receipt and executable digest on reuse. The managed kit lives at
+`vendor/morphir-mck`, acquired from `finos/morphir` commit
+`48977b55ec1c1ccf834837fe1912e01615071d46` with a CLI-generated `mck-kit.lock.json`.
+Its exact bytes are preserved by `.gitattributes` and excluded from formatting.
 The older `packages/mck/kit.lock.json` is not that manifest.
 
 For local preparation with an absolute native CLI path:

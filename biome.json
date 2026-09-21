@@ -7,7 +7,7 @@
 	},
 	"files": {
 		"ignoreUnknown": true,
-		"includes": ["**", "!packages/mck/kit"]
+		"includes": ["**", "!packages/mck/kit", "!vendor/morphir-mck"]
 	},
 	"formatter": {
 		"enabled": true,
