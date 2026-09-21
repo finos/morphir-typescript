@@ -142,6 +142,10 @@ describe("release automation contract", () => {
 		expect(byName.get("release:artifact")?.depends).toEqual(["setup"]);
 		expect(byName.get("release:binaries")?.depends).toEqual(["setup"]);
 		expect(byName.get("release:adapter-binaries")?.depends).toEqual(["setup"]);
+		for (const name of ["check:native-kit", "check:native-conformance"]) {
+			expect(byName.get(name)?.depends).toEqual(["setup"]);
+			await access(byName.get(name)?.file as string, constants.X_OK);
+		}
 		for (const dependency of ["check:lint", "check:typecheck", "check:kit", "test", "check:package", "check:workflows", "check:conformance"])
 			expect(byName.get("ci")?.depends).toContain(dependency);
 

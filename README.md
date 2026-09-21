@@ -121,6 +121,8 @@ Use mise tasks for repository automation:
 | `mise run check:workflows` | Validate GitHub Actions workflows with the pinned actionlint version. |
 | `mise run check:kit` | Verify the vendored kit matches `kit.lock.json`. |
 | `mise run check:conformance` | Run the vendored kit in-process and through the adapter, compare the two reports, and check coverage. |
+| `mise run check:native-kit` | Verify a native managed kit and run native authoring gates. Preparation task; needs a released CLI pin or explicit local override. |
+| `mise run check:native-conformance` | Run that kit against the explicit TypeScript adapter, check the native report and render HTML. Preparation task; not yet the CI default. |
 | `mise run test` | Run the available Bun test suite. |
 | `mise run ci` | Run the same checks as GitHub Actions. |
 | `mise run release:prepare -- VERSION` | Update the suite version and finalize the Keep a Changelog release entry. |
@@ -146,6 +148,34 @@ This runs the CLI and adapter from a fresh directory with an empty `PATH`, vendo
 the CLI's embedded kit, runs it and independently checks the resulting report.
 It complements the always-on adapter build-boundary and IR/package protocol tests.
 It does not disable operating-system network access or certify other platforms.
+
+### Native consumer preparation
+
+The native consumer tasks are staged until a released CLI and managed kit are
+pinned. Existing `check:kit`, `check:conformance`, package gates and CI dependencies
+remain authoritative during this preparation. No production release pin is
+invented or inferred from a local executable.
+
+The production pin is `.config/mck-cli.json`, containing an exact `version` and a
+`sha256` object with archive digests for all six native release target triples.
+The installer verifies the selected archive before extraction and checks its
+cached receipt and executable digest on reuse. The managed kit will live at
+`vendor/morphir-mck`; it must contain a CLI-generated `mck-kit.lock.json`.
+The older `packages/mck/kit.lock.json` is not that manifest.
+
+For local preparation with an absolute native CLI path:
+
+```sh
+export MORPHIR_MCK_NATIVE_CLI=/absolute/path/to/morphir
+"$MORPHIR_MCK_NATIVE_CLI" mck kit vendor --source embedded --dest .dev/native-kit
+MORPHIR_MCK_KIT=.dev/native-kit mise run check:native-conformance
+```
+
+The run writes `.dev/out/conformance/native.json` and `native.html`. It removes
+old evidence before starting. Native `report check` owns schema, inventory,
+session and allowed-failure adjudication against `.config/mck-allowed-failing.json`.
+HTML rendering does not turn a failed gate into a pass. The acquisition helper
+contains no compatibility checker.
 
 To apply formatting and safe lint fixes, run:
 
