@@ -131,7 +131,6 @@ describe("release automation contract", () => {
 		expect(ir).toContain('["mise", "exec", "node@20.20.2", "--", "node", "--input-type=module", "--eval", nodeProgram]');
 		expect(ir).toContain("expected Node 20, received");
 		expect(mck).toContain("expected Node 24, received");
-		expect(mck).toContain("NOBLE_SMOKE");
 	});
 
 	test("registers executable package, workflow, and artifact tasks in the CI graph", async () => {

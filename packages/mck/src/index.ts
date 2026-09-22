@@ -11,14 +11,6 @@ export {
 	type PackageSchemas,
 	type PackageTestee,
 } from "./package/contract.ts";
-export {
-	type Admission,
-	admitLocalRegistryFromFiles,
-	admitLocalRegistryRepository,
-	type LocalRegistryCase,
-	type LocalRegistryKit,
-} from "./package/local-registry/admission.ts";
-export { type DefinitionSummary, inspectLocalRegistryFromFiles, inspectLocalRegistryRepository } from "./package/local-registry/definition.ts";
 export { parsePackageCapabilities, parsePackageRequest, parsePackageResponse } from "./package/protocol.ts";
 export { canonicalizePackageDocument, packageFileDigest, referencePackageTestee, referenceResolutionTestee } from "./package/reference.ts";
 export {
