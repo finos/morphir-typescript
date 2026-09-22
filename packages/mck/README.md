@@ -24,7 +24,7 @@ morphir mck report check ir-report.json allowed-failing.json --kit ./mck-kit
 
 For a local npm install, pass `--adapter node --adapter-arg /absolute/path/to/node_modules/@finos/morphir-mck/dist/adapter.js`. The adapter protocol remains version 1, with `protocol.schema.json` and `protocol.example.json` shipped in the package. Native reports use the consolidated `2.0.0-draft.1` contract, not the retired TypeScript IR report format.
 
-The npm `mck` executable has been removed. The library no longer exports IR or package runner, comparison, coverage, corpus loader, embedded-kit, kit-version, report-summary, or subprocess-client APIs. Use `morphir mck` for IR operations and `morphir mck package run` for draft package compatibility. The implementation APIs, resolver, adapter/protocol codecs and draft.3 local-registry helpers remain available. `bindingVersion()` is the package-version helper.
+The npm `mck` executable has been removed. The library no longer exports IR or package runner, comparison, coverage, corpus loader, embedded-kit, kit-version, report-summary, or subprocess-client APIs. Use `morphir mck` for IR operations and `morphir mck package run` for draft package compatibility. The draft.1/.2 implementation APIs, resolver and IR/package adapter/protocol codecs remain available. `bindingVersion()` is the package-version helper.
 
 Future GitHub releases contain five `mck-adapter-typescript-VERSION-OS-ARCH` executables and the two npm tarballs. They no longer build standalone `mck-VERSION-OS-ARCH` drivers. Historical release assets remain unchanged.
 
@@ -34,71 +34,36 @@ Copyright 2026 FINOS. Licensed under Apache-2.0.
 
 ## Experimental package suite
 
-Draft.3 local Library definitions can be inspected through the library API:
+Draft.3 shared tooling now lives in [finos/morphir](https://github.com/finos/morphir),
+following [the MCK ownership decision](https://github.com/finos/morphir/blob/main/kb/bundles/morphir/morphir-package-system/decisions/0003-mck-tooling-lives-in-the-rust-morphir-cli.md).
+The TypeScript package no longer exports `inspectLocalRegistryRepository`,
+`inspectLocalRegistryFromFiles`, `admitLocalRegistryRepository`,
+`admitLocalRegistryFromFiles`, or their `DefinitionSummary`, `Admission`,
+`LocalRegistryCase` and `LocalRegistryKit` types.
 
-```ts
-import { inspectLocalRegistryRepository, admitLocalRegistryRepository } from "@finos/morphir-mck";
+The parent Rust `morphir-mck` crate owns definition inspection and full admission.
+The internal decoders, trust-policy selection, publisher verification and assurance
+preflight helpers moved to the parent's `morphir-package` runtime. Signing and signed
+fixture generation/verification are parent Rust test support. Their TypeScript source,
+tests and the two source-only assurance schema mirrors have been removed; canonical
+schemas, fixed assets and historical evidence remain parent-owned.
 
-const summary = inspectLocalRegistryRepository("/path/to/finos/morphir");
-// { kind: "definition-summary", caseCount, boundAssetCount, pendingAssetCount, errors }
-const admission = admitLocalRegistryRepository("/path/to/finos/morphir");
-if (admission.kind === "kit-error") throw new Error(admission.errors.join("\n"));
-// admission.value contains constructed cases and the executable corpus contentHash.
-```
-
-Definition inspection permits declared pending assets and returns no compatibility
-report, pass count or executable hash. Full admission validates every asset and complete
-expectation before returning an executable kit. Pending assets are kit errors.
-Both functions also have `FromFiles` variants taking a map of repository-relative
-slash-separated paths to exact bytes, including `spec/package/mck/...` and local schemas.
-Filesystem loading expects a trusted static repository checkout and rejects path escapes.
-This admission API does not execute a testee, restore packages, verify signatures or
-claim runtime compatibility. Draft.1, draft.2 and IR v1 execution remain separate.
-
-The explicit integration check requires the parent source and fails if it is absent:
+These are source/library operations, not a claim that an already released CLI includes
+them. From a prepared `finos/morphir` source checkout, use:
 
 ```sh
-bun packages/mck/test/support/local-registry-parent-integration.ts --source /path/to/finos/morphir
+cargo run --locked -p morphir -- mck package inspect --source . --contract 0.1.0-draft.3
+cargo test --locked -p morphir-mck --test package_local_registry
+cargo test --locked -p morphir --test package_runtime
+cargo test --locked -p morphir-mck --test package_fixture
+cargo run --locked -p morphir-mck --example package_fixture -- --source . --check spec/package/mck/fixtures/local-registry/assets/signed
 ```
 
-Internal draft.3 decoders validate raw locks, canonical records and statement payloads,
-and explicit trust policies. They preserve exact TUF integer lexemes and keep DSSE's
-JSON domain separate from Morphir metadata. Policy helpers match complete namespace
-components and select the most specific publisher rule without fallback.
-These modules are not public package exports. A decoded value proves neither signatures
-nor authorization; no authenticated restore or qualified filesystem provider is supplied.
-
-The decoder integration check compares fixed rejection diagnostics and the signed
-fixture's document shapes. It does not execute pending scenarios or produce a
-compatibility report:
-
-```sh
-bun packages/mck/test/support/local-registry-decode-parent-integration.ts --source /path/to/finos/morphir
-```
-
-The internal `restore-filesystem-assurance` preflight profile, version `0.1.0-draft.1`,
-guards a callback with explicit trusted-host `portable` or `hardened` selection.
-Unqualified providers and unavailable modes return rejection before the callback;
-malformed inputs throw. Successful selection supplies a copied, deeply immutable context.
-Callback failures propagate without retry or downgrade.
-
-Provider qualification metadata records identity, mode, environment, assumptions and
-evidence references. Parsing it does not verify evidence or qualify a provider. The
-selected receipt is neither authentication success nor a compatibility result and cannot
-authorize another invocation. Callers must provide trusted host policy on each invocation.
-No real provider or platform is qualified here.
-
-`package-restore-assurance-protocol.schema.json` and
-`package-restore-assurance-report.schema.json` describe the closed request and preflight
-receipt. They are source-only internal contracts, not published adapter transports or
-additions to the existing executable package protocols. Full portable execution, its
-complete required-case set, authentication, durable state and platform qualification
-remain separate work. The following check compares six parent-owned synthetic expectations
-without executing or relabeling any draft.3 case:
-
-```sh
-bun packages/mck/test/support/local-registry-assurance-parent-integration.ts --source /path/to/finos/morphir
-```
+Inspection permits pending definitions and returns no compatibility report, pass count
+or executable hash. The current draft.3 corpus has 54 candidate definitions, 6 bound
+assets and 121 pending bindings; full admission rejects those pending bindings.
+These operations do not execute draft.3 cases, perform authenticated restore or qualify
+a filesystem provider. Draft.1/.2 independent implementations and adapters remain here.
 
 `morphir mck package run --contract 0.1.0-draft.1 --kit /path/to/finos/morphir/spec/package/mck --adapter mck-adapter-typescript --adapter-arg --suite --adapter-arg package --report package.json`
 runs the draft package corpus owned by finos/morphir. Supply the package corpus and adapter explicitly.

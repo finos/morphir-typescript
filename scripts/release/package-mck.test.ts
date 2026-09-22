@@ -36,9 +36,19 @@ function sourceManifest(): Record<string, unknown> {
 		sideEffects: false,
 		publishConfig: { access: "public" },
 		scripts: { typecheck: "tsc -p tsconfig.json" },
-		dependencies: { "@finos/morphir-ir": "workspace:*", "@noble/curves": "2.4.0", ajv: "8.20.0" },
+		dependencies: { "@finos/morphir-ir": "workspace:*", ajv: "8.20.0" },
 	};
 }
+
+describe("MCK public ownership", () => {
+	test("keeps independent implementations and retires draft.3 shared entry points", async () => {
+		const api = await import("../../packages/mck/src/index.ts");
+		for (const retained of ["referencePackageTestee", "referenceResolutionTestee", "resolveLibrary", "inProcessTestee", "bindingVersion"])
+			expect(api).toHaveProperty(retained);
+		for (const retired of ["admitLocalRegistryFromFiles", "admitLocalRegistryRepository", "inspectLocalRegistryFromFiles", "inspectLocalRegistryRepository"])
+			expect(api).not.toHaveProperty(retired);
+	});
+});
 
 describe("canonicalSourceMap", () => {
 	test("maps a package source to its stable virtual package path", () => {
@@ -97,7 +107,7 @@ describe("publishMckManifest", () => {
 				"LICENSE",
 				"NOTICE",
 			],
-			dependencies: { "@finos/morphir-ir": "0.0.0", "@noble/curves": "2.4.0", ajv: "8.20.0" },
+			dependencies: { "@finos/morphir-ir": "0.0.0", ajv: "8.20.0" },
 			publishConfig: { access: "public" },
 		});
 		expect(result).not.toHaveProperty("private");
@@ -120,7 +130,7 @@ describe("publishMckManifest", () => {
 	test("rewrites the workspace dependency to the exact suite version", () => {
 		const source = { ...sourceManifest(), version: "1.2.3" };
 
-		expect(publishMckManifest(source).dependencies).toEqual({ "@finos/morphir-ir": "1.2.3", "@noble/curves": "2.4.0", ajv: "8.20.0" });
+		expect(publishMckManifest(source).dependencies).toEqual({ "@finos/morphir-ir": "1.2.3", ajv: "8.20.0" });
 	});
 
 	test("rejects metadata that does not match the public package contract", () => {
@@ -232,12 +242,15 @@ describe.if(canBuild)("@finos/morphir-mck artifact", () => {
 		expect(artifact.files.some((file) => file.includes(".test.") || file.includes("tsconfig") || file.includes("bun.lock"))).toBe(false);
 
 		expect(artifact.files.some((file) => file.includes("/cli."))).toBe(false);
+		expect(artifact.files.some((file) => file.includes("/local-registry/") || file.includes("package-restore-assurance"))).toBe(false);
+		const publicTypes = await Bun.$`tar -xOf ${artifact.tarball} package/dist/index.d.ts`.text();
+		expect(publicTypes).not.toMatch(/LocalRegistry|DefinitionSummary|\bAdmission\b/);
 		const adapter = await Bun.$`tar -xOf ${artifact.tarball} package/dist/adapter.js`.text();
 		expect(adapter.startsWith("#!/usr/bin/env node")).toBe(true);
 
 		const packedManifest = JSON.parse(await Bun.$`tar -xOf ${artifact.tarball} package/package.json`.text());
 		expect(packedManifest).toEqual(publishMckManifest(JSON.parse(await readFile(path.join(root, "packages/mck/package.json"), "utf8"))));
-		expect(packedManifest.dependencies).toEqual({ "@finos/morphir-ir": repositoryVersion, "@noble/curves": "2.4.0", ajv: "8.20.0" });
+		expect(packedManifest.dependencies).toEqual({ "@finos/morphir-ir": repositoryVersion, ajv: "8.20.0" });
 
 		for (const declaration of artifact.files.filter((file) => file.endsWith(".d.ts"))) {
 			const contents = await Bun.$`tar -xOf ${artifact.tarball} ${declaration}`.text();

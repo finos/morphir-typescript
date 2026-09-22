@@ -7,7 +7,7 @@
 // bundle and the declarations rewrite those paths to the `@finos/morphir-ir`
 // package specifiers the published package depends on.
 //
-// The IR, Ajv validator and Noble curves are external dependencies.
+// The IR and Ajv validator are external dependencies.
 
 import { copyFile, mkdir, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -48,7 +48,7 @@ const REPOSITORY = {
 } as const;
 const EXPORTS = { ".": { types: "./dist/index.d.ts", import: "./dist/index.js" } } as const;
 const BIN = { "mck-adapter-typescript": "./dist/adapter.js" } as const;
-const RUNTIME_DEPENDENCIES = { "@noble/curves": "2.4.0", ajv: "8.20.0" } as const;
+const RUNTIME_DEPENDENCIES = { ajv: "8.20.0" } as const;
 const WORKSPACE_DEPENDENCIES = { "@finos/morphir-ir": "workspace:*", ...RUNTIME_DEPENDENCIES } as const;
 
 // The adapter protocol's schema and worked example ship with the package: an
@@ -190,17 +190,14 @@ async function packMckDependencies(root: string, packedOutput: string): Promise<
 	const packed = new Map<string, { readonly version: string; readonly tarball: string }>();
 	async function pack(name: string, from: string): Promise<void> {
 		const require = createRequire(from);
-		// Noble exports its algorithm entries, but intentionally hides package.json.
-		const entry = name === "@noble/curves" ? "ed25519.js" : name === "@noble/hashes" ? "sha2.js" : undefined;
-		const manifestPath =
-			entry === undefined ? require.resolve(`${name}/package.json`) : path.join(path.dirname(require.resolve(`${name}/${entry}`)), "package.json");
+		const manifestPath = require.resolve(`${name}/package.json`);
 		const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as { name: string; version: string; dependencies?: Record<string, string> };
 		const previous = packed.get(name);
 		if (previous !== undefined) {
 			if (previous.version !== manifest.version) throw new Error(`offline runtime dependencies require multiple versions of ${name}`);
 			return;
 		}
-		const expected = ({ ...RUNTIME_DEPENDENCIES, "@noble/hashes": "2.4.0" } as Readonly<Record<string, string>>)[name];
+		const expected = (RUNTIME_DEPENDENCIES as Readonly<Record<string, string>>)[name];
 		if (manifest.name !== name || (expected !== undefined && manifest.version !== expected))
 			throw new Error(`installed ${name} does not match the publishing contract`);
 		const tarball = await packStagedPackage(
@@ -214,30 +211,6 @@ async function packMckDependencies(root: string, packedOutput: string): Promise<
 	for (const name of Object.keys(RUNTIME_DEPENDENCIES)) await pack(name, path.join(root, "packages/mck/package.json"));
 	return Object.fromEntries([...packed].map(([name, { tarball }]) => [name, `file:${tarball.split(path.sep).join("/")}`]));
 }
-
-// Internal publisher verification is source-only. This checks its declared math dependency
-// from an isolated installed MCK package without adding a public publisher entry point.
-const NOBLE_SMOKE = `
-import assert from "node:assert/strict";
-import { createRequire } from "node:module";
-import { realpathSync } from "node:fs";
-import path from "node:path";
-import { pathToFileURL } from "node:url";
-const require = createRequire(path.resolve("node_modules/@finos/morphir-mck/package.json"));
-const curves = require.resolve("@noble/curves/ed25519.js");
-const hashes = createRequire(curves).resolve("@noble/hashes/sha2.js");
-const installed = realpathSync("node_modules") + path.sep;
-for (const entry of [curves, hashes]) {
-  assert(realpathSync(entry).startsWith(installed), "crypto dependency resolved outside isolated consumer");
-  const manifest = JSON.parse(require("node:fs").readFileSync(path.join(path.dirname(entry), "package.json"), "utf8"));
-  assert.equal(manifest.version, "2.4.0");
-}
-const { ed25519 } = await import(pathToFileURL(curves).href);
-const key = Buffer.from("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a", "hex");
-const sig = Buffer.from("e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b", "hex");
-assert(ed25519.verify(sig, new Uint8Array(), key, { zip215: false }));
-assert(!ed25519.verify(sig, new Uint8Array([0]), key, { zip215: false }));
-`;
 
 async function writeIntegritySmokeKit(consumer: string): Promise<string> {
 	const root = path.join(consumer, "integrity-kit");
@@ -364,8 +337,7 @@ async function smokeTest(mckTarball: string, irTarball: string, compiler: string
 	try {
 		// A fresh runner has no registry metadata for offline resolution. Local
 		// tarball overrides cover the IR, the IR's own runtime dependencies (yaml,
-		// decimal.js, see package-ir.ts's DEPENDENCIES), Ajv, Noble curves,
-		// and their runtime dependencies, including Noble hashes.
+		// decimal.js, see package-ir.ts's DEPENDENCIES), Ajv and its runtime dependencies.
 		const irDependencyNames = Object.keys(IR_DEPENDENCIES) as readonly RuntimeDependencyName[];
 		const irDependencyPacks = await Promise.all(
 			irDependencyNames.map(async (name) => ({ name, tarball: await packRuntimeDependency(root, name, irDependenciesWork) })),
@@ -410,7 +382,6 @@ async function smokeTest(mckTarball: string, irTarball: string, compiler: string
 			consumer,
 		);
 		await runCommand([native.cli, "mck", "report", "check", "ir.json", path.join(root, ".config/mck-allowed-failing.json"), "--kit", native.kit], consumer);
-		await runCommand(["node", "--input-type=module", "--eval", NOBLE_SMOKE], consumer);
 
 		const integrityKit = await writeIntegritySmokeKit(consumer);
 		const resolutionKit = await writeResolutionSmokeKit(consumer);
