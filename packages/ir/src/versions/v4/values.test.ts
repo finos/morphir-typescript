@@ -58,6 +58,10 @@ describe("literals", () => {
 		const f = readLiteral(newRoot(), json('{ "FloatLiteral": 0.0 }'));
 		expect(f.ok && writeJson(writeLiteral(f.value))).toBe('{ "FloatLiteral": 0.0 }');
 	});
+	test("expanded scalar literals ignore unknown members", () => {
+		rtLiteral('{ "FloatLiteral": { "future": true, "value": 4.0 } }', '{ "FloatLiteral": 4.0 }');
+		rtLiteral('{ "IntegerLiteral": { "future": true, "value": 42 } }', '{ "IntegerLiteral": 42 }');
+	});
 	test("a DecimalLiteral is a decimal lexeme kept as written (kit patterns-and-literals-0002, 0016, 0017, 0018)", () => {
 		for (const s of [
 			'{ "DecimalLiteral": "10.50" }',

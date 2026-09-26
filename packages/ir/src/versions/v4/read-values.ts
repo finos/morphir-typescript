@@ -143,8 +143,8 @@ function readPatterns(ctx: Ctx, v: JsonValue): Result<readonly Pattern<VA>[], Di
 // own right.
 function literalPayload(ctx: Ctx, v: JsonValue): Result<JsonValue, Diagnostic> {
 	if (!isObject(v)) return ok(v);
-	const m = members(ctx, v, ["value"], []);
-	return m.ok ? ok(m.value.get("value") as JsonValue) : m;
+	const value = v.members.get("value");
+	return value === undefined ? fail(ctx, "missing_member", 'missing member "value"', v) : ok(value);
 }
 
 function floatLiteral(ctx: Ctx, text: string): Result<Literal, Diagnostic> {
