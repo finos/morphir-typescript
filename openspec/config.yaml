@@ -1,0 +1,10 @@
+# Copyright 2026 FINOS
+# SPDX-License-Identifier: Apache-2.0
+
+schema: html-design
+githubCopilot:
+  cloudAgent: false
+context: |
+  Morphir TypeScript is a Bun workspace with semantic @finos/morphir-ir packages.
+  Keep the semantic IR independent of Effect; use Bun tests and Biome checks.
+  Follow AGENTS.md, CONTRIBUTING.md and nested agent instructions; link the GitHub issue, sign off commits and preserve the local mise run ci mirror of hosted CI.

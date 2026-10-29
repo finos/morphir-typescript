@@ -7,3 +7,6 @@ dist/
 .env*
 *.log
 .dev/
+
+# Shared OpenSpec checker build cache
+/scripts/_build/
