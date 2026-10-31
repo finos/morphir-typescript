@@ -9,32 +9,26 @@ recorded schema. Follow this repository's contribution and approval rules.
 ## Bootstrap
 
 Install [mise](https://mise.jdx.dev/), then run `mise install`. OpenSpec is pinned
-to 1.14.3. MoonBit 0.10.15+943464bfa runs the shared checker; it does not change
+to 1.14.3. MoonBit 0.10.18+6c83a7f62 runs the shared checker; it does not change
 the project's implementation language. Existing project runtime pins remain in
-place. Complete the MoonBit SDK and initialize its package registry once per
-machine. The binary archive installed by mise does not include core or moonx.
+place.
 
-`mise run openspec:bootstrap` performs SDK completion and registry initialization
-on all supported platforms and is included in `mise run ci`. The equivalent
-manual commands follow.
+The binary archive that mise downloads does not include core or moonx. The
+`http:moonbit` postinstall hook in `mise.toml` completes the SDK inside the mise
+installation:
 
-On Linux and macOS:
+- On Linux (x64 and ARM64) and Apple Silicon macOS, it runs the upstream
+  `unix.sh` installer for the exact pinned version.
+- On Windows, it runs `tools/bootstrap-moonbit-windows.ps1` with PowerShell 7
+  (`pwsh`). The script downloads the core archive and checks it against
+  `bootstrapWindowsCoreSha256` in `tools/moonbit-core-pin.json`. Windows on Arm
+  uses the x64 archive under emulation.
 
-```sh
-set -euo pipefail
-curl -fsSL https://cli.moonbitlang.com/install/unix.sh | \
-  MOON_HOME="$(mise where http:moonbit)" bash -s -- "$(mise current http:moonbit)"
-mise exec -- moon update
-```
+MoonBit publishes no Intel macOS archive for this version, so Intel macOS is not
+supported.
 
-On Windows, use PowerShell:
-
-```powershell
-$env:MOON_HOME = mise where http:moonbit
-$env:MOONBIT_INSTALL_VERSION = mise current http:moonbit
-Invoke-RestMethod https://cli.moonbitlang.com/install/powershell.ps1 | Invoke-Expression
-mise exec -- moon update
-```
+`mise run openspec:bootstrap` initializes the MoonBit package registry
+(`moon update`). It is included in `mise run ci`.
 
 Then verify the checked-in bundle:
 

@@ -7,7 +7,7 @@
 	},
 	"files": {
 		"ignoreUnknown": true,
-		"includes": ["**", "!vendor/morphir-mck"]
+		"includes": ["**", "!vendor/morphir-mck", "!openspec/extensions.lock.json", "!tools/moonbit-core-pin.json"]
 	},
 	"formatter": {
 		"enabled": true,
