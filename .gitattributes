@@ -2,3 +2,6 @@
 
 # Native managed snapshots are verified against the acquired bytes.
 vendor/morphir-mck/** -text
+
+# Managed OpenSpec files are compared byte for byte, also on Windows.
+openspec/schemas/html-design/** text eol=lf

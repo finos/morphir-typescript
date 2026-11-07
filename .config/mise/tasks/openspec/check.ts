@@ -5,4 +5,4 @@
 
 import { exec } from "../_lib.ts";
 
-await exec(["mise", "exec", "--", "moon", "run", "-q", "--target", "wasm", "scripts/openspec-ext.mbtx", "--", "check"]);
+await exec(["mise", "exec", "--", "mission-control-tools", "openspec", "check", "--bundle"]);

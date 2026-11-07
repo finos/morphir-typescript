@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 // Copyright 2026 FINOS
 // SPDX-License-Identifier: Apache-2.0
-//MISE description="Setup the shared OpenSpec workflow"
+//MISE description="Set up the shared OpenSpec workflow"
 
 import { exec } from "../_lib.ts";
 
-await exec(["mise", "exec", "--", "moon", "run", "-q", "--target", "wasm", "scripts/openspec-ext.mbtx", "--", "setup"]);
+await exec(["mise", "exec", "--", "mission-control-tools", "openspec", "setup"]);
