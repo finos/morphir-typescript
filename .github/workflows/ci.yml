@@ -39,6 +39,11 @@ jobs:
           restore-keys: |
             bun-${{ runner.os }}-${{ runner.arch }}-
 
+      # The same check also runs in mise run ci (openspec:verify). This step shows
+      # a bundle drift as its own failure.
+      - name: Check the shared OpenSpec bundle
+        run: mise exec -- mission-control-tools openspec check --bundle
+
       # check:package verifies installed IR on pinned Node 20 and MCK on Node 24.
       # Both runtimes are installed from mise.toml by the setup action above.
       # Native IR gates use .config/mck-cli.json and vendor/morphir-mck.
